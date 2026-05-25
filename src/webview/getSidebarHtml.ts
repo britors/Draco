@@ -1,3 +1,6 @@
+const MONACO_VERSION = '0.45.0';
+const MONACO_CDN = `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_VERSION}/min/vs`;
+
 export function getSidebarHtml(params: {
   nonce: string;
   cspSource: string;
@@ -11,9 +14,11 @@ export function getSidebarHtml(params: {
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'none';
-             style-src ${cspSource} 'unsafe-inline';
-             font-src ${cspSource};
-             script-src 'nonce-${nonce}';">
+             script-src 'nonce-${nonce}' https://cdn.jsdelivr.net;
+             style-src ${cspSource} 'unsafe-inline' https://cdn.jsdelivr.net;
+             font-src ${cspSource} https://cdn.jsdelivr.net data:;
+             worker-src blob:;
+             connect-src https://cdn.jsdelivr.net;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="${codiconsUri}">
   <title>Prisma4Postgres</title>
@@ -39,17 +44,11 @@ export function getSidebarHtml(params: {
       background: var(--vscode-editorGroupHeader-tabsBackground);
     }
     .tab {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 6px 12px;
-      background: transparent;
-      border: none;
-      border-bottom: 2px solid transparent;
-      color: var(--vscode-tab-inactiveForeground);
-      cursor: pointer;
-      font-size: var(--vscode-font-size);
-      font-family: var(--vscode-font-family);
+      display: flex; align-items: center; gap: 4px;
+      padding: 6px 12px; background: transparent;
+      border: none; border-bottom: 2px solid transparent;
+      color: var(--vscode-tab-inactiveForeground); cursor: pointer;
+      font-size: var(--vscode-font-size); font-family: var(--vscode-font-family);
       white-space: nowrap;
     }
     .tab.active {
@@ -60,204 +59,82 @@ export function getSidebarHtml(params: {
     .tab:hover:not(.active) { background: var(--vscode-tab-hoverBackground); }
 
     /* Panels */
-    .panel {
-      flex: 1;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
+    .panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+    .view  { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
 
-    /* Views inside Explorer */
-    .view {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      overflow: hidden;
-    }
-
-    /* Search bar (#14) */
+    /* Search bar (Explorer filter + History search) */
     .search-bar {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 4px 6px;
-      border-bottom: 1px solid var(--vscode-panel-border);
-      flex-shrink: 0;
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 6px; border-bottom: 1px solid var(--vscode-panel-border); flex-shrink: 0;
     }
     .search-icon { color: var(--vscode-descriptionForeground); flex-shrink: 0; font-size: 14px; }
     .search-input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      color: var(--vscode-foreground);
-      font-size: var(--vscode-font-size);
-      font-family: var(--vscode-font-family);
-      padding: 0;
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--vscode-foreground); font-size: var(--vscode-font-size);
+      font-family: var(--vscode-font-family); padding: 0;
     }
     .search-input::placeholder { color: var(--vscode-descriptionForeground); }
     .search-clear {
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      color: var(--vscode-descriptionForeground);
-      padding: 0;
-      display: flex;
-      align-items: center;
+      background: transparent; border: none; cursor: pointer;
+      color: var(--vscode-descriptionForeground); padding: 0;
+      display: flex; align-items: center;
     }
     .search-clear:hover { color: var(--vscode-foreground); }
 
-    /* Tree (#8–#12) */
-    .tree {
-      flex: 1;
-      overflow-y: auto;
-      padding: 2px 0;
-    }
+    /* Tree */
+    .tree { flex: 1; overflow-y: auto; padding: 2px 0; }
     .tree-row {
-      display: flex;
-      align-items: center;
-      height: 22px;
-      padding-right: 8px;
-      cursor: default;
-      user-select: none;
+      display: flex; align-items: center; height: 22px;
+      padding-right: 8px; cursor: default; user-select: none;
     }
     .tree-row:hover { background: var(--vscode-list-hoverBackground); }
     .indent { flex-shrink: 0; display: inline-block; }
     .toggle {
-      flex-shrink: 0;
-      width: 16px;
-      height: 16px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
+      flex-shrink: 0; width: 16px; height: 16px;
+      display: inline-flex; align-items: center; justify-content: center; font-size: 13px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .codicon-modifier-spin { animation: spin 1.2s linear infinite; display: inline-flex; }
-    .tree-icon {
-      flex-shrink: 0;
-      margin-right: 4px;
-      width: 16px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    /* Status dot (#8) */
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      margin-right: 5px;
-    }
+    .tree-icon { flex-shrink: 0; margin-right: 4px; width: 16px; display: inline-flex; align-items: center; justify-content: center; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-right: 5px; }
     .status-dot.connected    { background: var(--vscode-testing-iconPassed, #73c991); }
     .status-dot.disconnected { background: var(--vscode-foreground); opacity: 0.3; }
     .status-dot.connecting   { background: var(--vscode-progressBar-background, #0e70c0); }
     .status-dot.error        { background: var(--vscode-errorForeground, #f48771); }
-
-    .tree-label {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .tree-label mark {
-      background: var(--vscode-editor-findMatchHighlightBackground, rgba(234,92,0,0.33));
-      color: inherit;
-      border-radius: 2px;
-    }
-    .tree-badge {
-      flex-shrink: 0;
-      font-size: 10px;
-      background: var(--vscode-badge-background);
-      color: var(--vscode-badge-foreground);
-      border-radius: 10px;
-      padding: 0 5px;
-      margin-left: 4px;
-      min-width: 18px;
-      text-align: center;
-    }
-    .tree-actions {
-      display: none;
-      align-items: center;
-      gap: 1px;
-      flex-shrink: 0;
-      margin-left: 4px;
-    }
+    .tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tree-label mark { background: var(--vscode-editor-findMatchHighlightBackground, rgba(234,92,0,0.33)); color: inherit; border-radius: 2px; }
+    .tree-badge { flex-shrink: 0; font-size: 10px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-radius: 10px; padding: 0 5px; margin-left: 4px; min-width: 18px; text-align: center; }
+    .tree-actions { display: none; align-items: center; gap: 1px; flex-shrink: 0; margin-left: 4px; }
     .tree-row:hover .tree-actions { display: flex; }
-
-    /* Column badges (#11) */
-    .col-type {
-      flex-shrink: 0;
-      font-size: 10px;
-      color: var(--vscode-descriptionForeground);
-      margin-left: 4px;
-      font-style: italic;
-    }
-    .col-badge {
-      flex-shrink: 0;
-      font-size: 9px;
-      font-weight: 700;
-      border-radius: 2px;
-      padding: 0 3px;
-      margin-left: 3px;
-      line-height: 14px;
-    }
+    .col-type { flex-shrink: 0; font-size: 10px; color: var(--vscode-descriptionForeground); margin-left: 4px; font-style: italic; }
+    .col-badge { flex-shrink: 0; font-size: 9px; font-weight: 700; border-radius: 2px; padding: 0 3px; margin-left: 3px; line-height: 14px; }
     .col-badge.pk { background: #cca700; color: #000; }
     .col-badge.fk { background: #007acc; color: #fff; }
-
-    /* List footer */
-    .list-footer {
-      padding: 8px 12px;
-      border-top: 1px solid var(--vscode-panel-border);
-      flex-shrink: 0;
-    }
+    .list-footer { padding: 8px 12px; border-top: 1px solid var(--vscode-panel-border); flex-shrink: 0; }
 
     /* Buttons */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border: none;
-      cursor: pointer;
-      font-size: var(--vscode-font-size);
-      font-family: var(--vscode-font-family);
-    }
-    .btn-primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border: none; cursor: pointer; font-size: var(--vscode-font-size); font-family: var(--vscode-font-family); }
+    .btn-primary   { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
     .btn-primary:hover { background: var(--vscode-button-hoverBackground); }
     .btn-secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
     .btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
-    .btn-icon {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 22px; height: 22px;
-      background: transparent; border: none; cursor: pointer;
-      color: var(--vscode-icon-foreground); border-radius: 2px;
-    }
+    .btn:disabled  { opacity: 0.5; cursor: not-allowed; }
+    .btn-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background: transparent; border: none; cursor: pointer; color: var(--vscode-icon-foreground); border-radius: 2px; }
     .btn-icon:hover { background: var(--vscode-toolbar-hoverBackground); }
     .btn-icon.btn-danger:hover { color: var(--vscode-errorForeground); }
 
     /* Empty state */
-    .empty-state {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      flex: 1; gap: 12px; color: var(--vscode-descriptionForeground);
-      padding: 24px; text-align: center;
-    }
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 12px; color: var(--vscode-descriptionForeground); padding: 24px; text-align: center; }
 
-    /* Form */
-    .form-header {
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 12px; border-bottom: 1px solid var(--vscode-panel-border); flex-shrink: 0;
-    }
+    /* Connection form */
+    .form-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--vscode-panel-border); flex-shrink: 0; }
     .form-header span { font-weight: 500; }
     .form-body { padding: 12px; overflow-y: auto; flex: 1; }
     .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     label { font-size: 11px; color: var(--vscode-descriptionForeground); text-transform: uppercase; letter-spacing: 0.5px; }
     input[type="text"], input[type="number"], input[type="password"] {
-      padding: 4px 8px;
-      background: var(--vscode-input-background); color: var(--vscode-input-foreground);
+      padding: 4px 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground);
       border: 1px solid var(--vscode-input-border, transparent); outline: none;
       font-size: var(--vscode-font-size); font-family: var(--vscode-font-family); width: 100%;
     }
@@ -270,11 +147,80 @@ export function getSidebarHtml(params: {
     .test-status.error   { color: var(--vscode-errorForeground); }
     .test-status.testing { color: var(--vscode-descriptionForeground); }
 
-    /* Placeholder */
-    .placeholder {
-      display: flex; align-items: center; justify-content: center; flex: 1;
-      color: var(--vscode-descriptionForeground); font-style: italic; padding: 24px;
+    /* ── Query panel (#15, #16, #17) ─────────────────────────────── */
+    .query-tabs-bar {
+      display: flex; align-items: stretch; flex-shrink: 0;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editorGroupHeader-tabsBackground);
+      overflow-x: auto;
     }
+    .query-tab-list { display: flex; flex: 1; overflow-x: auto; }
+    .query-tab {
+      display: flex; align-items: center; gap: 4px;
+      padding: 5px 10px; border-right: 1px solid var(--vscode-panel-border);
+      cursor: pointer; white-space: nowrap; min-width: 80px; max-width: 140px;
+      font-size: var(--vscode-font-size);
+    }
+    .query-tab:hover { background: var(--vscode-tab-hoverBackground); }
+    .query-tab.active {
+      background: var(--vscode-tab-activeBackground);
+      color: var(--vscode-tab-activeForeground);
+      border-bottom: 2px solid var(--vscode-focusBorder);
+    }
+    .query-tab-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .query-tab-close { width: 14px; height: 14px; font-size: 11px; flex-shrink: 0; padding: 0; background: transparent; border: none; cursor: pointer; color: var(--vscode-icon-foreground); border-radius: 2px; display: inline-flex; align-items: center; justify-content: center; }
+    .query-tab-close:hover { background: var(--vscode-toolbar-hoverBackground); }
+    .btn-new-tab { flex-shrink: 0; align-self: center; margin: 0 4px; }
+
+    .query-toolbar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 8px; border-bottom: 1px solid var(--vscode-panel-border); flex-shrink: 0;
+    }
+    .conn-select {
+      flex: 1; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground);
+      border: 1px solid var(--vscode-dropdown-border, transparent); padding: 2px 4px;
+      font-size: var(--vscode-font-size); font-family: var(--vscode-font-family); outline: none;
+      max-width: 180px;
+    }
+
+    #monaco-container { flex: 1; min-height: 120px; overflow: hidden; }
+
+    .query-status {
+      padding: 2px 8px; font-size: 11px; flex-shrink: 0;
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-editorGroupHeader-tabsBackground);
+      border-top: 1px solid var(--vscode-panel-border);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .query-status.error { color: var(--vscode-errorForeground); }
+
+    .results-section {
+      flex-shrink: 0; max-height: 220px; overflow: auto;
+      border-top: 1px solid var(--vscode-panel-border);
+    }
+    .result-grid { width: max-content; min-width: 100%; border-collapse: collapse; }
+    .result-grid th {
+      position: sticky; top: 0; z-index: 1;
+      background: var(--vscode-editorGroupHeader-tabsBackground);
+      padding: 3px 8px; text-align: left; font-weight: 600;
+      border-bottom: 2px solid var(--vscode-panel-border); white-space: nowrap; font-size: 11px;
+    }
+    .result-grid td {
+      padding: 2px 8px; border-bottom: 1px solid rgba(128,128,128,0.1);
+      white-space: nowrap; font-size: 11px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;
+    }
+    .result-grid tr:hover { background: var(--vscode-list-hoverBackground); }
+    .result-null { color: var(--vscode-descriptionForeground); font-style: italic; }
+
+    /* ── History panel (#18) ─────────────────────────────────────── */
+    .history-list { flex: 1; overflow-y: auto; }
+    .history-item { padding: 6px 12px; border-bottom: 1px solid rgba(128,128,128,0.08); cursor: pointer; }
+    .history-item:hover { background: var(--vscode-list-hoverBackground); }
+    .history-sql { font-family: var(--vscode-editor-font-family, monospace); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+    .history-meta { display: flex; gap: 8px; font-size: 10px; color: var(--vscode-descriptionForeground); }
+
+    /* Placeholder */
+    .placeholder { display: flex; align-items: center; justify-content: center; flex: 1; color: var(--vscode-descriptionForeground); font-style: italic; padding: 24px; }
   </style>
 </head>
 <body>
@@ -286,27 +232,20 @@ export function getSidebarHtml(params: {
     <button class="tab" data-tab="history"><i class="codicon codicon-history"></i>History</button>
   </div>
 
-  <!-- Explorer panel -->
+  <!-- ── Explorer panel ───────────────────────────────────────────── -->
   <div class="panel" id="panel-explorer">
-
-    <!-- Tree view -->
     <div class="view" id="view-tree">
       <div class="search-bar">
         <i class="search-icon codicon codicon-search"></i>
         <input class="search-input" id="search-input" type="text" placeholder="Filter tables, views, functions…">
-        <button class="search-clear hidden" id="search-clear" title="Clear filter">
-          <i class="codicon codicon-close"></i>
-        </button>
+        <button class="search-clear hidden" id="search-clear" title="Clear"><i class="codicon codicon-close"></i></button>
       </div>
       <div class="tree" id="tree"></div>
       <div class="list-footer">
-        <button class="btn btn-secondary" id="btn-add-conn">
-          <i class="codicon codicon-add"></i>Add Connection
-        </button>
+        <button class="btn btn-secondary" id="btn-add-conn"><i class="codicon codicon-add"></i>Add Connection</button>
       </div>
     </div>
 
-    <!-- Form view -->
     <div class="view hidden" id="view-form">
       <div class="form-header">
         <button class="btn-icon" id="btn-back" title="Back"><i class="codicon codicon-arrow-left"></i></button>
@@ -349,46 +288,77 @@ export function getSidebarHtml(params: {
             </div>
           </div>
           <div class="form-actions">
-            <button type="button" class="btn btn-secondary" id="btn-test">
-              <i class="codicon codicon-plug"></i>Test
-            </button>
+            <button type="button" class="btn btn-secondary" id="btn-test"><i class="codicon codicon-plug"></i>Test</button>
             <span class="test-status" id="test-status"></span>
-            <button type="submit" class="btn btn-primary">
-              <i class="codicon codicon-save"></i>Save
-            </button>
+            <button type="submit" class="btn btn-primary"><i class="codicon codicon-save"></i>Save</button>
           </div>
         </form>
       </div>
     </div>
   </div>
 
-  <!-- Query panel -->
+  <!-- ── Query panel (#15 #16 #17) ────────────────────────────────── -->
   <div class="panel hidden" id="panel-query">
-    <div class="placeholder">Query editor — coming in v0.3</div>
+    <div class="query-tabs-bar">
+      <div class="query-tab-list" id="query-tab-list"></div>
+      <button class="btn-icon btn-new-tab" id="btn-new-tab" title="New query tab"><i class="codicon codicon-add"></i></button>
+    </div>
+    <div class="query-toolbar">
+      <select class="conn-select" id="conn-select"><option value="">Select connection…</option></select>
+      <button class="btn btn-primary" id="btn-run"><i class="codicon codicon-play"></i>Run</button>
+    </div>
+    <div id="monaco-container"></div>
+    <div class="query-status hidden" id="query-status"></div>
+    <div class="results-section hidden" id="results-section"></div>
   </div>
 
-  <!-- History panel -->
+  <!-- ── History panel (#18) ──────────────────────────────────────── -->
   <div class="panel hidden" id="panel-history">
-    <div class="placeholder">Query history — coming in v0.3</div>
+    <div class="search-bar">
+      <i class="search-icon codicon codicon-search"></i>
+      <input class="search-input" id="history-search" type="text" placeholder="Search history…">
+      <button class="search-clear hidden" id="history-clear" title="Clear"><i class="codicon codicon-close"></i></button>
+    </div>
+    <div class="history-list" id="history-list">
+      <div class="empty-state"><span>No history yet.</span></div>
+    </div>
   </div>
 
+  <script nonce="${nonce}" src="${MONACO_CDN}/loader.js"></script>
   <script nonce="${nonce}">
   (function () {
     var vscode = acquireVsCodeApi();
 
-    // ── State ────────────────────────────────────────────────────────
-    var persisted    = vscode.getState() || { tab: 'explorer' };
+    // ── Persisted & ephemeral state ──────────────────────────────────
+    var persisted = vscode.getState() || { tab: 'explorer', tabs: null, activeTabId: null };
+
+    // Explorer state
     var connections  = [];
-    var statuses     = {};    // { connId: status }
-    var schemas      = {};    // { connId: [{name}] }
-    var tables       = {};    // { 'connId:schema': [{name,type}] }
-    var cols         = {};    // { 'connId:schema:table': [ColumnInfo] }
-    var funcs        = {};    // { 'connId:schema': [FunctionInfo] }
-    var funcParams   = {};    // { 'connId:schema:specificName': [FunctionParam] }
-    var expanded     = {};    // { nodeId: true }
-    var loadingNodes = {};    // { nodeId: true }
+    var statuses     = {};
+    var schemas      = {};
+    var tables       = {};
+    var cols         = {};
+    var funcs        = {};
+    var funcParams   = {};
+    var expanded     = {};
+    var loadingNodes = {};
     var filter       = '';
     var editingId    = null;
+
+    // Query state (#17)
+    var tabs = persisted.tabs && persisted.tabs.length
+      ? persisted.tabs
+      : [{ id: 'qtab-1', name: 'Query 1', sql: '-- Write your query here\\nSELECT 1;', connId: null, result: null }];
+    var activeQTabId = persisted.activeTabId || tabs[0].id;
+
+    // Monaco (#15)
+    var monacoReady = false;
+    var monacoEditor = null;
+    var completionProvider = null;
+
+    // History (#18)
+    var historyEntries = [];
+    var filteredHistory = [];
 
     // ── Helpers ──────────────────────────────────────────────────────
     function esc(s) {
@@ -416,36 +386,36 @@ export function getSidebarHtml(params: {
           attrs += ' data-' + attr + '="' + esc(String(data[k])) + '"';
         }
       }
-      return '<button class="btn-icon' + (danger ? ' btn-danger' : '') + '"'
-        + attrs + ' title="' + esc(title) + '">'
+      return '<button class="btn-icon' + (danger ? ' btn-danger' : '') + '"' + attrs + ' title="' + esc(title) + '">'
         + '<i class="codicon ' + icon + '"></i></button>';
     }
 
     function loadingRow(level) {
-      return '<div class="tree-row">'
-        + '<span class="indent" style="width:' + (level * 16) + 'px"></span>'
+      return '<div class="tree-row"><span class="indent" style="width:' + (level * 16) + 'px"></span>'
         + '<i class="codicon codicon-loading codicon-modifier-spin" style="margin-right:6px;font-size:13px;"></i>'
-        + '<span class="tree-label" style="color:var(--vscode-descriptionForeground)">Loading…</span>'
-        + '</div>';
+        + '<span class="tree-label" style="color:var(--vscode-descriptionForeground)">Loading…</span></div>';
     }
 
     function infoRow(level, text) {
-      return '<div class="tree-row">'
-        + '<span class="indent" style="width:' + (level * 16) + 'px"></span>'
+      return '<div class="tree-row"><span class="indent" style="width:' + (level * 16) + 'px"></span>'
         + '<span class="toggle"></span>'
-        + '<span class="tree-label" style="color:var(--vscode-descriptionForeground);font-style:italic">' + esc(text) + '</span>'
-        + '</div>';
+        + '<span class="tree-label" style="color:var(--vscode-descriptionForeground);font-style:italic">' + esc(text) + '</span></div>';
     }
 
-    // ── Tree rendering ───────────────────────────────────────────────
+    function saveState() {
+      persisted.tab = persisted.tab || 'explorer';
+      persisted.tabs = tabs.map(function (t) { return { id: t.id, name: t.name, sql: t.sql, connId: t.connId }; });
+      persisted.activeTabId = activeQTabId;
+      vscode.setState(persisted);
+    }
+
+    // ── Tree rendering (Explorer) ─────────────────────────────────────
     function renderTree() {
       var treeEl = document.getElementById('tree');
       if (!treeEl) return;
       if (connections.length === 0) {
-        treeEl.innerHTML = '<div class="empty-state">'
-          + '<span>No connections yet.</span>'
-          + '<button class="btn btn-primary" id="btn-add-first"><i class="codicon codicon-add"></i>Add Connection</button>'
-          + '</div>';
+        treeEl.innerHTML = '<div class="empty-state"><span>No connections yet.</span>'
+          + '<button class="btn btn-primary" id="btn-add-first"><i class="codicon codicon-add"></i>Add Connection</button></div>';
         var b = document.getElementById('btn-add-first');
         if (b) b.addEventListener('click', function () { showForm(null); });
         return;
@@ -463,18 +433,11 @@ export function getSidebarHtml(params: {
       var status = statuses[conn.id] || 'disconnected';
       var isConn = status === 'connected';
       var isExp  = !!expanded[nid];
-      var isLoad = !!loadingNodes[nid];
-
-      var toggleCls = '';
-      if (status === 'connecting') toggleCls = 'codicon-loading codicon-modifier-spin';
-      else if (isConn) toggleCls = isExp ? 'codicon-chevron-down' : 'codicon-chevron-right';
-
+      var toggleCls = status === 'connecting' ? 'codicon-loading codicon-modifier-spin'
+                    : isConn ? (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') : '';
       var acts = '';
-      if (status === 'disconnected' || status === 'error') {
-        acts += btnIcon('connect', { connId: conn.id }, 'codicon-plug', 'Connect');
-      } else if (status === 'connected') {
-        acts += btnIcon('disconnect', { connId: conn.id }, 'codicon-debug-disconnect', 'Disconnect');
-      }
+      if (status === 'disconnected' || status === 'error') acts += btnIcon('connect', { connId: conn.id }, 'codicon-plug', 'Connect');
+      else if (status === 'connected') acts += btnIcon('disconnect', { connId: conn.id }, 'codicon-debug-disconnect', 'Disconnect');
       acts += btnIcon('edit-conn', { connId: conn.id }, 'codicon-edit', 'Edit');
       acts += btnIcon('delete-conn', { connId: conn.id }, 'codicon-trash', 'Delete', true);
 
@@ -484,20 +447,13 @@ export function getSidebarHtml(params: {
         + '<span class="status-dot ' + status + '"></span>'
         + '<i class="tree-icon codicon codicon-server"></i>'
         + '<span class="tree-label">' + hl(conn.label, f) + '</span>'
-        + '<div class="tree-actions">' + acts + '</div>'
-        + '</div>';
+        + '<div class="tree-actions">' + acts + '</div></div>';
 
       if (isExp && isConn) {
-        if (isLoad) {
-          html += loadingRow(1);
-        } else {
-          var sl = schemas[conn.id] || [];
-          if (sl.length === 0) {
-            html += infoRow(1, 'No schemas');
-          } else {
-            sl.forEach(function (s) { html += renderSchema(conn.id, s.name, f); });
-          }
-        }
+        var sl = schemas[conn.id] || [];
+        if (loadingNodes[nid]) { html += loadingRow(1); }
+        else if (sl.length === 0) { html += infoRow(1, 'No schemas'); }
+        else { sl.forEach(function (s) { html += renderSchema(conn.id, s.name, f); }); }
       }
       return html;
     }
@@ -505,16 +461,12 @@ export function getSidebarHtml(params: {
     function renderSchema(connId, schemaName, f) {
       var nid = 's:' + connId + ':' + schemaName;
       var isExp = !!expanded[nid];
-      var toggleCls = isExp ? 'codicon-chevron-down' : 'codicon-chevron-right';
-
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:16px"></span>'
-        + '<span class="toggle codicon ' + toggleCls + '"></span>'
+        + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
         + '<i class="tree-icon codicon codicon-symbol-namespace"></i>'
         + '<span class="tree-label">' + hl(schemaName, f) + '</span>'
-        + '<div class="tree-actions"></div>'
-        + '</div>';
-
+        + '<div class="tree-actions"></div></div>';
       if (isExp) {
         html += renderTablesGroup(connId, schemaName, f);
         html += renderFuncsGroup(connId, schemaName, f);
@@ -524,33 +476,22 @@ export function getSidebarHtml(params: {
 
     function renderTablesGroup(connId, schemaName, f) {
       var nid = 'tg:' + connId + ':' + schemaName;
-      var isExp  = !!expanded[nid];
-      var isLoad = !!loadingNodes[nid];
-      var toggleCls = isExp ? 'codicon-chevron-down' : 'codicon-chevron-right';
+      var isExp = !!expanded[nid];
       var tList = tables[connId + ':' + schemaName];
-      var badge = tList ? String(tList.length) : '';
-
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:32px"></span>'
-        + '<span class="toggle codicon ' + toggleCls + '"></span>'
+        + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
         + '<i class="tree-icon codicon codicon-list-flat"></i>'
         + '<span class="tree-label">Tables &amp; Views</span>'
-        + (badge ? '<span class="tree-badge">' + esc(badge) + '</span>' : '')
-        + '<div class="tree-actions"></div>'
-        + '</div>';
-
+        + (tList ? '<span class="tree-badge">' + tList.length + '</span>' : '')
+        + '<div class="tree-actions"></div></div>';
       if (isExp) {
-        if (isLoad) {
-          html += loadingRow(3);
-        } else if (!tList) {
-          html += infoRow(3, 'Loading…');
-        } else {
+        if (loadingNodes[nid]) { html += loadingRow(3); }
+        else if (!tList) { html += infoRow(3, 'Loading…'); }
+        else {
           var filtered = f ? tList.filter(function (t) { return t.name.toLowerCase().indexOf(f) >= 0; }) : tList;
-          if (filtered.length === 0) {
-            html += infoRow(3, f ? 'No matches' : 'Empty schema');
-          } else {
-            filtered.forEach(function (t) { html += renderTableNode(connId, schemaName, t, f); });
-          }
+          if (!filtered.length) { html += infoRow(3, f ? 'No matches' : 'Empty schema'); }
+          else { filtered.forEach(function (t) { html += renderTableNode(connId, schemaName, t, f); }); }
         }
       }
       return html;
@@ -558,33 +499,22 @@ export function getSidebarHtml(params: {
 
     function renderFuncsGroup(connId, schemaName, f) {
       var nid = 'fg:' + connId + ':' + schemaName;
-      var isExp  = !!expanded[nid];
-      var isLoad = !!loadingNodes[nid];
-      var toggleCls = isExp ? 'codicon-chevron-down' : 'codicon-chevron-right';
+      var isExp = !!expanded[nid];
       var fList = funcs[connId + ':' + schemaName];
-      var badge = fList ? String(fList.length) : '';
-
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:32px"></span>'
-        + '<span class="toggle codicon ' + toggleCls + '"></span>'
+        + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
         + '<i class="tree-icon codicon codicon-symbol-method"></i>'
         + '<span class="tree-label">Functions</span>'
-        + (badge ? '<span class="tree-badge">' + esc(badge) + '</span>' : '')
-        + '<div class="tree-actions"></div>'
-        + '</div>';
-
+        + (fList ? '<span class="tree-badge">' + fList.length + '</span>' : '')
+        + '<div class="tree-actions"></div></div>';
       if (isExp) {
-        if (isLoad) {
-          html += loadingRow(3);
-        } else if (!fList) {
-          html += infoRow(3, 'Loading…');
-        } else {
+        if (loadingNodes[nid]) { html += loadingRow(3); }
+        else if (!fList) { html += infoRow(3, 'Loading…'); }
+        else {
           var filtered = f ? fList.filter(function (fn) { return fn.name.toLowerCase().indexOf(f) >= 0; }) : fList;
-          if (filtered.length === 0) {
-            html += infoRow(3, f ? 'No matches' : 'No functions');
-          } else {
-            filtered.forEach(function (fn) { html += renderFuncNode(connId, schemaName, fn, f); });
-          }
+          if (!filtered.length) { html += infoRow(3, f ? 'No matches' : 'No functions'); }
+          else { filtered.forEach(function (fn) { html += renderFuncNode(connId, schemaName, fn, f); }); }
         }
       }
       return html;
@@ -592,89 +522,60 @@ export function getSidebarHtml(params: {
 
     function renderTableNode(connId, schemaName, t, f) {
       var isView = t.type === 'view';
-      var nid    = (isView ? 'v:' : 't:') + connId + ':' + schemaName + ':' + t.name;
-      var isExp  = !!expanded[nid];
-      var isLoad = !!loadingNodes[nid];
-      var icon   = isView ? 'codicon-layout' : 'codicon-table';
-      var toggleCls = isExp ? 'codicon-chevron-down' : 'codicon-chevron-right';
+      var nid = (isView ? 'v:' : 't:') + connId + ':' + schemaName + ':' + t.name;
+      var isExp = !!expanded[nid];
       var colList = cols[connId + ':' + schemaName + ':' + t.name];
-      var badge = colList ? String(colList.length) : '';
-
-      var acts = btnIcon('preview', { connId: connId, schema: schemaName, table: t.name }, 'codicon-open-preview', 'Preview');
-      acts += btnIcon('copy-name', { name: t.name }, 'codicon-copy', 'Copy name');
-
+      var acts = btnIcon('preview', { connId: connId, schema: schemaName, table: t.name }, 'codicon-open-preview', 'Preview')
+               + btnIcon('copy-name', { name: t.name }, 'codicon-copy', 'Copy name');
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:48px"></span>'
-        + '<span class="toggle codicon ' + toggleCls + '"></span>'
-        + '<i class="tree-icon codicon ' + icon + '"></i>'
+        + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
+        + '<i class="tree-icon codicon ' + (isView ? 'codicon-layout' : 'codicon-table') + '"></i>'
         + '<span class="tree-label">' + hl(t.name, f) + '</span>'
-        + (badge ? '<span class="tree-badge">' + esc(badge) + '</span>' : '')
-        + '<div class="tree-actions">' + acts + '</div>'
-        + '</div>';
-
+        + (colList ? '<span class="tree-badge">' + colList.length + '</span>' : '')
+        + '<div class="tree-actions">' + acts + '</div></div>';
       if (isExp) {
-        if (isLoad) {
-          html += loadingRow(4);
-        } else if (!colList) {
-          html += infoRow(4, 'Loading…');
-        } else if (colList.length === 0) {
-          html += infoRow(4, 'No columns');
-        } else {
-          colList.forEach(function (c) { html += renderColRow(c); });
-        }
+        if (loadingNodes[nid]) { html += loadingRow(4); }
+        else if (!colList) { html += infoRow(4, 'Loading…'); }
+        else if (!colList.length) { html += infoRow(4, 'No columns'); }
+        else { colList.forEach(function (c) { html += renderColRow(c); }); }
       }
       return html;
     }
 
     function renderColRow(c) {
       var icon = c.isPrimaryKey ? 'codicon-key' : c.isForeignKey ? 'codicon-link' : 'codicon-symbol-field';
-      var badges = '';
-      if (c.isPrimaryKey) badges += '<span class="col-badge pk">PK</span>';
-      if (c.isForeignKey) badges += '<span class="col-badge fk">FK</span>';
-      return '<div class="tree-row">'
-        + '<span class="indent" style="width:64px"></span>'
+      return '<div class="tree-row"><span class="indent" style="width:64px"></span>'
         + '<span class="toggle" style="width:16px;display:inline-block"></span>'
         + '<i class="tree-icon codicon ' + icon + '"></i>'
         + '<span class="tree-label">' + esc(c.name) + '</span>'
-        + badges
-        + '<span class="col-type">' + esc(c.dataType) + '</span>'
-        + '</div>';
+        + (c.isPrimaryKey ? '<span class="col-badge pk">PK</span>' : '')
+        + (c.isForeignKey ? '<span class="col-badge fk">FK</span>' : '')
+        + '<span class="col-type">' + esc(c.dataType) + '</span></div>';
     }
 
     function renderFuncNode(connId, schemaName, fn, f) {
-      var nid    = 'f:' + connId + ':' + schemaName + ':' + fn.specificName;
-      var isExp  = !!expanded[nid];
-      var isLoad = !!loadingNodes[nid];
-      var icon   = fn.type === 'FUNCTION' ? 'codicon-symbol-function' : 'codicon-symbol-operator';
-      var toggleCls = isExp ? 'codicon-chevron-down' : 'codicon-chevron-right';
-
+      var nid = 'f:' + connId + ':' + schemaName + ':' + fn.specificName;
+      var isExp = !!expanded[nid];
+      var pList = funcParams[connId + ':' + schemaName + ':' + fn.specificName];
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:48px"></span>'
-        + '<span class="toggle codicon ' + toggleCls + '"></span>'
-        + '<i class="tree-icon codicon ' + icon + '"></i>'
+        + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
+        + '<i class="tree-icon codicon ' + (fn.type === 'FUNCTION' ? 'codicon-symbol-function' : 'codicon-symbol-operator') + '"></i>'
         + '<span class="tree-label">' + hl(fn.name, f) + '</span>'
         + (fn.returnType ? '<span class="col-type">→ ' + esc(fn.returnType) + '</span>' : '')
-        + '<div class="tree-actions">' + btnIcon('copy-name', { name: fn.name }, 'codicon-copy', 'Copy name') + '</div>'
-        + '</div>';
-
+        + '<div class="tree-actions">' + btnIcon('copy-name', { name: fn.name }, 'codicon-copy', 'Copy name') + '</div></div>';
       if (isExp) {
-        var pKey = connId + ':' + schemaName + ':' + fn.specificName;
-        var pList = funcParams[pKey];
-        if (isLoad) {
-          html += loadingRow(4);
-        } else if (!pList) {
-          html += infoRow(4, 'Loading…');
-        } else if (pList.length === 0) {
-          html += infoRow(4, 'No parameters');
-        } else {
+        if (loadingNodes[nid]) { html += loadingRow(4); }
+        else if (!pList) { html += infoRow(4, 'Loading…'); }
+        else if (!pList.length) { html += infoRow(4, 'No parameters'); }
+        else {
           pList.forEach(function (p) {
-            html += '<div class="tree-row">'
-              + '<span class="indent" style="width:64px"></span>'
+            html += '<div class="tree-row"><span class="indent" style="width:64px"></span>'
               + '<span class="toggle" style="width:16px;display:inline-block"></span>'
               + '<i class="tree-icon codicon codicon-symbol-variable"></i>'
               + '<span class="tree-label">' + esc(p.name) + '</span>'
-              + '<span class="col-type">' + esc(p.mode + ' ' + p.dataType) + '</span>'
-              + '</div>';
+              + '<span class="col-type">' + esc(p.mode + ' ' + p.dataType) + '</span></div>';
           });
         }
       }
@@ -684,50 +585,36 @@ export function getSidebarHtml(params: {
     // ── Node toggle ──────────────────────────────────────────────────
     function toggleNode(nid) {
       if (!nid) return;
-      var ci = nid.indexOf(':');
+      var ci   = nid.indexOf(':');
       var type = nid.slice(0, ci);
       var rest = nid.slice(ci + 1);
+      expanded[nid] = !expanded[nid];
 
       if (expanded[nid]) {
-        expanded[nid] = false;
-      } else {
-        expanded[nid] = true;
-
         if (type === 'c') {
-          var connId = rest;
-          if (!schemas[connId] && !loadingNodes[nid] && (statuses[connId] === 'connected')) {
+          if (!schemas[rest] && !loadingNodes[nid] && statuses[rest] === 'connected') {
             loadingNodes[nid] = true;
-            vscode.postMessage({ command: 'loadSchemas', data: { connId: connId } });
+            vscode.postMessage({ command: 'loadSchemas', data: { connId: rest } });
           }
-        } else if (type === 'tg') {
-          var p = rest.indexOf(':');
-          var cId = rest.slice(0, p);
-          var sc  = rest.slice(p + 1);
+        } else if (type === 'tg' || type === 'fg') {
+          var p = rest.indexOf(':'); var cId = rest.slice(0, p); var sc = rest.slice(p + 1);
           var key = cId + ':' + sc;
-          if (!tables[key] && !loadingNodes[nid]) {
+          if (type === 'tg' && !tables[key] && !loadingNodes[nid]) {
             loadingNodes[nid] = true;
             vscode.postMessage({ command: 'loadTables', data: { connId: cId, schema: sc } });
-          }
-        } else if (type === 'fg') {
-          var p = rest.indexOf(':');
-          var cId = rest.slice(0, p);
-          var sc  = rest.slice(p + 1);
-          var key = cId + ':' + sc;
-          if (!funcs[key] && !loadingNodes[nid]) {
+          } else if (type === 'fg' && !funcs[key] && !loadingNodes[nid]) {
             loadingNodes[nid] = true;
             vscode.postMessage({ command: 'loadFunctions', data: { connId: cId, schema: sc } });
           }
         } else if (type === 't' || type === 'v') {
-          var parts = rest.split(':');
-          var cId = parts[0]; var sc = parts[1]; var tbl = parts[2];
+          var parts = rest.split(':'); var cId = parts[0]; var sc = parts[1]; var tbl = parts[2];
           var key = cId + ':' + sc + ':' + tbl;
           if (!cols[key] && !loadingNodes[nid]) {
             loadingNodes[nid] = true;
             vscode.postMessage({ command: 'loadColumns', data: { connId: cId, schema: sc, table: tbl } });
           }
         } else if (type === 'f') {
-          var parts = rest.split(':');
-          var cId = parts[0]; var sc = parts[1]; var sn = parts[2];
+          var parts = rest.split(':'); var cId = parts[0]; var sc = parts[1]; var sn = parts[2];
           var key = cId + ':' + sc + ':' + sn;
           if (!funcParams[key] && !loadingNodes[nid]) {
             loadingNodes[nid] = true;
@@ -738,74 +625,56 @@ export function getSidebarHtml(params: {
       renderTree();
     }
 
-    // ── Event delegation ─────────────────────────────────────────────
     document.getElementById('tree').addEventListener('click', function (e) {
       var actionEl = e.target.closest('[data-action]');
-      if (actionEl) { e.stopPropagation(); handleAction(actionEl); return; }
+      if (actionEl) { e.stopPropagation(); handleTreeAction(actionEl); return; }
       var rowEl = e.target.closest('.tree-row[data-node]');
       if (rowEl && rowEl.dataset.node) toggleNode(rowEl.dataset.node);
     });
 
-    function handleAction(el) {
-      var action = el.dataset.action;
+    function handleTreeAction(el) {
       var d = el.dataset;
-      switch (action) {
+      switch (d.action) {
         case 'connect':
-          statuses[d.connId] = 'connecting';
-          renderTree();
-          vscode.postMessage({ command: 'connect', data: { connId: d.connId } });
-          break;
+          statuses[d.connId] = 'connecting'; renderTree();
+          vscode.postMessage({ command: 'connect', data: { connId: d.connId } }); break;
         case 'disconnect':
-          vscode.postMessage({ command: 'disconnect', data: { connId: d.connId } });
-          break;
+          vscode.postMessage({ command: 'disconnect', data: { connId: d.connId } }); break;
         case 'edit-conn': {
           var conn = connections.find(function (c) { return c.id === d.connId; });
-          if (conn) showForm(conn);
-          break;
+          if (conn) showForm(conn); break;
         }
         case 'delete-conn':
-          vscode.postMessage({ command: 'deleteConnection', data: { id: d.connId } });
-          break;
+          vscode.postMessage({ command: 'deleteConnection', data: { id: d.connId } }); break;
         case 'preview':
-          vscode.postMessage({ command: 'previewTable', data: { connId: d.connId, schema: d.schema, table: d.table } });
-          break;
+          vscode.postMessage({ command: 'previewTable', data: { connId: d.connId, schema: d.schema, table: d.table } }); break;
         case 'copy-name':
-          navigator.clipboard.writeText(d.name).catch(function () {});
-          break;
+          navigator.clipboard.writeText(d.name).catch(function () {}); break;
       }
     }
 
-    // ── Search / filter (#14) ────────────────────────────────────────
+    // ── Explorer search ──────────────────────────────────────────────
     var searchInput = document.getElementById('search-input');
     var searchClear = document.getElementById('search-clear');
-
-    searchInput.addEventListener('input', function () {
-      filter = searchInput.value;
-      searchClear.classList.toggle('hidden', !filter);
-      renderTree();
-    });
-
-    searchInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') { searchInput.value = ''; filter = ''; searchClear.classList.add('hidden'); renderTree(); }
-    });
-
-    searchClear.addEventListener('click', function () {
-      searchInput.value = ''; filter = ''; searchClear.classList.add('hidden'); renderTree();
-    });
+    searchInput.addEventListener('input', function () { filter = searchInput.value; searchClear.classList.toggle('hidden', !filter); renderTree(); });
+    searchInput.addEventListener('keydown', function (e) { if (e.key === 'Escape') { searchInput.value = ''; filter = ''; searchClear.classList.add('hidden'); renderTree(); } });
+    searchClear.addEventListener('click', function () { searchInput.value = ''; filter = ''; searchClear.classList.add('hidden'); renderTree(); });
 
     // ── Tab switching ────────────────────────────────────────────────
-    function switchTab(tab) {
+    function switchMainTab(tab) {
       persisted.tab = tab;
-      vscode.setState(persisted);
+      saveState();
       document.querySelectorAll('.tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === tab); });
       document.querySelectorAll('.panel').forEach(function (p) { p.classList.toggle('hidden', p.id !== 'panel-' + tab); });
+      if (tab === 'query') { setTimeout(ensureMonacoReady, 30); renderQueryTabs(); renderConnSelect(); }
+      if (tab === 'history') { if (!historyEntries.length) vscode.postMessage({ command: 'loadHistory' }); renderHistory(); }
     }
 
     document.querySelectorAll('.tab').forEach(function (btn) {
-      btn.addEventListener('click', function () { switchTab(btn.dataset.tab); });
+      btn.addEventListener('click', function () { switchMainTab(btn.dataset.tab); });
     });
 
-    // ── Form helpers ─────────────────────────────────────────────────
+    // ── Explorer form ────────────────────────────────────────────────
     function showForm(conn) {
       editingId = conn ? conn.id : null;
       document.getElementById('form-title').textContent = conn ? 'Edit Connection' : 'Add Connection';
@@ -816,136 +685,284 @@ export function getSidebarHtml(params: {
       document.getElementById('f-user').value     = conn ? conn.user     : '';
       document.getElementById('f-password').value = '';
       document.getElementById('f-ssl').checked    = conn ? conn.ssl      : false;
-      var ts = document.getElementById('test-status');
-      ts.textContent = ''; ts.className = 'test-status';
+      var ts = document.getElementById('test-status'); ts.textContent = ''; ts.className = 'test-status';
       document.getElementById('view-tree').classList.add('hidden');
       document.getElementById('view-form').classList.remove('hidden');
     }
-
-    function showTree() {
-      editingId = null;
-      document.getElementById('view-form').classList.add('hidden');
-      document.getElementById('view-tree').classList.remove('hidden');
-    }
-
+    function showTree() { editingId = null; document.getElementById('view-form').classList.add('hidden'); document.getElementById('view-tree').classList.remove('hidden'); }
     function getFormData() {
-      return {
-        conn: {
-          id:       editingId,
-          label:    document.getElementById('f-label').value.trim(),
-          host:     document.getElementById('f-host').value.trim(),
-          port:     parseInt(document.getElementById('f-port').value, 10) || 5432,
-          database: document.getElementById('f-database').value.trim(),
-          user:     document.getElementById('f-user').value.trim(),
-          ssl:      document.getElementById('f-ssl').checked,
-        },
-        password: document.getElementById('f-password').value,
-      };
+      return { conn: { id: editingId, label: document.getElementById('f-label').value.trim(), host: document.getElementById('f-host').value.trim(), port: parseInt(document.getElementById('f-port').value, 10) || 5432, database: document.getElementById('f-database').value.trim(), user: document.getElementById('f-user').value.trim(), ssl: document.getElementById('f-ssl').checked }, password: document.getElementById('f-password').value };
     }
-
     document.getElementById('btn-add-conn').addEventListener('click', function () { showForm(null); });
     document.getElementById('btn-back').addEventListener('click', showTree);
-
     document.getElementById('btn-test').addEventListener('click', function () {
-      var ts = document.getElementById('test-status');
-      ts.textContent = 'Testing…'; ts.className = 'test-status testing';
+      var ts = document.getElementById('test-status'); ts.textContent = 'Testing…'; ts.className = 'test-status testing';
       vscode.postMessage({ command: 'testConnection', data: getFormData() });
     });
+    document.getElementById('conn-form').addEventListener('submit', function (e) { e.preventDefault(); vscode.postMessage({ command: 'saveConnection', data: getFormData() }); });
 
-    document.getElementById('conn-form').addEventListener('submit', function (e) {
-      e.preventDefault();
-      vscode.postMessage({ command: 'saveConnection', data: getFormData() });
+    // ── Query tabs (#17) ─────────────────────────────────────────────
+    function activeQTab() { return tabs.find(function (t) { return t.id === activeQTabId; }) || tabs[0]; }
+
+    function renderQueryTabs() {
+      var html = '';
+      tabs.forEach(function (t) {
+        var isAct = t.id === activeQTabId;
+        html += '<div class="query-tab ' + (isAct ? 'active' : '') + '" data-qtab="' + esc(t.id) + '">'
+          + '<span class="query-tab-name">' + esc(t.name) + '</span>'
+          + (tabs.length > 1 ? '<button class="query-tab-close" data-close-tab="' + esc(t.id) + '" title="Close"><i class="codicon codicon-close"></i></button>' : '')
+          + '</div>';
+      });
+      document.getElementById('query-tab-list').innerHTML = html;
+    }
+
+    document.getElementById('query-tab-list').addEventListener('click', function (e) {
+      var closeBtn = e.target.closest('[data-close-tab]');
+      if (closeBtn) { e.stopPropagation(); closeQTab(closeBtn.dataset.closeTab); return; }
+      var tabEl = e.target.closest('[data-qtab]');
+      if (tabEl) switchQTab(tabEl.dataset.qtab);
     });
+
+    document.getElementById('btn-new-tab').addEventListener('click', function () {
+      var n = tabs.length + 1;
+      var t = { id: 'qtab-' + Date.now(), name: 'Query ' + n, sql: '', connId: activeQTab().connId, result: null };
+      tabs.push(t);
+      switchQTab(t.id);
+    });
+
+    function switchQTab(id) {
+      if (monacoEditor && activeQTabId) activeQTab().sql = monacoEditor.getValue();
+      activeQTabId = id;
+      var tab = activeQTab();
+      if (monacoEditor) monacoEditor.setValue(tab.sql || '');
+      saveState();
+      renderQueryTabs();
+      renderConnSelect();
+      renderResults(tab.result);
+      var statusEl = document.getElementById('query-status');
+      if (tab.result) {
+        statusEl.classList.remove('hidden');
+        var isErr = !!tab.result.error;
+        statusEl.className = 'query-status' + (isErr ? ' error' : '');
+        statusEl.textContent = isErr ? (tab.result.error || 'Error') : (tab.result.rowCount + ' rows · ' + tab.result.durationMs + 'ms');
+      } else {
+        statusEl.classList.add('hidden');
+      }
+    }
+
+    function closeQTab(id) {
+      var idx = tabs.findIndex(function (t) { return t.id === id; });
+      if (idx < 0) return;
+      tabs.splice(idx, 1);
+      if (activeQTabId === id) switchQTab(tabs[Math.max(0, idx - 1)].id);
+      else { saveState(); renderQueryTabs(); }
+    }
+
+    // ── Connection select ────────────────────────────────────────────
+    function renderConnSelect() {
+      var sel = document.getElementById('conn-select');
+      var tab = activeQTab();
+      sel.innerHTML = '<option value="">Select connection…</option>'
+        + connections.map(function (c) {
+            var s = statuses[c.id] || 'disconnected';
+            var dot = s === 'connected' ? ' ●' : ' ○';
+            return '<option value="' + esc(c.id) + '" ' + (tab.connId === c.id ? 'selected' : '') + '>'
+              + esc(c.label) + dot + '</option>';
+          }).join('');
+    }
+
+    document.getElementById('conn-select').addEventListener('change', function () {
+      var connId = this.value;
+      activeQTab().connId = connId;
+      saveState();
+      if (connId) vscode.postMessage({ command: 'loadCompletions', data: { connId: connId } });
+    });
+
+    // ── Monaco (#15) ─────────────────────────────────────────────────
+    function ensureMonacoReady() {
+      if (monacoReady) { if (monacoEditor) monacoEditor.layout(); return; }
+      var MONACO_BASE = '${MONACO_CDN}';
+      window.MonacoEnvironment = {
+        getWorkerUrl: function () {
+          var code = 'self.MonacoEnvironment={baseUrl:"' + MONACO_BASE + '/"};importScripts("' + MONACO_BASE + '/base/worker/workerMain.js");';
+          var blob = new Blob([code], { type: 'application/javascript' });
+          return URL.createObjectURL(blob);
+        }
+      };
+      require.config({ paths: { vs: MONACO_BASE } });
+      require(['vs/editor/editor.main'], function () {
+        monacoReady = true;
+        var isDark = document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast');
+        var tab = activeQTab();
+        monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
+          value: tab.sql || '',
+          language: 'sql',
+          theme: isDark ? 'vs-dark' : 'vs',
+          minimap: { enabled: false },
+          lineNumbers: 'on',
+          fontSize: 13,
+          wordWrap: 'on',
+          automaticLayout: true,
+          scrollBeyondLastLine: false,
+          tabSize: 2,
+          renderLineHighlight: 'all',
+        });
+        monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runQuery);
+        monacoEditor.onDidChangeModelContent(function () { activeQTab().sql = monacoEditor.getValue(); });
+        if (tab.connId) vscode.postMessage({ command: 'loadCompletions', data: { connId: tab.connId } });
+      });
+    }
+
+    // ── Execute query (#16) ──────────────────────────────────────────
+    document.getElementById('btn-run').addEventListener('click', runQuery);
+
+    function runQuery() {
+      var tab = activeQTab();
+      if (!tab.connId) { setStatus('No connection selected.', true); return; }
+      var sql = monacoEditor
+        ? (monacoEditor.getModel().getValueInRange(monacoEditor.getSelection()).trim() || monacoEditor.getValue().trim())
+        : tab.sql.trim();
+      if (!sql) return;
+      document.getElementById('btn-run').disabled = true;
+      setStatus('Executing…', false);
+      vscode.postMessage({ command: 'executeQuery', data: { connId: tab.connId, sql: sql, tabId: tab.id } });
+    }
+
+    function setStatus(msg, isErr) {
+      var el = document.getElementById('query-status');
+      el.classList.remove('hidden');
+      el.textContent = msg;
+      el.className = 'query-status' + (isErr ? ' error' : '');
+    }
+
+    function renderResults(result) {
+      var section = document.getElementById('results-section');
+      if (!result || result.error || !result.columns || !result.columns.length) { section.classList.add('hidden'); return; }
+      section.classList.remove('hidden');
+      var html = '<table class="result-grid"><thead><tr>';
+      result.columns.forEach(function (c) { html += '<th>' + esc(c) + '</th>'; });
+      html += '</tr></thead><tbody>';
+      (result.rows || []).forEach(function (row) {
+        html += '<tr>';
+        result.columns.forEach(function (c) {
+          var v = row[c];
+          if (v === null || v === undefined) { html += '<td><span class="result-null">NULL</span></td>'; }
+          else if (typeof v === 'object') { html += '<td>' + esc(JSON.stringify(v)) + '</td>'; }
+          else { html += '<td>' + esc(String(v)) + '</td>'; }
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      section.innerHTML = html;
+    }
+
+    // ── History (#18) ────────────────────────────────────────────────
+    var historySearch = document.getElementById('history-search');
+    var historyClear  = document.getElementById('history-clear');
+    historySearch.addEventListener('input', function () { historyClear.classList.toggle('hidden', !historySearch.value); renderHistory(); });
+    historySearch.addEventListener('keydown', function (e) { if (e.key === 'Escape') { historySearch.value = ''; historyClear.classList.add('hidden'); renderHistory(); } });
+    historyClear.addEventListener('click', function () { historySearch.value = ''; historyClear.classList.add('hidden'); renderHistory(); });
+
+    function renderHistory() {
+      var list = document.getElementById('history-list');
+      var q = historySearch.value.toLowerCase();
+      filteredHistory = q ? historyEntries.filter(function (h) { return h.sql.toLowerCase().indexOf(q) >= 0; }) : historyEntries;
+      if (!filteredHistory.length) {
+        list.innerHTML = '<div class="empty-state"><span>' + (q ? 'No matches' : 'No history yet.') + '</span></div>';
+        return;
+      }
+      list.innerHTML = filteredHistory.map(function (h, i) {
+        var preview = h.sql.replace(/\s+/g, ' ').slice(0, 100);
+        var time = new Date(h.timestamp).toLocaleString();
+        return '<div class="history-item" data-hidx="' + i + '">'
+          + '<div class="history-sql">' + esc(preview) + '</div>'
+          + '<div class="history-meta"><span>' + esc(h.connLabel) + '</span><span>' + esc(time) + '</span><span>' + h.rowCount + ' rows</span><span>' + h.durationMs + 'ms</span></div>'
+          + '</div>';
+      }).join('');
+    }
+
+    document.getElementById('history-list').addEventListener('click', function (e) {
+      var item = e.target.closest('[data-hidx]');
+      if (!item) return;
+      var entry = filteredHistory[parseInt(item.dataset.hidx, 10)];
+      if (!entry) return;
+      activeQTab().sql = entry.sql;
+      if (entry.connId) activeQTab().connId = entry.connId;
+      if (monacoEditor) monacoEditor.setValue(entry.sql);
+      saveState();
+      switchMainTab('query');
+    });
+
+    // ── Autocomplete (#19) ───────────────────────────────────────────
+    function registerCompletions(data) {
+      if (!monacoReady) return;
+      if (completionProvider) completionProvider.dispose();
+      completionProvider = monaco.languages.registerCompletionItemProvider('sql', {
+        provideCompletionItems: function (model, position) {
+          var word = model.getWordUntilPosition(position);
+          var range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: word.startColumn, endColumn: word.endColumn };
+          var suggestions = [];
+          (data.tables || []).forEach(function (t) {
+            suggestions.push({ label: t.name, kind: monaco.languages.CompletionItemKind.Class, insertText: t.name, range: range, detail: t.schema + ' · ' + (t.type === 'view' ? 'View' : 'Table') });
+            suggestions.push({ label: t.schema + '.' + t.name, kind: monaco.languages.CompletionItemKind.Class, insertText: t.schema + '.' + t.name, range: range, detail: t.type === 'view' ? 'View' : 'Table' });
+          });
+          (data.functions || []).forEach(function (f) {
+            suggestions.push({ label: f.name, kind: monaco.languages.CompletionItemKind.Function, insertText: f.name + '()', range: range, detail: f.schema + ' · Function' });
+          });
+          return { suggestions: suggestions };
+        }
+      });
+    }
 
     // ── Messages from extension host ─────────────────────────────────
     window.addEventListener('message', function (event) {
       var msg = event.data;
       switch (msg.command) {
-
         case 'updateConnections':
           connections = msg.data || [];
           renderTree();
           if (!document.getElementById('view-form').classList.contains('hidden')) showTree();
+          if (persisted.tab === 'query') { renderConnSelect(); }
           break;
-
         case 'updateStatuses':
-          statuses = msg.data || {};
-          renderTree();
-          break;
-
+          statuses = msg.data || {}; renderTree(); break;
         case 'connectionStatus': {
-          var s = msg.data;
-          statuses[s.id] = s.status;
-          delete loadingNodes['c:' + s.id];
-          if (s.status === 'connected') {
-            expanded['c:' + s.id] = true;
-            loadingNodes['c:' + s.id] = true;
-            vscode.postMessage({ command: 'loadSchemas', data: { connId: s.id } });
-          } else if (s.status !== 'connecting') {
-            delete schemas[s.id];
-          }
+          var s = msg.data; statuses[s.id] = s.status; delete loadingNodes['c:' + s.id];
+          if (s.status === 'connected') { expanded['c:' + s.id] = true; loadingNodes['c:' + s.id] = true; vscode.postMessage({ command: 'loadSchemas', data: { connId: s.id } }); }
+          else if (s.status !== 'connecting') { delete schemas[s.id]; }
           renderTree();
+          if (persisted.tab === 'query') renderConnSelect();
           break;
         }
-
-        case 'schemasLoaded': {
-          var d = msg.data;
-          schemas[d.connId] = d.schemas;
-          delete loadingNodes['c:' + d.connId];
-          renderTree();
-          break;
-        }
-
-        case 'tablesLoaded': {
-          var d = msg.data;
-          var key = d.connId + ':' + d.schema;
-          tables[key] = d.tables;
-          delete loadingNodes['tg:' + d.connId + ':' + d.schema];
-          renderTree();
-          break;
-        }
-
-        case 'columnsLoaded': {
-          var d = msg.data;
-          var key = d.connId + ':' + d.schema + ':' + d.table;
-          cols[key] = d.columns;
-          var nid = (d.isView ? 'v:' : 't:') + d.connId + ':' + d.schema + ':' + d.table;
-          delete loadingNodes[nid];
-          renderTree();
-          break;
-        }
-
-        case 'functionsLoaded': {
-          var d = msg.data;
-          var key = d.connId + ':' + d.schema;
-          funcs[key] = d.functions;
-          delete loadingNodes['fg:' + d.connId + ':' + d.schema];
-          renderTree();
-          break;
-        }
-
-        case 'funcParamsLoaded': {
-          var d = msg.data;
-          var key = d.connId + ':' + d.schema + ':' + d.specificName;
-          funcParams[key] = d.params;
-          delete loadingNodes['f:' + d.connId + ':' + d.schema + ':' + d.specificName];
-          renderTree();
-          break;
-        }
-
-        case 'testResult':
+        case 'schemasLoaded': { var d = msg.data; schemas[d.connId] = d.schemas; delete loadingNodes['c:' + d.connId]; renderTree(); break; }
+        case 'tablesLoaded':  { var d = msg.data; tables[d.connId + ':' + d.schema] = d.tables; delete loadingNodes['tg:' + d.connId + ':' + d.schema]; renderTree(); break; }
+        case 'columnsLoaded': { var d = msg.data; cols[d.connId + ':' + d.schema + ':' + d.table] = d.columns; delete loadingNodes[(d.isView ? 'v:' : 't:') + d.connId + ':' + d.schema + ':' + d.table]; renderTree(); break; }
+        case 'functionsLoaded': { var d = msg.data; funcs[d.connId + ':' + d.schema] = d.functions; delete loadingNodes['fg:' + d.connId + ':' + d.schema]; renderTree(); break; }
+        case 'funcParamsLoaded': { var d = msg.data; funcParams[d.connId + ':' + d.schema + ':' + d.specificName] = d.params; delete loadingNodes['f:' + d.connId + ':' + d.schema + ':' + d.specificName]; renderTree(); break; }
+        case 'testResult': {
           var ts = document.getElementById('test-status');
-          if (msg.data.success) {
-            ts.textContent = 'Connected successfully!'; ts.className = 'test-status success';
-          } else {
-            ts.textContent = msg.data.message || 'Connection failed'; ts.className = 'test-status error';
+          if (msg.data.success) { ts.textContent = 'Connected successfully!'; ts.className = 'test-status success'; }
+          else { ts.textContent = msg.data.message || 'Connection failed'; ts.className = 'test-status error'; }
+          break;
+        }
+        case 'queryResult': {
+          var d = msg.data;
+          var tab = tabs.find(function (t) { return t.id === d.tabId; });
+          if (tab) { tab.result = d; }
+          document.getElementById('btn-run').disabled = false;
+          if (!d.tabId || d.tabId === activeQTabId) {
+            if (d.error) { setStatus(d.error + (d.errorCode ? ' [' + d.errorCode + ']' : ''), true); renderResults(null); }
+            else { setStatus(d.rowCount + ' rows · ' + d.durationMs + 'ms', false); renderResults(d); }
           }
           break;
+        }
+        case 'historyLoaded': { historyEntries = msg.data || []; renderHistory(); break; }
+        case 'completionsLoaded': { registerCompletions(msg.data); break; }
       }
     });
 
     // ── Init ─────────────────────────────────────────────────────────
-    switchTab(persisted.tab || 'explorer');
+    switchMainTab(persisted.tab || 'explorer');
     renderTree();
     vscode.postMessage({ command: 'ready' });
   }());

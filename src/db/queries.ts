@@ -136,6 +136,31 @@ export async function getFunctionParams(
   return rows.map(r => ({ name: r.parameter_name, dataType: r.data_type, mode: r.parameter_mode }));
 }
 
+export async function getCompletionData(driver: PgDriver): Promise<{
+  tables: { schema: string; name: string; type: 'table' | 'view' }[];
+  functions: { schema: string; name: string }[];
+}> {
+  const [tables, functions] = await Promise.all([
+    driver.query<{ schema: string; name: string; table_type: string }>(
+      `SELECT table_schema AS schema, table_name AS name, table_type
+       FROM information_schema.tables
+       WHERE table_schema NOT IN ('pg_catalog','information_schema','pg_toast')
+       ORDER BY table_schema, table_name`
+    ),
+    driver.query<{ schema: string; name: string }>(
+      `SELECT routine_schema AS schema, routine_name AS name
+       FROM information_schema.routines
+       WHERE routine_schema NOT IN ('pg_catalog','information_schema','pg_toast')
+         AND routine_type IN ('FUNCTION','PROCEDURE')
+       ORDER BY routine_schema, routine_name`
+    ),
+  ]);
+  return {
+    tables: tables.map(t => ({ schema: t.schema, name: t.name, type: (t.table_type === 'VIEW' ? 'view' : 'table') as 'view' | 'table' })),
+    functions: functions.map(f => ({ schema: f.schema, name: f.name })),
+  };
+}
+
 export async function previewTable(
   driver: PgDriver,
   schema: string,

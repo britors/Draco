@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { ConnectionStorage } from '../storage/ConnectionStorage';
 import { ConnectionManager } from '../db/ConnectionManager';
+import { HistoryStorage } from '../storage/HistoryStorage';
 import { testConnection } from '../db/PgDriver';
-import { getSchemas, getTables, getColumns, getFunctions, getFunctionParams, previewTable } from '../db/queries';
+import { getSchemas, getTables, getColumns, getFunctions, getFunctionParams, previewTable, getCompletionData } from '../db/queries';
 import { validateConnection } from '../types/PgConnection';
 import { getSidebarHtml } from '../webview/getSidebarHtml';
 import { PreviewPanel } from './PreviewPanel';
@@ -33,7 +34,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly _context: vscode.ExtensionContext,
     private readonly _storage: ConnectionStorage,
-    private readonly _connManager: ConnectionManager
+    private readonly _connManager: ConnectionManager,
+    private readonly _history: HistoryStorage
   ) {}
 
   resolveWebviewView(
@@ -220,6 +222,55 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           this.postMessage('funcParamsLoaded', { connId, schema, specificName, params });
         } catch (err) {
           vscode.window.showErrorMessage(`Failed to load function params: ${String(err)}`);
+        }
+        break;
+      }
+
+      // ── Query execution (#15–#18) ────────────────────────────────
+
+      case 'executeQuery': {
+        const { connId, sql, tabId } = message.data as { connId: string; sql: string; tabId: string };
+        const driver = this._connManager.getDriver(connId);
+        if (!driver) {
+          this.postMessage('queryResult', { tabId, error: 'Not connected. Please connect first.' });
+          return;
+        }
+        const conn = this._storage.getConnection(connId);
+        const start = Date.now();
+        try {
+          const rows = await driver.query(sql);
+          const durationMs = Date.now() - start;
+          const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+          this.postMessage('queryResult', { tabId, columns, rows, durationMs });
+          await this._history.add({
+            sql,
+            connId,
+            connLabel: conn?.label ?? connId,
+            timestamp: Date.now(),
+            durationMs,
+            rowCount: rows.length,
+          });
+        } catch (err) {
+          const durationMs = Date.now() - start;
+          this.postMessage('queryResult', { tabId, error: String(err), durationMs });
+        }
+        break;
+      }
+
+      case 'loadHistory': {
+        this.postMessage('historyLoaded', this._history.list());
+        break;
+      }
+
+      case 'loadCompletions': {
+        const { connId } = message.data as { connId: string };
+        const driver = this._connManager.getDriver(connId);
+        if (!driver) return;
+        try {
+          const data = await getCompletionData(driver);
+          this.postMessage('completionsLoaded', data);
+        } catch {
+          // completions are best-effort
         }
         break;
       }
