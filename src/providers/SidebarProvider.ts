@@ -1,13 +1,18 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import { spawn } from 'child_process';
 import { ConnectionStorage } from '../storage/ConnectionStorage';
 import { ConnectionManager } from '../db/ConnectionManager';
 import { HistoryStorage } from '../storage/HistoryStorage';
 import { testConnection } from '../db/PgDriver';
-import { getSchemas, getTables, getColumns, getFunctions, getFunctionParams, previewTable, getCompletionData, getTableDDL, getIndexes, getConstraints, getFKMap } from '../db/queries';
+import { getSchemas, getTables, getColumns, getFunctions, getFunctionParams, previewTable, getCompletionData, getTableDDL, getIndexes, getConstraints, getFKMap, checkMigrationsTable, getMigrations } from '../db/queries';
 import { validateConnection } from '../types/PgConnection';
+import { PgConnection } from '../types/PgConnection';
 import { getSidebarHtml } from '../webview/getSidebarHtml';
 import { PreviewPanel } from './PreviewPanel';
 import { DDLPanel } from './DDLPanel';
+import { DriftPanel } from './DriftPanel';
+import { ParsedPrismaSchema, parsePrismaSchema } from '../prisma/PrismaParser';
 
 interface IpcMessage {
   command: string;
@@ -31,6 +36,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   static readonly viewId = 'prisma4postgres.sidebar';
 
   private _view?: vscode.WebviewView;
+  private _prismaSchema: ParsedPrismaSchema | null = null;
 
   constructor(
     private readonly _context: vscode.ExtensionContext,
@@ -38,6 +44,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     private readonly _connManager: ConnectionManager,
     private readonly _history: HistoryStorage
   ) {}
+
+  setPrismaSchema(schema: ParsedPrismaSchema | null): void {
+    this._prismaSchema = schema;
+    this.postMessage('prismaSchema', schema);
+  }
 
   resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -76,6 +87,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
       case 'ready':
         this._pushConnections();
+        if (this._prismaSchema) this.postMessage('prismaSchema', this._prismaSchema);
         break;
 
       case 'addConnection':
@@ -345,6 +357,81 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         break;
       }
 
+      // ── Prisma Integration (#24–#28) ──────────────────────────────
+
+      case 'loadMigrations': {
+        const { connId } = message.data as { connId: string };
+        const driver = this._connManager.getDriver(connId);
+        if (!driver) return;
+        try {
+          const hasTable = await checkMigrationsTable(driver);
+          if (!hasTable) { this.postMessage('migrationsLoaded', { hasTable: false, entries: [] }); return; }
+          const entries = await getMigrations(driver);
+          this.postMessage('migrationsLoaded', { hasTable: true, entries });
+        } catch (err) {
+          this.postMessage('migrationsLoaded', { hasTable: false, error: String(err) });
+        }
+        break;
+      }
+
+      case 'runPrismaCommand': {
+        const { command, connId } = message.data as { command: 'db-pull' | 'migrate-status'; connId: string };
+        if (!this._prismaSchema) {
+          this.postMessage('prismaLog', { text: 'No schema.prisma found in workspace.\n', done: true }); return;
+        }
+        const conn = this._storage.getConnection(connId);
+        if (!conn) {
+          this.postMessage('prismaLog', { text: 'No connection selected.\n', done: true }); return;
+        }
+        const password = await this._storage.getPassword(connId);
+        const databaseUrl = buildDatabaseUrl(conn, password);
+        const schemaPath = this._prismaSchema.filePath;
+        const args = command === 'db-pull'
+          ? ['prisma', 'db', 'pull', '--schema', schemaPath]
+          : ['prisma', 'migrate', 'status', '--schema', schemaPath];
+
+        const proc = spawn('npx', args, {
+          cwd: path.dirname(schemaPath),
+          env: { ...process.env, DATABASE_URL: databaseUrl },
+          shell: process.platform === 'win32',
+        });
+
+        this.postMessage('prismaLog', { text: `> npx ${args.join(' ')}\n`, done: false });
+        proc.stdout.on('data', (data: Buffer) => this.postMessage('prismaLog', { text: data.toString(), done: false }));
+        proc.stderr.on('data', (data: Buffer) => this.postMessage('prismaLog', { text: data.toString(), done: false }));
+        proc.on('close', (code: number | null) => {
+          this.postMessage('prismaLog', { text: `\nFinished (exit ${code ?? '?'}).\n`, done: true });
+          if (command === 'db-pull' && code === 0) {
+            vscode.workspace.fs.readFile(vscode.Uri.file(schemaPath)).then(bytes => {
+              const parsed = parsePrismaSchema(schemaPath, Buffer.from(bytes).toString('utf-8'));
+              this._prismaSchema = parsed;
+              this.postMessage('prismaSchema', parsed);
+            });
+          }
+        });
+        proc.on('error', (err: Error) => {
+          this.postMessage('prismaLog', { text: `Error: ${err.message}\n`, done: true });
+        });
+        break;
+      }
+
+      case 'openDrift': {
+        const { connId, schema, tableName, modelName } = message.data as {
+          connId: string; schema: string; tableName: string; modelName: string;
+        };
+        const driver = this._connManager.getDriver(connId);
+        if (!driver) { vscode.window.showErrorMessage('Not connected.'); return; }
+        const model = this._prismaSchema?.models.find(m => m.name === modelName);
+        if (!model) { vscode.window.showErrorMessage(`Model "${modelName}" not found.`); return; }
+        try {
+          const columns = await getColumns(driver, schema, tableName);
+          DriftPanel.show({ modelName, tableName, schema, model, columns });
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to load columns: ${String(err)}`);
+        }
+        break;
+      }
+
       // ── Preview (#13) ─────────────────────────────────────────────
 
       case 'previewTable': {
@@ -388,4 +475,12 @@ function getNonce(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   for (let i = 0; i < 32; i++) text += chars.charAt(Math.floor(Math.random() * chars.length));
   return text;
+}
+
+function buildDatabaseUrl(conn: PgConnection, password: string): string {
+  const user = encodeURIComponent(conn.user);
+  const pass = encodeURIComponent(password);
+  const db   = encodeURIComponent(conn.database);
+  const ssl  = conn.ssl ? '?sslmode=require' : '';
+  return `postgresql://${user}:${pass}@${conn.host}:${conn.port}/${db}${ssl}`;
 }

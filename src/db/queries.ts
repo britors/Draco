@@ -27,6 +27,16 @@ export interface FKMapEntry {
   foreignColumn: string;
 }
 
+export interface MigrationEntry {
+  id: string;
+  migrationName: string;
+  startedAt: string;
+  finishedAt: string | null;
+  rolledBackAt: string | null;
+  logs: string | null;
+  appliedStepsCount: number;
+}
+
 export interface TableInfo {
   name: string;
   type: 'table' | 'view';
@@ -351,4 +361,40 @@ export async function getFKMap(driver: PgDriver, schema: string, table: string):
       foreignColumn: r.referencing_column,
     })),
   ];
+}
+
+export async function checkMigrationsTable(driver: PgDriver, schema = 'public'): Promise<boolean> {
+  const rows = await driver.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.tables
+       WHERE table_schema = $1 AND table_name = '_prisma_migrations'
+     ) AS exists`,
+    [schema]
+  );
+  return Boolean(rows[0]?.exists);
+}
+
+export async function getMigrations(driver: PgDriver, schema = 'public'): Promise<MigrationEntry[]> {
+  const rows = await driver.query<{
+    id: string;
+    migration_name: string;
+    started_at: Date;
+    finished_at: Date | null;
+    rolled_back_at: Date | null;
+    logs: string | null;
+    applied_steps_count: number;
+  }>(
+    `SELECT id, migration_name, started_at, finished_at, rolled_back_at, logs, applied_steps_count
+     FROM "${schema}"._prisma_migrations
+     ORDER BY started_at DESC`
+  );
+  return rows.map(r => ({
+    id: r.id,
+    migrationName: r.migration_name,
+    startedAt: r.started_at instanceof Date ? r.started_at.toISOString() : String(r.started_at),
+    finishedAt: r.finished_at instanceof Date ? r.finished_at.toISOString() : (r.finished_at ? String(r.finished_at) : null),
+    rolledBackAt: r.rolled_back_at instanceof Date ? r.rolled_back_at.toISOString() : (r.rolled_back_at ? String(r.rolled_back_at) : null),
+    logs: r.logs,
+    appliedStepsCount: Number(r.applied_steps_count),
+  }));
 }

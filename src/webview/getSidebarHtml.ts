@@ -223,6 +223,36 @@ export function getSidebarHtml(params: {
     .export-bar { display: flex; align-items: center; gap: 4px; padding: 3px 6px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editorGroupHeader-tabsBackground); flex-shrink: 0; }
     .btn-xs { padding: 1px 7px; font-size: 11px; }
 
+    /* ── Prisma panel (#24–#28) ─────────────────────────────────── */
+    .prisma-scroll { flex: 1; overflow-y: auto; }
+    .prisma-section { border-bottom: 1px solid var(--vscode-panel-border); }
+    .prisma-section-header {
+      display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--vscode-descriptionForeground); cursor: pointer; user-select: none;
+      background: var(--vscode-sideBarSectionHeader-background);
+    }
+    .prisma-section-header:hover { background: var(--vscode-list-hoverBackground); }
+    .prisma-section-body { padding: 6px 10px; }
+    .prisma-info-row { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; font-size: 12px; }
+    .prisma-info-label { color: var(--vscode-descriptionForeground); font-size: 11px; flex-shrink: 0; }
+    .prisma-actions-row { display: flex; gap: 6px; padding: 6px 0 2px; }
+    .model-row { display: flex; align-items: center; gap: 5px; padding: 3px 0; font-size: 12px; }
+    .model-name { font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .model-map  { color: var(--vscode-descriptionForeground); font-size: 11px; }
+    .model-status-ok   { color: var(--vscode-testing-iconPassed,#73c991); font-size: 11px; }
+    .model-status-miss { color: var(--vscode-errorForeground,#f48771); font-size: 11px; }
+    .model-status-unk  { color: var(--vscode-descriptionForeground); font-size: 11px; }
+    .migration-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 11px; border-bottom: 1px solid rgba(128,128,128,0.07); }
+    .migration-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--vscode-editor-font-family,monospace); font-size: 11px; }
+    .migration-date { flex-shrink: 0; color: var(--vscode-descriptionForeground); }
+    .mig-ok   { color: var(--vscode-testing-iconPassed,#73c991); flex-shrink: 0; }
+    .mig-fail { color: var(--vscode-errorForeground,#f48771); flex-shrink: 0; }
+    .mig-rb   { color: var(--vscode-editorWarning-foreground,#cca700); flex-shrink: 0; }
+    .prisma-log { flex: 1; overflow-y: auto; font-family: var(--vscode-editor-font-family,monospace); font-size: 11px; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; min-height: 80px; max-height: 200px; background: var(--vscode-terminal-background,var(--vscode-editor-background)); color: var(--vscode-terminal-foreground,var(--vscode-foreground)); }
+    .conn-select-sm { background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border,transparent); padding: 2px 4px; font-size: var(--vscode-font-size); font-family: var(--vscode-font-family); outline: none; width: 100%; }
+    .no-schema-msg { color: var(--vscode-descriptionForeground); font-style: italic; font-size: 12px; padding: 4px 0; }
+
     /* Placeholder */
     .placeholder { display: flex; align-items: center; justify-content: center; flex: 1; color: var(--vscode-descriptionForeground); font-style: italic; padding: 24px; }
   </style>
@@ -234,6 +264,7 @@ export function getSidebarHtml(params: {
     <button class="tab" data-tab="explorer"><i class="codicon codicon-database"></i>Explorer</button>
     <button class="tab" data-tab="query"><i class="codicon codicon-file-code"></i>Query</button>
     <button class="tab" data-tab="history"><i class="codicon codicon-history"></i>History</button>
+    <button class="tab" data-tab="prisma" id="tab-btn-prisma"><i class="codicon codicon-symbol-class"></i>Prisma</button>
   </div>
 
   <!-- ── Explorer panel ───────────────────────────────────────────── -->
@@ -325,6 +356,52 @@ export function getSidebarHtml(params: {
     </div>
     <div class="history-list" id="history-list">
       <div class="empty-state"><span>No history yet.</span></div>
+    </div>
+  </div>
+
+  <!-- ── Prisma panel (#24–#28) ──────────────────────────────────── -->
+  <div class="panel hidden" id="panel-prisma">
+    <div class="prisma-scroll">
+
+      <!-- Connection selector -->
+      <div class="prisma-section">
+        <div class="prisma-section-body" style="padding:6px 10px">
+          <select class="conn-select-sm" id="prisma-conn-select">
+            <option value="">Select connection…</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Schema file -->
+      <div class="prisma-section">
+        <div class="prisma-section-header"><i class="codicon codicon-file-code"></i>Schema File</div>
+        <div class="prisma-section-body" id="prisma-schema-body">
+          <div class="no-schema-msg">No schema.prisma found in workspace.</div>
+        </div>
+      </div>
+
+      <!-- Models -->
+      <div class="prisma-section">
+        <div class="prisma-section-header"><i class="codicon codicon-symbol-class"></i>Models <span id="prisma-models-badge" style="margin-left:4px"></span></div>
+        <div class="prisma-section-body" id="prisma-models-body">
+          <div class="no-schema-msg">No schema loaded.</div>
+        </div>
+      </div>
+
+      <!-- Migrations -->
+      <div class="prisma-section">
+        <div class="prisma-section-header"><i class="codicon codicon-history"></i>Migrations</div>
+        <div class="prisma-section-body" id="prisma-migrations-body">
+          <div class="no-schema-msg">Select a connection to load migrations.</div>
+        </div>
+      </div>
+
+      <!-- Log -->
+      <div class="prisma-section">
+        <div class="prisma-section-header"><i class="codicon codicon-terminal"></i>Log</div>
+        <div class="prisma-log" id="prisma-log">Ready.</div>
+      </div>
+
     </div>
   </div>
 
@@ -527,19 +604,27 @@ export function getSidebarHtml(params: {
       return html;
     }
 
+    function findPrismaModel(tableName) {
+      if (!prismaSchema) return null;
+      return prismaSchema.models.find(function (m) { return m.tableName === tableName || m.tableName.toLowerCase() === tableName.toLowerCase(); }) || null;
+    }
+
     function renderTableNode(connId, schemaName, t, f) {
       var isView = t.type === 'view';
       var nid = (isView ? 'v:' : 't:') + connId + ':' + schemaName + ':' + t.name;
       var isExp = !!expanded[nid];
       var colList = cols[connId + ':' + schemaName + ':' + t.name];
+      var prismaModel = findPrismaModel(t.name);
       var acts = btnIcon('preview', { connId: connId, schema: schemaName, table: t.name }, 'codicon-open-preview', 'Preview')
                + btnIcon('open-ddl', { connId: connId, schema: schemaName, table: t.name }, 'codicon-symbol-structure', 'View DDL')
                + btnIcon('copy-name', { name: t.name }, 'codicon-copy', 'Copy name');
+      var prismaPin = prismaModel ? '<i class="codicon codicon-symbol-class" title="Prisma model: ' + esc(prismaModel.name) + '" style="font-size:11px;color:var(--vscode-descriptionForeground);margin-right:2px"></i>' : '';
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:48px"></span>'
         + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
         + '<i class="tree-icon codicon ' + (isView ? 'codicon-layout' : 'codicon-table') + '"></i>'
         + '<span class="tree-label">' + hl(t.name, f) + '</span>'
+        + prismaPin
         + (colList ? '<span class="tree-badge">' + colList.length + '</span>' : '')
         + '<div class="tree-actions">' + acts + '</div></div>';
       if (isExp) {
@@ -678,6 +763,7 @@ export function getSidebarHtml(params: {
       document.querySelectorAll('.panel').forEach(function (p) { p.classList.toggle('hidden', p.id !== 'panel-' + tab); });
       if (tab === 'query') { setTimeout(ensureMonacoReady, 30); renderQueryTabs(); renderConnSelect(); }
       if (tab === 'history') { if (!historyEntries.length) vscode.postMessage({ command: 'loadHistory' }); renderHistory(); }
+      if (tab === 'prisma') { renderPrismaConnSelect(); renderPrismaSchemaInfo(); renderPrismaModels(); }
     }
 
     document.querySelectorAll('.tab').forEach(function (btn) {
@@ -938,6 +1024,134 @@ export function getSidebarHtml(params: {
       });
     }
 
+    // ── Prisma state (#24–#28) ───────────────────────────────────────
+    var prismaSchema = null;
+    var prismaConnId = '';
+    var prismaLog    = 'Ready.';
+    var migrations   = [];
+    var migrationsHasTable = false;
+
+    function renderPrismaConnSelect() {
+      var sel = document.getElementById('prisma-conn-select');
+      sel.innerHTML = '<option value="">Select connection…</option>'
+        + connections.map(function (c) {
+            var s = statuses[c.id] || 'disconnected';
+            return '<option value="' + esc(c.id) + '"' + (prismaConnId === c.id ? ' selected' : '') + '>'
+              + esc(c.label) + (s === 'connected' ? ' ●' : ' ○') + '</option>';
+          }).join('');
+    }
+
+    document.getElementById('prisma-conn-select').addEventListener('change', function () {
+      prismaConnId = this.value;
+      renderPrismaModels();
+      if (prismaConnId) {
+        document.getElementById('prisma-migrations-body').innerHTML = '<div class="no-schema-msg">Loading…</div>';
+        vscode.postMessage({ command: 'loadMigrations', data: { connId: prismaConnId } });
+      } else {
+        document.getElementById('prisma-migrations-body').innerHTML = '<div class="no-schema-msg">Select a connection to load migrations.</div>';
+      }
+    });
+
+    function renderPrismaSchemaInfo() {
+      var body = document.getElementById('prisma-schema-body');
+      if (!prismaSchema) {
+        body.innerHTML = '<div class="no-schema-msg">No schema.prisma found in workspace.</div>';
+        return;
+      }
+      var ds = prismaSchema.datasource;
+      var shortPath = prismaSchema.filePath.replace(/\\\\/g, '/').split('/').slice(-3).join('/');
+      var html = '<div class="prisma-info-row"><span class="prisma-info-label">File:</span><span title="' + esc(prismaSchema.filePath) + '">' + esc(shortPath) + '</span></div>';
+      if (ds) {
+        html += '<div class="prisma-info-row"><span class="prisma-info-label">Provider:</span><span>' + esc(ds.provider) + (ds.isPostgres ? ' ✓' : ' ⚠') + '</span></div>';
+        html += '<div class="prisma-info-row"><span class="prisma-info-label">URL:</span><span style="font-size:10px;color:var(--vscode-descriptionForeground)">' + esc(ds.url.length > 40 ? ds.url.slice(0, 40) + '…' : ds.url) + '</span></div>';
+      }
+      html += '<div class="prisma-actions-row">'
+        + '<button class="btn btn-secondary btn-xs" id="btn-db-pull"><i class="codicon codicon-cloud-download"></i>db pull</button>'
+        + '<button class="btn btn-secondary btn-xs" id="btn-migrate-status"><i class="codicon codicon-checklist"></i>migrate status</button>'
+        + '</div>';
+      body.innerHTML = html;
+      document.getElementById('btn-db-pull').addEventListener('click', function () {
+        if (!prismaConnId) { setStatus('Select a connection in the Prisma tab first.', true); switchMainTab('prisma'); return; }
+        prismaLog = '';
+        document.getElementById('prisma-log').textContent = '';
+        vscode.postMessage({ command: 'runPrismaCommand', data: { command: 'db-pull', connId: prismaConnId } });
+      });
+      document.getElementById('btn-migrate-status').addEventListener('click', function () {
+        if (!prismaConnId) { setStatus('Select a connection in the Prisma tab first.', true); switchMainTab('prisma'); return; }
+        prismaLog = '';
+        document.getElementById('prisma-log').textContent = '';
+        vscode.postMessage({ command: 'runPrismaCommand', data: { command: 'migrate-status', connId: prismaConnId } });
+      });
+    }
+
+    function renderPrismaModels() {
+      var body = document.getElementById('prisma-models-body');
+      var badge = document.getElementById('prisma-models-badge');
+      if (!prismaSchema || !prismaSchema.models.length) {
+        body.innerHTML = '<div class="no-schema-msg">No models found.</div>';
+        if (badge) badge.textContent = '';
+        return;
+      }
+      if (badge) badge.textContent = '(' + prismaSchema.models.length + ')';
+      var html = '';
+      prismaSchema.models.forEach(function (model) {
+        var found = null; var foundSchema = null;
+        if (prismaConnId) {
+          Object.keys(tables).forEach(function (key) {
+            if (!key.startsWith(prismaConnId + ':')) return;
+            var sc = key.slice(prismaConnId.length + 1);
+            var tList = tables[key];
+            if (tList) {
+              var match = tList.find(function (t) { return t.name === model.tableName || t.name.toLowerCase() === model.tableName.toLowerCase(); });
+              if (match && !found) { found = match; foundSchema = sc; }
+            }
+          });
+        }
+        var mapNote = model.tableName !== model.name ? ' <span class="model-map">→ ' + esc(model.tableName) + '</span>' : '';
+        var statusHtml = prismaConnId
+          ? (found ? '<span class="model-status-ok">✓</span>' : '<span class="model-status-miss">✗</span>')
+          : '<span class="model-status-unk">?</span>';
+        var driftBtn = (found && foundSchema)
+          ? '<button class="btn-icon" data-action="open-drift" data-conn-id="' + esc(prismaConnId) + '" data-schema="' + esc(foundSchema) + '" data-table-name="' + esc(model.tableName) + '" data-model-name="' + esc(model.name) + '" title="View Drift"><i class="codicon codicon-diff"></i></button>'
+          : '';
+        html += '<div class="model-row">'
+          + '<i class="codicon codicon-symbol-class" style="font-size:13px;flex-shrink:0"></i>'
+          + '<span class="model-name">' + esc(model.name) + '</span>'
+          + mapNote + statusHtml + driftBtn + '</div>';
+      });
+      body.innerHTML = html;
+      body.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-action="open-drift"]');
+        if (!btn) return;
+        var d = btn.dataset;
+        vscode.postMessage({ command: 'openDrift', data: { connId: d.connId, schema: d.schema, tableName: d.tableName, modelName: d.modelName } });
+      });
+    }
+
+    function renderPrismaMigrations() {
+      var body = document.getElementById('prisma-migrations-body');
+      if (!prismaConnId) { body.innerHTML = '<div class="no-schema-msg">Select a connection to load migrations.</div>'; return; }
+      if (!migrationsHasTable) { body.innerHTML = '<div class="no-schema-msg">Table _prisma_migrations not found in this database.</div>'; return; }
+      if (!migrations.length) { body.innerHTML = '<div class="no-schema-msg">No migrations found.</div>'; return; }
+      body.innerHTML = migrations.map(function (m) {
+        var icon, cls;
+        if (m.rolledBackAt) { icon = '↩'; cls = 'mig-rb'; }
+        else if (m.logs)     { icon = '✗'; cls = 'mig-fail'; }
+        else if (m.finishedAt) { icon = '✓'; cls = 'mig-ok'; }
+        else { icon = '⧖'; cls = 'mig-rb'; }
+        var date = m.finishedAt ? new Date(m.finishedAt).toLocaleDateString() : (m.logs ? 'FAILED' : 'pending');
+        return '<div class="migration-row"><span class="' + cls + '">' + icon + '</span><span class="migration-name" title="' + esc(m.migrationName) + '">' + esc(m.migrationName) + '</span><span class="migration-date">' + esc(date) + '</span></div>';
+      }).join('');
+    }
+
+    function renderPrismaTabBadge() {
+      var btn = document.getElementById('tab-btn-prisma');
+      if (!btn) return;
+      var hasSchema = !!prismaSchema;
+      var label = hasSchema ? 'Prisma ●' : 'Prisma';
+      btn.innerHTML = '<i class="codicon codicon-symbol-class"></i>' + label;
+    }
+
     // ── Messages from extension host ─────────────────────────────────
     window.addEventListener('message', function (event) {
       var msg = event.data;
@@ -947,6 +1161,7 @@ export function getSidebarHtml(params: {
           renderTree();
           if (!document.getElementById('view-form').classList.contains('hidden')) showTree();
           if (persisted.tab === 'query') { renderConnSelect(); }
+          if (persisted.tab === 'prisma') { renderPrismaConnSelect(); }
           break;
         case 'updateStatuses':
           statuses = msg.data || {}; renderTree(); break;
@@ -982,6 +1197,25 @@ export function getSidebarHtml(params: {
         }
         case 'historyLoaded': { historyEntries = msg.data || []; renderHistory(); break; }
         case 'completionsLoaded': { registerCompletions(msg.data); break; }
+        case 'prismaSchema': {
+          prismaSchema = msg.data;
+          renderPrismaSchemaInfo();
+          renderPrismaModels();
+          renderPrismaTabBadge();
+          break;
+        }
+        case 'migrationsLoaded': {
+          migrationsHasTable = msg.data.hasTable;
+          migrations = msg.data.entries || [];
+          renderPrismaMigrations();
+          break;
+        }
+        case 'prismaLog': {
+          prismaLog += msg.data.text;
+          var logEl = document.getElementById('prisma-log');
+          if (logEl) { logEl.textContent = prismaLog; logEl.scrollTop = logEl.scrollHeight; }
+          break;
+        }
         case 'navigateToTable': {
           var nd = msg.data;
           switchMainTab('explorer');
