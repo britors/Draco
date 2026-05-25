@@ -5,7 +5,7 @@ import { ConnectionStorage } from '../storage/ConnectionStorage';
 import { ConnectionManager } from '../db/ConnectionManager';
 import { HistoryStorage } from '../storage/HistoryStorage';
 import { testConnection } from '../db/PgDriver';
-import { getSchemas, getTables, getColumns, getFunctions, getFunctionParams, previewTable, getCompletionData, getTableDDL, getIndexes, getConstraints, getFKMap, checkMigrationsTable, getMigrations } from '../db/queries';
+import { getSchemas, getTables, getColumns, getFunctions, getFunctionParams, previewTable, getCompletionData, getTableDDL, getIndexes, getConstraints, getFKMap, checkMigrationsTable, getMigrations, getTableEstimates } from '../db/queries';
 import { validateConnection } from '../types/PgConnection';
 import { PgConnection } from '../types/PgConnection';
 import { getSidebarHtml } from '../webview/getSidebarHtml';
@@ -42,7 +42,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     private readonly _context: vscode.ExtensionContext,
     private readonly _storage: ConnectionStorage,
     private readonly _connManager: ConnectionManager,
-    private readonly _history: HistoryStorage
+    private readonly _history: HistoryStorage,
+    private readonly _out: vscode.OutputChannel
   ) {}
 
   setPrismaSchema(schema: ParsedPrismaSchema | null): void {
@@ -85,10 +86,17 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private async _handleMessage(message: IpcMessage) {
     switch (message.command) {
 
-      case 'ready':
+      case 'ready': {
         this._pushConnections();
         if (this._prismaSchema) this.postMessage('prismaSchema', this._prismaSchema);
+        const cfg = vscode.workspace.getConfiguration('prisma4postgres');
+        this.postMessage('settings', {
+          defaultPort: cfg.get<number>('defaultPort', 5432),
+          defaultSsl:  cfg.get<boolean>('defaultSsl', false),
+          showRowCount: cfg.get<boolean>('showRowCount', false),
+        });
         break;
+      }
 
       case 'addConnection':
         this.postMessage('switchTab', 'explorer');
@@ -152,12 +160,25 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'connect': {
         const { connId } = message.data as { connId: string };
         const password = await this._storage.getPassword(connId);
+        const cfg = vscode.workspace.getConfiguration('prisma4postgres');
+        const timeout = cfg.get<number>('queryTimeout', 30_000);
         try {
-          await this._connManager.connect(connId, password);
+          await this._connManager.connect(connId, password, timeout);
+          const conn = this._storage.getConnection(connId);
+          this._out.appendLine(`[connect] ${conn?.label ?? connId} — OK`);
           this.postMessage('connectionStatus', { id: connId, status: 'connected' });
         } catch (err) {
-          this.postMessage('connectionStatus', { id: connId, status: 'error', message: String(err) });
-          vscode.window.showErrorMessage(`Connection failed: ${String(err)}`);
+          const msg = String(err);
+          this._out.appendLine(`[connect] ${connId} — ERROR: ${msg}`);
+          this.postMessage('connectionStatus', { id: connId, status: 'error', message: msg });
+          const conn = this._storage.getConnection(connId);
+          const answer = await vscode.window.showErrorMessage(
+            `Connection failed (${conn?.label ?? connId}): ${msg}`,
+            'Reconnect'
+          );
+          if (answer === 'Reconnect') {
+            this.postMessage('reconnect', { connId });
+          }
         }
         break;
       }
@@ -254,24 +275,64 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           const rows = await driver.query(sql);
           const durationMs = Date.now() - start;
           const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+          this._out.appendLine(`[query] ${conn?.label ?? connId} — ${rows.length} rows in ${durationMs}ms`);
           this.postMessage('queryResult', { tabId, columns, rows, durationMs });
           await this._history.add({
-            sql,
-            connId,
-            connLabel: conn?.label ?? connId,
-            timestamp: Date.now(),
-            durationMs,
-            rowCount: rows.length,
+            sql, connId, connLabel: conn?.label ?? connId,
+            timestamp: Date.now(), durationMs, rowCount: rows.length,
           });
         } catch (err) {
           const durationMs = Date.now() - start;
-          this.postMessage('queryResult', { tabId, error: String(err), durationMs });
+          const msg = String(err);
+          this._out.appendLine(`[query] ${conn?.label ?? connId} — ERROR: ${msg}`);
+          const isTimeout = /canceling statement due to statement timeout/i.test(msg);
+          if (isTimeout) {
+            const ans = await vscode.window.showErrorMessage(
+              'Query timed out. Increase prisma4postgres.queryTimeout in settings.',
+              'Open Settings'
+            );
+            if (ans === 'Open Settings') {
+              vscode.commands.executeCommand('workbench.action.openSettings', 'prisma4postgres.queryTimeout');
+            }
+          }
+          this.postMessage('queryResult', { tabId, error: msg, durationMs });
+        }
+        break;
+      }
+
+      case 'executeExplain': {
+        const { connId, sql, tabId } = message.data as { connId: string; sql: string; tabId: string };
+        const driver = this._connManager.getDriver(connId);
+        if (!driver) {
+          this.postMessage('explainResult', { tabId, error: 'Not connected. Please connect first.' }); return;
+        }
+        try {
+          const rows = await driver.query<Record<string, unknown>>(
+            `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`
+          );
+          const raw = rows[0]['QUERY PLAN'];
+          const plan = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          this._out.appendLine(`[explain] ${connId} — plan received`);
+          this.postMessage('explainResult', { tabId, plan });
+        } catch (err) {
+          this.postMessage('explainResult', { tabId, error: String(err) });
         }
         break;
       }
 
       case 'loadHistory': {
         this.postMessage('historyLoaded', this._history.list());
+        break;
+      }
+
+      case 'loadTableEstimates': {
+        const { connId, schema } = message.data as { connId: string; schema: string };
+        const driver = this._connManager.getDriver(connId);
+        if (!driver) return;
+        try {
+          const estimates = await getTableEstimates(driver, schema);
+          this.postMessage('tableEstimatesLoaded', { connId, schema, estimates });
+        } catch { /* best-effort */ }
         break;
       }
 
@@ -439,8 +500,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         const driver = this._connManager.getDriver(connId);
         if (!driver) { vscode.window.showErrorMessage('Not connected. Please connect first.'); return; }
         const conn = this._storage.getConnection(connId);
+        const rowLimit = vscode.workspace.getConfiguration('prisma4postgres').get<number>('previewRowLimit', 100);
         try {
-          const { columns, rows, estimate } = await previewTable(driver, schema, table);
+          const { columns, rows, estimate } = await previewTable(driver, schema, table, rowLimit);
           PreviewPanel.show({
             extensionUri: this._context.extensionUri,
             connLabel: conn?.label ?? connId,

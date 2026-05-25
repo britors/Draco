@@ -61,6 +61,41 @@
           "group": "navigation"
         }
       ]
+    },
+    "configuration": {
+      "title": "Prisma4Postgres",
+      "properties": {
+        "prisma4postgres.queryTimeout": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "description": "Query timeout in milliseconds. Applies to all queries executed in the Query editor."
+        },
+        "prisma4postgres.previewRowLimit": {
+          "type": "number",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 5000,
+          "description": "Maximum number of rows returned in table preview."
+        },
+        "prisma4postgres.defaultSsl": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable SSL by default when adding new connections."
+        },
+        "prisma4postgres.defaultPort": {
+          "type": "number",
+          "default": 5432,
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Default port pre-filled when adding new connections."
+        },
+        "prisma4postgres.showRowCount": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show estimated row count next to table names in the Explorer tree (uses pg_class.reltuples)."
+        }
+      }
     }
   },
   "scripts": {

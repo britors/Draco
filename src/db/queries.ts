@@ -194,15 +194,29 @@ export async function getCompletionData(driver: PgDriver): Promise<{
   };
 }
 
+export async function getTableEstimates(
+  driver: PgDriver,
+  schema: string
+): Promise<Record<string, number>> {
+  const rows = await driver.query<{ relname: string; estimate: number }>(
+    `SELECT c.relname, c.reltuples::bigint AS estimate
+     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = $1 AND c.relkind IN ('r','v','m')`,
+    [schema]
+  );
+  return Object.fromEntries(rows.map(r => [r.relname, Number(r.estimate)]));
+}
+
 export async function previewTable(
   driver: PgDriver,
   schema: string,
-  table: string
+  table: string,
+  rowLimit = 100
 ): Promise<{ columns: string[]; rows: Record<string, unknown>[]; estimate: number }> {
   const qSchema = schema.replace(/"/g, '""');
   const qTable  = table.replace(/"/g, '""');
 
-  const rows = await driver.query(`SELECT * FROM "${qSchema}"."${qTable}" LIMIT 100`);
+  const rows = await driver.query(`SELECT * FROM "${qSchema}"."${qTable}" LIMIT ${Math.max(1, Math.floor(rowLimit))}`);
 
   const est = await driver.query<{ estimate: number }>(
     `SELECT reltuples::bigint AS estimate

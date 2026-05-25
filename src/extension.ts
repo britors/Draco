@@ -9,7 +9,9 @@ export function activate(context: vscode.ExtensionContext) {
   const storage     = new ConnectionStorage(context.globalState, context.secrets);
   const connManager = new ConnectionManager();
   const history     = new HistoryStorage(context.globalState);
-  const provider    = new SidebarProvider(context, storage, connManager, history);
+  const out         = vscode.window.createOutputChannel('Prisma4Postgres');
+  const provider    = new SidebarProvider(context, storage, connManager, history, out);
+  context.subscriptions.push(out);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(SidebarProvider.viewId, provider)

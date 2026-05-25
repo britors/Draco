@@ -212,6 +212,24 @@ export function getSidebarHtml(params: {
     .result-grid tr:hover { background: var(--vscode-list-hoverBackground); }
     .result-null { color: var(--vscode-descriptionForeground); font-style: italic; }
 
+    /* ── EXPLAIN plan tree (#29) ─────────────────────────────────── */
+    .plan-wrap { padding: 8px; overflow: auto; font-size: 11px; }
+    .plan-summary { margin-bottom: 8px; color: var(--vscode-descriptionForeground); font-size: 11px; }
+    .plan-node { padding: 1px 0 1px 12px; border-left: 1px solid rgba(128,128,128,0.2); margin: 1px 0; }
+    .plan-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; padding: 3px 4px; border-radius: 2px; cursor: pointer; }
+    .plan-header:hover { background: var(--vscode-list-hoverBackground); }
+    .plan-type { font-weight: 600; }
+    .plan-rel  { color: var(--vscode-textLink-foreground); }
+    .plan-cost { color: var(--vscode-descriptionForeground); font-size: 10px; }
+    .plan-time { font-size: 10px; color: var(--vscode-descriptionForeground); }
+    .plan-rows { font-size: 10px; color: var(--vscode-descriptionForeground); }
+    .plan-warn .plan-type { color: var(--vscode-editorWarning-foreground, #cca700); }
+    .plan-danger .plan-type { color: var(--vscode-errorForeground, #f48771); }
+    .plan-children { padding-left: 0; }
+    .plan-raw { font-family: var(--vscode-editor-font-family,monospace); font-size: 11px; white-space: pre-wrap; padding: 8px; overflow: auto; }
+    .result-toolbar { display: flex; align-items: center; gap: 4px; padding: 3px 6px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editorGroupHeader-tabsBackground); flex-shrink: 0; }
+    .result-toolbar-spacer { flex: 1; }
+
     /* ── History panel (#18) ─────────────────────────────────────── */
     .history-list { flex: 1; overflow-y: auto; }
     .history-item { padding: 6px 12px; border-bottom: 1px solid rgba(128,128,128,0.08); cursor: pointer; }
@@ -341,6 +359,7 @@ export function getSidebarHtml(params: {
     <div class="query-toolbar">
       <select class="conn-select" id="conn-select"><option value="">Select connection…</option></select>
       <button class="btn btn-primary" id="btn-run"><i class="codicon codicon-play"></i>Run</button>
+      <button class="btn btn-secondary" id="btn-explain"><i class="codicon codicon-graph"></i>Explain</button>
     </div>
     <div id="monaco-container"></div>
     <div class="query-status hidden" id="query-status"></div>
@@ -443,6 +462,15 @@ export function getSidebarHtml(params: {
 
     // Export (#23) — last successful result
     var lastResult = null;
+
+    // Settings (#30)
+    var settings = { defaultPort: 5432, defaultSsl: false, showRowCount: false };
+
+    // Row count estimates (#30)
+    var estimates = {};
+
+    // Explain mode toggle (#29) — 'tree' | 'json'
+    var explainViewMode = 'tree';
 
     // ── Helpers ──────────────────────────────────────────────────────
     function esc(s) {
@@ -619,13 +647,17 @@ export function getSidebarHtml(params: {
                + btnIcon('open-ddl', { connId: connId, schema: schemaName, table: t.name }, 'codicon-symbol-structure', 'View DDL')
                + btnIcon('copy-name', { name: t.name }, 'codicon-copy', 'Copy name');
       var prismaPin = prismaModel ? '<i class="codicon codicon-symbol-class" title="Prisma model: ' + esc(prismaModel.name) + '" style="font-size:11px;color:var(--vscode-descriptionForeground);margin-right:2px"></i>' : '';
+      var estKey = connId + ':' + schemaName;
+      var estVal = settings.showRowCount && estimates[estKey] !== undefined ? estimates[estKey][t.name] : undefined;
+      var badgeHtml = estVal !== undefined
+        ? '<span class="tree-badge" title="estimated rows">' + (estVal >= 1000 ? (estVal/1000).toFixed(0)+'k' : estVal) + '</span>'
+        : (colList ? '<span class="tree-badge">' + colList.length + '</span>' : '');
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:48px"></span>'
         + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
         + '<i class="tree-icon codicon ' + (isView ? 'codicon-layout' : 'codicon-table') + '"></i>'
         + '<span class="tree-label">' + hl(t.name, f) + '</span>'
-        + prismaPin
-        + (colList ? '<span class="tree-badge">' + colList.length + '</span>' : '')
+        + prismaPin + badgeHtml
         + '<div class="tree-actions">' + acts + '</div></div>';
       if (isExp) {
         if (loadingNodes[nid]) { html += loadingRow(4); }
@@ -695,6 +727,9 @@ export function getSidebarHtml(params: {
           if (type === 'tg' && !tables[key] && !loadingNodes[nid]) {
             loadingNodes[nid] = true;
             vscode.postMessage({ command: 'loadTables', data: { connId: cId, schema: sc } });
+            if (settings.showRowCount && !estimates[key]) {
+              vscode.postMessage({ command: 'loadTableEstimates', data: { connId: cId, schema: sc } });
+            }
           } else if (type === 'fg' && !funcs[key] && !loadingNodes[nid]) {
             loadingNodes[nid] = true;
             vscode.postMessage({ command: 'loadFunctions', data: { connId: cId, schema: sc } });
@@ -776,11 +811,11 @@ export function getSidebarHtml(params: {
       document.getElementById('form-title').textContent = conn ? 'Edit Connection' : 'Add Connection';
       document.getElementById('f-label').value    = conn ? conn.label    : '';
       document.getElementById('f-host').value     = conn ? conn.host     : 'localhost';
-      document.getElementById('f-port').value     = conn ? String(conn.port) : '5432';
+      document.getElementById('f-port').value     = conn ? String(conn.port) : String(settings.defaultPort);
       document.getElementById('f-database').value = conn ? conn.database : '';
       document.getElementById('f-user').value     = conn ? conn.user     : '';
       document.getElementById('f-password').value = '';
-      document.getElementById('f-ssl').checked    = conn ? conn.ssl      : false;
+      document.getElementById('f-ssl').checked    = conn ? conn.ssl      : settings.defaultSsl;
       var ts = document.getElementById('test-status'); ts.textContent = ''; ts.className = 'test-status';
       document.getElementById('view-tree').classList.add('hidden');
       document.getElementById('view-form').classList.remove('hidden');
@@ -911,6 +946,7 @@ export function getSidebarHtml(params: {
 
     // ── Execute query (#16) ──────────────────────────────────────────
     document.getElementById('btn-run').addEventListener('click', runQuery);
+    document.getElementById('btn-explain').addEventListener('click', runExplain);
 
     function runQuery() {
       var tab = activeQTab();
@@ -922,6 +958,19 @@ export function getSidebarHtml(params: {
       document.getElementById('btn-run').disabled = true;
       setStatus('Executing…', false);
       vscode.postMessage({ command: 'executeQuery', data: { connId: tab.connId, sql: sql, tabId: tab.id } });
+    }
+
+    function runExplain() {
+      var tab = activeQTab();
+      if (!tab.connId) { setStatus('No connection selected.', true); return; }
+      var sql = monacoEditor
+        ? (monacoEditor.getModel().getValueInRange(monacoEditor.getSelection()).trim() || monacoEditor.getValue().trim())
+        : tab.sql.trim();
+      if (!sql) return;
+      document.getElementById('btn-explain').disabled = true;
+      document.getElementById('btn-run').disabled = true;
+      setStatus('Running EXPLAIN…', false);
+      vscode.postMessage({ command: 'executeExplain', data: { connId: tab.connId, sql: sql, tabId: tab.id } });
     }
 
     function setStatus(msg, isErr) {
@@ -964,6 +1013,81 @@ export function getSidebarHtml(params: {
     function exportResult(format) {
       if (!lastResult) return;
       vscode.postMessage({ command: 'exportResult', data: { format: format, columns: lastResult.columns, rows: lastResult.rows } });
+    }
+
+    // ── EXPLAIN plan renderer (#29) ──────────────────────────────────
+    function renderExplain(plan) {
+      var section = document.getElementById('results-section');
+      if (!plan) { section.classList.add('hidden'); return; }
+      section.classList.remove('hidden');
+      lastResult = null;
+      var rootPlan = plan[0];
+      var execTime = rootPlan['Execution Time'] || 0;
+      var planTime = rootPlan['Planning Time'] || 0;
+
+      function renderNode(node, depth) {
+        var nodeType = node['Node Type'] || '';
+        var totalCost = (node['Total Cost'] || 0).toFixed(2);
+        var startCost = (node['Startup Cost'] || 0).toFixed(2);
+        var actualTime = node['Actual Total Time'];
+        var actualRows = node['Actual Rows'];
+        var relation = node['Relation Name'] || node['Index Name'] || '';
+        var isSeqScan = nodeType === 'Seq Scan';
+        var isDanger = execTime > 0 && actualTime !== undefined && (actualTime / execTime) > 0.5;
+        var isWarn = isSeqScan || (execTime > 0 && actualTime !== undefined && (actualTime / execTime) > 0.2);
+        var cls = isDanger ? 'plan-danger' : isWarn ? 'plan-warn' : '';
+        var indent = depth * 14;
+        var html = '<div class="plan-node" style="padding-left:' + indent + 'px">';
+        html += '<div class="plan-header ' + cls + '">';
+        html += '<span class="plan-type">' + esc(nodeType) + '</span>';
+        if (relation) html += ' <span class="plan-rel">' + esc(relation) + '</span>';
+        if (node['Alias'] && node['Alias'] !== relation) html += ' <span class="plan-cost">alias: ' + esc(node['Alias']) + '</span>';
+        html += '<span class="plan-cost">cost ' + startCost + '..' + totalCost + '</span>';
+        if (actualTime !== undefined) html += '<span class="plan-time">⏱ ' + actualTime.toFixed(2) + 'ms</span>';
+        if (actualRows !== undefined) html += '<span class="plan-rows">→ ' + actualRows + ' rows</span>';
+        if (node['Rows Removed by Filter']) html += '<span class="plan-cost" style="color:var(--vscode-editorWarning-foreground)">filtered ' + node['Rows Removed by Filter'] + '</span>';
+        html += '</div>';
+        if (node['Plans'] && node['Plans'].length) {
+          html += '<div class="plan-children">';
+          node['Plans'].forEach(function(child) { html += renderNode(child, depth + 1); });
+          html += '</div>';
+        }
+        html += '</div>';
+        return html;
+      }
+
+      var treeHtml = '<div class="plan-summary">Planning: <b>' + planTime.toFixed(2) + 'ms</b> &nbsp; Execution: <b>' + execTime.toFixed(2) + 'ms</b></div>'
+        + renderNode(rootPlan.Plan, 0);
+      var jsonHtml = '<pre class="plan-raw">' + esc(JSON.stringify(plan, null, 2)) + '</pre>';
+
+      section.innerHTML = '<div class="result-toolbar">'
+        + '<span style="font-size:11px;font-weight:600;color:var(--vscode-descriptionForeground)">EXPLAIN PLAN</span>'
+        + '<span class="result-toolbar-spacer"></span>'
+        + '<button class="btn btn-secondary btn-xs" id="btn-plan-tree" style="font-weight:' + (explainViewMode==='tree'?'700':'400') + '">Tree</button>'
+        + '<button class="btn btn-secondary btn-xs" id="btn-plan-json" style="font-weight:' + (explainViewMode==='json'?'700':'400') + '">JSON</button>'
+        + '</div>'
+        + '<div class="plan-wrap" id="plan-tree-view">' + treeHtml + '</div>'
+        + '<div id="plan-json-view" style="display:none">' + jsonHtml + '</div>';
+
+      if (explainViewMode === 'json') {
+        document.getElementById('plan-tree-view').style.display = 'none';
+        document.getElementById('plan-json-view').style.display = '';
+      }
+
+      document.getElementById('btn-plan-tree').addEventListener('click', function() {
+        explainViewMode = 'tree';
+        document.getElementById('plan-tree-view').style.display = '';
+        document.getElementById('plan-json-view').style.display = 'none';
+        document.getElementById('btn-plan-tree').style.fontWeight = '700';
+        document.getElementById('btn-plan-json').style.fontWeight = '400';
+      });
+      document.getElementById('btn-plan-json').addEventListener('click', function() {
+        explainViewMode = 'json';
+        document.getElementById('plan-tree-view').style.display = 'none';
+        document.getElementById('plan-json-view').style.display = '';
+        document.getElementById('btn-plan-tree').style.fontWeight = '400';
+        document.getElementById('btn-plan-json').style.fontWeight = '700';
+      });
     }
 
     // ── History (#18) ────────────────────────────────────────────────
@@ -1214,6 +1338,40 @@ export function getSidebarHtml(params: {
           prismaLog += msg.data.text;
           var logEl = document.getElementById('prisma-log');
           if (logEl) { logEl.textContent = prismaLog; logEl.scrollTop = logEl.scrollHeight; }
+          break;
+        }
+        case 'settings': {
+          settings = Object.assign(settings, msg.data);
+          break;
+        }
+        case 'reconnect': {
+          var rData = msg.data;
+          statuses[rData.connId] = 'connecting'; renderTree();
+          vscode.postMessage({ command: 'connect', data: { connId: rData.connId } });
+          break;
+        }
+        case 'tableEstimatesLoaded': {
+          var ed = msg.data;
+          if (!estimates[ed.connId + ':' + ed.schema]) estimates[ed.connId + ':' + ed.schema] = {};
+          Object.assign(estimates[ed.connId + ':' + ed.schema], ed.estimates);
+          renderTree();
+          break;
+        }
+        case 'explainResult': {
+          var xd = msg.data;
+          document.getElementById('btn-explain').disabled = false;
+          document.getElementById('btn-run').disabled = false;
+          var xtab = tabs.find(function(t) { return t.id === xd.tabId; });
+          if (xtab) xtab.result = xd.error ? { error: xd.error } : { isPlan: true };
+          if (!xd.tabId || xd.tabId === activeQTabId) {
+            if (xd.error) {
+              setStatus('EXPLAIN error: ' + xd.error, true);
+              document.getElementById('results-section').classList.add('hidden');
+            } else {
+              setStatus('Query plan ready', false);
+              renderExplain(xd.plan);
+            }
+          }
           break;
         }
         case 'navigateToTable': {

@@ -6,7 +6,8 @@ export class PgDriver {
 
   constructor(
     private readonly _conn: PgConnection,
-    private readonly _password: string
+    private readonly _password: string,
+    private readonly _statementTimeout: number = 30_000
   ) {}
 
   async connect(): Promise<void> {
@@ -20,6 +21,7 @@ export class PgDriver {
       max: 5,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
+      statement_timeout: this._statementTimeout,
     });
     const client = await this._pool.connect();
     client.release();
