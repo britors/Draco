@@ -1,0 +1,83 @@
+{
+  "name": "prisma4postgres",
+  "displayName": "Prisma4Postgres",
+  "description": "PostgreSQL explorer and Prisma ORM integration for VS Code",
+  "version": "0.1.0",
+  "publisher": "britors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/britors/Prisma4Postgres.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "prisma4postgres",
+          "title": "Prisma4Postgres",
+          "icon": "logo.svg"
+        }
+      ]
+    },
+    "views": {
+      "prisma4postgres": [
+        {
+          "type": "webview",
+          "id": "prisma4postgres.sidebar",
+          "name": "Explorer"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "prisma4postgres.addConnection",
+        "title": "Add Connection",
+        "category": "Prisma4Postgres",
+        "icon": "$(add)"
+      },
+      {
+        "command": "prisma4postgres.refreshConnections",
+        "title": "Refresh",
+        "category": "Prisma4Postgres",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "prisma4postgres.addConnection",
+          "when": "view == prisma4postgres.sidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "prisma4postgres.refreshConnections",
+          "when": "view == prisma4postgres.sidebar",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "vscode:prepublish": "node esbuild.js --production",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/codicons": "^0.0.36",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "pg": "^8.11.0"
+  }
+}
