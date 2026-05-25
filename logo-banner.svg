@@ -64,19 +64,19 @@
 
   <!-- ===== TEXT (right side) ===== -->
   <!-- Main title -->
-  <text x="576" y="136"
+  <text x="576" y="130"
     font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
-    font-size="72" font-weight="800" fill="#eef2f7"
-    text-anchor="middle" letter-spacing="-2">Prisma<tspan fill="#4a9fd8">DB</tspan></text>
+    font-size="54" font-weight="800" fill="#eef2f7"
+    text-anchor="middle" letter-spacing="-1">Prisma<tspan fill="#4a9fd8">4</tspan>Postgres</text>
 
   <!-- Subtitle -->
-  <text x="576" y="170"
+  <text x="576" y="163"
     font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
-    font-size="13" font-weight="500" fill="#3d6680"
-    text-anchor="middle" letter-spacing="7">FOR POSTGRES</text>
+    font-size="12" font-weight="500" fill="#3d6680"
+    text-anchor="middle" letter-spacing="5">DATABASE EXPLORER</text>
 
   <!-- Tagline -->
-  <text x="576" y="210"
+  <text x="576" y="205"
     font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
     font-size="15" font-weight="400" fill="#5a8aaa"
     text-anchor="middle">A modern database explorer &amp; runner</text>
