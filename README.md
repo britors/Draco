@@ -69,7 +69,6 @@
 - Full DDL viewer with Monaco read-only (`CREATE TABLE` reconstructed from `pg_catalog`)
 - Indexes & constraints panel (size, type badges, definitions)
 - FK Map — outgoing and incoming foreign keys, click to navigate tree
-- Table preview (first N rows, configurable)
 
 ### Prisma Integration
 - Browse for `schema.prisma` via file dialog; path persisted in settings
@@ -133,7 +132,6 @@ Settings are stored in the app's user-data directory (`userData/settings.json`).
 | Setting | Default | Description |
 |---|---|---|
 | `queryTimeout` | `30000` | Query timeout (ms) |
-| `previewRowLimit` | `100` | Max rows in table preview |
 | `defaultPort` | `5432` | Pre-filled port for new connections |
 | `defaultSsl` | `false` | SSL enabled by default for new connections |
 | `showRowCount` | `false` | Show estimated row count badges in the Explorer |

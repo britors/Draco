@@ -226,31 +226,6 @@ export async function getTableEstimates(
   return Object.fromEntries(rows.map(r => [r.relname, Number(r.estimate)]));
 }
 
-export async function previewTable(
-  driver: PgDriver,
-  schema: string,
-  table: string,
-  rowLimit = 100
-): Promise<{ columns: string[]; rows: Record<string, unknown>[]; estimate: number }> {
-  const qSchema = schema.replace(/"/g, '""');
-  const qTable  = table.replace(/"/g, '""');
-
-  const rows = await driver.query(`SELECT * FROM "${qSchema}"."${qTable}" LIMIT ${Math.max(1, Math.floor(rowLimit))}`);
-
-  const est = await driver.query<{ estimate: number }>(
-    `SELECT reltuples::bigint AS estimate
-     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE n.nspname = $1 AND c.relname = $2`,
-    [schema, table]
-  );
-
-  return {
-    columns: rows.length > 0 ? Object.keys(rows[0]) : [],
-    rows,
-    estimate: Number(est[0]?.estimate ?? 0),
-  };
-}
-
 export async function getTableDDL(driver: PgDriver, schema: string, table: string): Promise<string> {
   const oidRows = await driver.query<{ oid: number }>(
     `SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname = $2 AND n.nspname = $1`,

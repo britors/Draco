@@ -8,7 +8,7 @@ import { ConnectionManager } from '../db/ConnectionManager';
 import { testConnection } from '../db/PgDriver';
 import {
   getSchemas, getTables, getColumns, getFunctions, getFunctionParams,
-  previewTable, getCompletionData, getTableDDL, getIndexes, getConstraints,
+  getCompletionData, getTableDDL, getIndexes, getConstraints,
   getFKMap, checkMigrationsTable, getMigrations, getTableEstimates,
   getTableDetail,
 } from '../db/queries';
@@ -351,29 +351,7 @@ export function registerIpc(win: BrowserWindow): void {
         break;
       }
 
-      // ── Preview ───────────────────────────────────────────────────────────
 
-      case 'previewTable': {
-        const { connId, schema, table } = data as { connId: string; schema: string; table: string };
-        const driver = connManager.getDriver(connId);
-        if (!driver) { send('formError', 'Not connected.'); return; }
-        const conn = getConnection(connId);
-        const rowLimit = getSettings().previewRowLimit;
-        try {
-          const result = await previewTable(driver, schema, table, rowLimit);
-          // Send inline to main window (no separate panel for preview in v1.0)
-          send('previewResult', {
-            connLabel: conn?.label ?? connId,
-            schema, table,
-            columns: result.columns,
-            rows: result.rows,
-            estimate: result.estimate,
-          });
-        } catch (err) {
-          send('formError', `Preview failed: ${String(err)}`);
-        }
-        break;
-      }
 
       // ── Export ────────────────────────────────────────────────────────────
 

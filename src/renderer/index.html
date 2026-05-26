@@ -269,12 +269,6 @@
     .conn-select-sm { background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border,transparent); padding: 2px 4px; font-size: var(--vscode-font-size); font-family: var(--vscode-font-family); outline: none; width: 100%; }
     .no-schema-msg { color: var(--vscode-descriptionForeground); font-style: italic; font-size: 12px; padding: 4px 0; }
 
-    /* Preview overlay */
-    .preview-overlay { position: fixed; inset: 0; background: var(--vscode-editor-background); display: flex; flex-direction: column; z-index: 100; }
-    .preview-header { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editorGroupHeader-tabsBackground); flex-shrink: 0; }
-    .preview-header-title { font-size: 13px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; }
-    .preview-body { flex: 1; overflow: auto; }
-
     /* Drift overlay */
     .drift-overlay { position: fixed; inset: 0; background: var(--vscode-editor-background); display: flex; flex-direction: column; z-index: 100; }
     .drift-header { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editorGroupHeader-tabsBackground); flex-shrink: 0; }
@@ -514,15 +508,7 @@
 
   </div><!-- /.main-area -->
 
-  <!-- Preview overlay (inline) -->
-  <div class="preview-overlay hidden" id="preview-overlay">
-    <div class="preview-header">
-      <button class="btn-icon" id="preview-close" title="Close"><i class="codicon codicon-close"></i></button>
-      <span class="preview-header-title" id="preview-title">Preview</span>
-      <span id="preview-estimate" style="font-size:11px;color:var(--vscode-descriptionForeground)"></span>
-    </div>
-    <div class="preview-body" id="preview-body"></div>
-  </div>
+
 
   <!-- Drift overlay (inline) -->
   <div class="drift-overlay hidden" id="drift-overlay">
@@ -873,7 +859,6 @@
       var colList = cols[connId + ':' + schemaName + ':' + t.name];
       var prismaModel = findPrismaModel(t.name);
       var acts = btnIcon('open-table-detail', { connId: connId, schema: schemaName, table: t.name }, 'codicon-table', 'Open Details')
-               + btnIcon('preview', { connId: connId, schema: schemaName, table: t.name }, 'codicon-open-preview', 'Preview')
                + btnIcon('open-ddl', { connId: connId, schema: schemaName, table: t.name }, 'codicon-symbol-structure', 'View DDL')
                + btnIcon('copy-name', { name: t.name }, 'codicon-copy', 'Copy name');
       var prismaPin = prismaModel ? '<i class="codicon codicon-symbol-class" title="Prisma model: ' + esc(prismaModel.name) + '" style="font-size:11px;color:var(--vscode-descriptionForeground);margin-right:2px"></i>' : '';
@@ -1006,8 +991,6 @@
           api.send('deleteConnection', { id: d.connId }); break;
         case 'open-table-detail':
           openTableTab(d.connId, d.schema, d.table); break;
-        case 'preview':
-          api.send('previewTable', { connId: d.connId, schema: d.schema, table: d.table }); break;
         case 'open-ddl':
           api.send('openDDL', { connId: d.connId, schema: d.schema, table: d.table }); break;
         case 'copy-name':
@@ -1831,33 +1814,6 @@
       btn.innerHTML = '<i class="codicon codicon-symbol-class"></i>' + (prismaSchema ? 'Prisma ●' : 'Prisma');
     }
 
-    // ── Preview overlay ────────────────────────────────────────────────────
-    document.getElementById('preview-close').addEventListener('click', function () {
-      document.getElementById('preview-overlay').classList.add('hidden');
-    });
-
-    function showPreview(d) {
-      document.getElementById('preview-title').textContent = d.schema + '.' + d.table + '  —  ' + d.connLabel;
-      var est = d.estimate !== undefined ? '~' + d.estimate + ' rows' : '';
-      document.getElementById('preview-estimate').textContent = est;
-      var html = '<table class="result-grid"><thead><tr>';
-      d.columns.forEach(function (c) { html += '<th>' + esc(c) + '</th>'; });
-      html += '</tr></thead><tbody>';
-      d.rows.forEach(function (row) {
-        html += '<tr>';
-        d.columns.forEach(function (c) {
-          var v = row[c];
-          if (v === null || v === undefined) { html += '<td><span class="result-null">NULL</span></td>'; }
-          else if (typeof v === 'object') { html += '<td>' + esc(JSON.stringify(v)) + '</td>'; }
-          else { html += '<td>' + esc(String(v)) + '</td>'; }
-        });
-        html += '</tr>';
-      });
-      html += '</tbody></table>';
-      document.getElementById('preview-body').innerHTML = html;
-      document.getElementById('preview-overlay').classList.remove('hidden');
-    }
-
     // ── Drift overlay ──────────────────────────────────────────────────────
     document.getElementById('drift-close').addEventListener('click', function () {
       document.getElementById('drift-overlay').classList.add('hidden');
@@ -1995,8 +1951,6 @@
             api.send('loadTables', { connId: d.connId, schema: d.schema });
           }
           renderTree(); break;
-        case 'previewResult':
-          showPreview(d); break;
         case 'driftResult':
           showDrift(d); break;
         case 'tableDetailLoaded': {
