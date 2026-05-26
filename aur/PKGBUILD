@@ -9,8 +9,10 @@ license=('MIT')
 depends=('gtk3' 'nss' 'alsa-lib' 'libnotify' 'libxss' 'libxtst')
 provides=('prisma4postgres')
 conflicts=('prisma4postgres')
-source=("https://github.com/britors/Prisma4Postgres/releases/download/v${pkgver}/prisma4postgres_${pkgver}_amd64.deb")
-sha256sums=('b4bf1a898ce9c3a81e980807c30fe14d9126f6698b68a2ba9cfb013acd7cc7da')
+source=("https://github.com/britors/Prisma4Postgres/releases/download/v${pkgver}/prisma4postgres_${pkgver}_amd64.deb"
+        "https://raw.githubusercontent.com/britors/Prisma4Postgres/main/logo.svg")
+sha256sums=('b4bf1a898ce9c3a81e980807c30fe14d9126f6698b68a2ba9cfb013acd7cc7da'
+            'b22695b2f97a91e4995fe11fd5cd60a63522818fa49af063cfa300a75a6b3ba6')
 
 prepare() {
     ar x "prisma4postgres_${pkgver}_amd64.deb"
@@ -18,6 +20,9 @@ prepare() {
 
 package() {
     bsdtar -xf data.tar.xz -C "${pkgdir}"
+
+    # ícone SVG correto (o .deb pode conter o ícone padrão do Electron)
+    install -Dm644 "logo.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/prisma4postgres.svg"
 
     # symlink no PATH
     install -dm755 "${pkgdir}/usr/bin"
