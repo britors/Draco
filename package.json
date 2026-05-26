@@ -14,7 +14,7 @@
     "dev": "node esbuild.js && electron out/main/index.js",
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
-    "package": "node esbuild.js --production && electron-builder",
+    "package": "node esbuild.js --production && electron-builder --publish never",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test src/__tests__/PgConnection.test.ts src/__tests__/PrismaParser.test.ts src/__tests__/ConnectionManager.test.ts",
     "flatpak:gen-sources": "flatpak-node-generator npm package-lock.json -o flatpak/generated-sources.json",
