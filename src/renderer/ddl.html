@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net data:; worker-src blob:; connect-src https://cdn.jsdelivr.net;">
+  <link rel="stylesheet" href="./codicon.css">
+  <title>DDL Viewer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --vscode-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --vscode-font-size: 13px;
+      --vscode-foreground: #cccccc;
+      --vscode-editor-background: #1e1e1e;
+      --vscode-editorGroupHeader-tabsBackground: #252526;
+      --vscode-panel-border: #444;
+      --vscode-tab-activeForeground: #fff;
+      --vscode-tab-inactiveForeground: rgba(255,255,255,0.5);
+      --vscode-tab-activeBackground: #1e1e1e;
+      --vscode-tab-hoverBackground: rgba(255,255,255,0.05);
+      --vscode-focusBorder: #007fd4;
+      --vscode-list-hoverBackground: #2a2d2e;
+      --vscode-descriptionForeground: rgba(204,204,204,0.7);
+      --vscode-button-background: #0e639c;
+      --vscode-button-foreground: #fff;
+      --vscode-button-hoverBackground: #1177bb;
+      --vscode-button-secondaryBackground: #3a3d41;
+      --vscode-button-secondaryForeground: #cccccc;
+      --vscode-button-secondaryHoverBackground: #45494e;
+      --vscode-textLink-foreground: #3794ff;
+      --vscode-textPreformat-foreground: #d7ba7d;
+      --vscode-badge-background: #4d4d4d;
+      --vscode-badge-foreground: #cccccc;
+      --vscode-editor-font-family: 'Cascadia Code', 'Droid Sans Mono', monospace;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        color-scheme: light;
+        --vscode-foreground: #383838;
+        --vscode-editor-background: #ffffff;
+        --vscode-editorGroupHeader-tabsBackground: #f3f3f3;
+        --vscode-panel-border: #e5e5e5;
+        --vscode-tab-activeForeground: #333;
+        --vscode-tab-inactiveForeground: rgba(51,51,51,0.7);
+        --vscode-tab-activeBackground: #fff;
+        --vscode-tab-hoverBackground: rgba(0,0,0,0.05);
+        --vscode-list-hoverBackground: #e8e8e8;
+        --vscode-descriptionForeground: rgba(97,97,97,0.8);
+        --vscode-button-secondaryBackground: #5f6a79;
+        --vscode-button-secondaryForeground: #fff;
+        --vscode-button-secondaryHoverBackground: #4c5561;
+        --vscode-textPreformat-foreground: #a31515;
+        --vscode-badge-background: #c4c4c4;
+        --vscode-badge-foreground: #333;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    .header { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 8px 14px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editorGroupHeader-tabsBackground); }
+    .header-title { font-size: 13px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .header-schema { font-size: 11px; color: var(--vscode-descriptionForeground); }
+    .tab-bar { display: flex; flex-shrink: 0; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editorGroupHeader-tabsBackground); }
+    .tab { padding: 6px 16px; background: transparent; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: var(--vscode-tab-inactiveForeground); font-size: var(--vscode-font-size); font-family: var(--vscode-font-family); }
+    .tab.active { color: var(--vscode-tab-activeForeground); border-bottom-color: var(--vscode-focusBorder); }
+    .tab:hover:not(.active) { background: var(--vscode-tab-hoverBackground); }
+    .tab-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+    .tab-content.hidden { display: none; }
+    #monaco-container { flex: 1; overflow: hidden; }
+    .scroll-area { flex: 1; overflow-y: auto; padding: 16px; }
+    .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--vscode-descriptionForeground); margin-bottom: 8px; margin-top: 16px; }
+    .section-title:first-child { margin-top: 0; }
+    .info-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; }
+    .info-table th { text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--vscode-descriptionForeground); padding: 4px 8px; border-bottom: 2px solid var(--vscode-panel-border); white-space: nowrap; }
+    .info-table td { padding: 4px 8px; border-bottom: 1px solid rgba(128,128,128,0.1); vertical-align: top; }
+    .info-table tr:hover { background: var(--vscode-list-hoverBackground); }
+    .badge { display: inline-block; font-size: 9px; font-weight: 700; border-radius: 2px; padding: 1px 4px; line-height: 14px; }
+    .badge-pk { background: #cca700; color: #000; }
+    .badge-fk { background: #007acc; color: #fff; }
+    .badge-uq { background: #6c8ebf; color: #fff; }
+    .badge-ck { background: #82b366; color: #fff; }
+    .code { font-family: var(--vscode-editor-font-family, monospace); font-size: 11px; color: var(--vscode-textPreformat-foreground); word-break: break-all; }
+    .size-cell { white-space: nowrap; color: var(--vscode-descriptionForeground); }
+    .fk-nav { background: transparent; border: none; cursor: pointer; padding: 2px 6px; color: var(--vscode-textLink-foreground); font-size: 12px; font-family: inherit; border-radius: 2px; }
+    .fk-nav:hover { background: var(--vscode-list-hoverBackground); text-decoration: underline; }
+    .empty { color: var(--vscode-descriptionForeground); font-style: italic; padding: 8px 0; }
+    .btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border: none; cursor: pointer; font-size: var(--vscode-font-size); font-family: inherit; border-radius: 2px; }
+    .btn-secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+    .btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    .loading { padding: 24px; color: var(--vscode-descriptionForeground); font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-title" id="header-title">Loading…</div>
+    <button class="btn btn-secondary" id="btn-copy">Copy DDL</button>
+  </div>
+  <div class="tab-bar">
+    <button class="tab active" data-tab="ddl">DDL</button>
+    <button class="tab" data-tab="indexes">Indexes &amp; Constraints</button>
+    <button class="tab" data-tab="fkmap">FK Map</button>
+  </div>
+  <div class="tab-content" id="tab-ddl"><div id="monaco-container"></div></div>
+  <div class="tab-content hidden" id="tab-indexes"><div class="scroll-area" id="indexes-content"><div class="loading">Loading…</div></div></div>
+  <div class="tab-content hidden" id="tab-fkmap"><div class="scroll-area" id="fkmap-content"><div class="loading">Loading…</div></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+  <script>
+  (function () {
+    var api = window.api;
+    var MONACO_CDN = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs';
+    var DATA = null;
+    var monacoEditor = null;
+    var indexesRendered = false;
+    var fkmapRendered = false;
+
+    function esc(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ── Receive panel key from main process ─────────────────────────────────
+    api.onMessage(function (msg) {
+      if (msg.command === 'panel-key') {
+        api.invoke('get-panel-data', msg.data).then(function (payload) {
+          if (!payload) { document.getElementById('header-title').textContent = 'Error: no data'; return; }
+          DATA = payload;
+          document.getElementById('header-title').innerHTML = '<span style="color:var(--vscode-descriptionForeground)">' + esc(DATA.schema) + '.</span>' + esc(DATA.table);
+          document.title = 'DDL: ' + DATA.schema + '.' + DATA.table;
+          initMonaco();
+        });
+      }
+    });
+
+    // ── Tab switching ──────────────────────────────────────────────────────
+    var tabs = document.querySelectorAll('.tab');
+    tabs.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.dataset.tab;
+        tabs.forEach(function (b) { b.classList.toggle('active', b.dataset.tab === id); });
+        document.querySelectorAll('.tab-content').forEach(function (el) {
+          el.classList.toggle('hidden', el.id !== 'tab-' + id);
+        });
+        if (id === 'indexes' && DATA) renderIndexes();
+        if (id === 'fkmap' && DATA) renderFKMap();
+        if (id === 'ddl' && monacoEditor) monacoEditor.layout();
+      });
+    });
+
+    // ── Monaco ─────────────────────────────────────────────────────────────
+    function initMonaco() {
+      window.MonacoEnvironment = {
+        getWorkerUrl: function () {
+          var code = 'self.MonacoEnvironment={baseUrl:"' + MONACO_CDN + '/"};importScripts("' + MONACO_CDN + '/base/worker/workerMain.js");';
+          return URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+        }
+      };
+      require.config({ paths: { vs: MONACO_CDN } });
+      require(['vs/editor/editor.main'], function () {
+        var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
+          value: DATA.ddl || '-- No DDL available',
+          language: 'sql',
+          theme: isDark ? 'vs-dark' : 'vs',
+          readOnly: true,
+          minimap: { enabled: false },
+          lineNumbers: 'on',
+          fontSize: 13,
+          wordWrap: 'on',
+          automaticLayout: true,
+          scrollBeyondLastLine: false,
+          contextmenu: false,
+        });
+      });
+    }
+
+    // ── Copy DDL ───────────────────────────────────────────────────────────
+    document.getElementById('btn-copy').addEventListener('click', function () {
+      if (!DATA) return;
+      navigator.clipboard.writeText(DATA.ddl).then(function () {
+        var btn = document.getElementById('btn-copy');
+        btn.textContent = 'Copied!';
+        setTimeout(function () { btn.textContent = 'Copy DDL'; }, 1500);
+      }).catch(function () {});
+    });
+
+    // ── Indexes ────────────────────────────────────────────────────────────
+    function renderIndexes() {
+      if (indexesRendered || !DATA) return;
+      indexesRendered = true;
+      var el = document.getElementById('indexes-content');
+      var html = '<div class="section-title">Indexes</div>';
+      if (!DATA.indexes.length) {
+        html += '<div class="empty">No indexes found.</div>';
+      } else {
+        html += '<table class="info-table"><thead><tr><th>Name</th><th>Type</th><th>Size</th><th>Definition</th></tr></thead><tbody>';
+        DATA.indexes.forEach(function (ix) {
+          var badge = ix.isPrimary ? '<span class="badge badge-pk">PK</span>' : ix.isUnique ? '<span class="badge badge-uq">UQ</span>' : '';
+          html += '<tr><td>' + esc(ix.name) + '</td><td>' + badge + '</td><td class="size-cell">' + esc(ix.size) + '</td><td class="code">' + esc(ix.definition) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '<div class="section-title">Constraints</div>';
+      if (!DATA.constraints.length) {
+        html += '<div class="empty">No constraints found.</div>';
+      } else {
+        html += '<table class="info-table"><thead><tr><th>Name</th><th>Type</th><th>Definition</th></tr></thead><tbody>';
+        DATA.constraints.forEach(function (c) {
+          var bc = c.type === 'PRIMARY KEY' ? 'badge-pk' : c.type === 'FOREIGN KEY' ? 'badge-fk' : c.type === 'UNIQUE' ? 'badge-uq' : 'badge-ck';
+          html += '<tr><td>' + esc(c.name) + '</td><td><span class="badge ' + bc + '">' + esc(c.type) + '</span></td><td class="code">' + esc(c.definition) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+    }
+
+    // ── FK Map ─────────────────────────────────────────────────────────────
+    function renderFKMap() {
+      if (fkmapRendered || !DATA) return;
+      fkmapRendered = true;
+      var el = document.getElementById('fkmap-content');
+      var outgoing = DATA.fkMap.filter(function (r) { return r.direction === 'outgoing'; });
+      var incoming = DATA.fkMap.filter(function (r) { return r.direction === 'incoming'; });
+      var html = '<div class="section-title">Outgoing (this table references)</div>';
+      if (!outgoing.length) {
+        html += '<div class="empty">No outgoing foreign keys.</div>';
+      } else {
+        html += '<table class="info-table"><thead><tr><th>Column</th><th>References</th><th>Constraint</th></tr></thead><tbody>';
+        outgoing.forEach(function (r) {
+          html += '<tr><td class="code">' + esc(r.column) + '</td>'
+            + '<td><button class="fk-nav" data-schema="' + esc(r.foreignSchema) + '" data-table="' + esc(r.foreignTable) + '">'
+            + esc(r.foreignSchema + '.' + r.foreignTable) + '.' + esc(r.foreignColumn) + '</button></td>'
+            + '<td class="code" style="color:var(--vscode-descriptionForeground)">' + esc(r.constraintName) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '<div class="section-title">Incoming (other tables reference this)</div>';
+      if (!incoming.length) {
+        html += '<div class="empty">No incoming foreign keys.</div>';
+      } else {
+        html += '<table class="info-table"><thead><tr><th>From</th><th>Column</th><th>Constraint</th></tr></thead><tbody>';
+        incoming.forEach(function (r) {
+          html += '<tr><td><button class="fk-nav" data-schema="' + esc(r.foreignSchema) + '" data-table="' + esc(r.foreignTable) + '">'
+            + esc(r.foreignSchema + '.' + r.foreignTable) + '</button></td>'
+            + '<td class="code">' + esc(r.foreignColumn) + '</td>'
+            + '<td class="code" style="color:var(--vscode-descriptionForeground)">' + esc(r.constraintName) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+      el.innerHTML = html;
+
+      el.addEventListener('click', function (e) {
+        var btn = e.target.closest('.fk-nav');
+        if (!btn) return;
+        api.send('navigate-to-table', { connId: DATA.connId, schema: btn.dataset.schema, table: btn.dataset.table });
+      });
+    }
+  }());
+  </script>
+</body>
+</html>

@@ -1,114 +1,47 @@
 {
   "name": "prisma4postgres",
-  "displayName": "Prisma4Postgres",
-  "description": "PostgreSQL explorer and Prisma ORM integration for VS Code",
-  "version": "0.1.0",
-  "publisher": "britors",
+  "productName": "Prisma4Postgres",
+  "description": "PostgreSQL explorer and Prisma ORM integration",
+  "version": "1.0.0",
+  "author": "britors",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/britors/Prisma4Postgres.git"
   },
-  "engines": {
-    "vscode": "^1.85.0"
-  },
-  "categories": ["Other"],
-  "activationEvents": [],
-  "main": "./out/extension.js",
-  "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "prisma4postgres",
-          "title": "Prisma4Postgres",
-          "icon": "logo.svg"
-        }
-      ]
-    },
-    "views": {
-      "prisma4postgres": [
-        {
-          "type": "webview",
-          "id": "prisma4postgres.sidebar",
-          "name": "Explorer"
-        }
-      ]
-    },
-    "commands": [
-      {
-        "command": "prisma4postgres.addConnection",
-        "title": "Add Connection",
-        "category": "Prisma4Postgres",
-        "icon": "$(add)"
-      },
-      {
-        "command": "prisma4postgres.refreshConnections",
-        "title": "Refresh",
-        "category": "Prisma4Postgres",
-        "icon": "$(refresh)"
-      }
-    ],
-    "menus": {
-      "view/title": [
-        {
-          "command": "prisma4postgres.addConnection",
-          "when": "view == prisma4postgres.sidebar",
-          "group": "navigation"
-        },
-        {
-          "command": "prisma4postgres.refreshConnections",
-          "when": "view == prisma4postgres.sidebar",
-          "group": "navigation"
-        }
-      ]
-    },
-    "configuration": {
-      "title": "Prisma4Postgres",
-      "properties": {
-        "prisma4postgres.queryTimeout": {
-          "type": "number",
-          "default": 30000,
-          "minimum": 1000,
-          "description": "Query timeout in milliseconds. Applies to all queries executed in the Query editor."
-        },
-        "prisma4postgres.previewRowLimit": {
-          "type": "number",
-          "default": 100,
-          "minimum": 1,
-          "maximum": 5000,
-          "description": "Maximum number of rows returned in table preview."
-        },
-        "prisma4postgres.defaultSsl": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable SSL by default when adding new connections."
-        },
-        "prisma4postgres.defaultPort": {
-          "type": "number",
-          "default": 5432,
-          "minimum": 1,
-          "maximum": 65535,
-          "description": "Default port pre-filled when adding new connections."
-        },
-        "prisma4postgres.showRowCount": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show estimated row count next to table names in the Explorer tree (uses pg_class.reltuples)."
-        }
-      }
-    }
-  },
+  "main": "out/main/index.js",
   "scripts": {
+    "dev": "node esbuild.js && electron out/main/index.js",
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
-    "vscode:prepublish": "node esbuild.js --production",
+    "package": "node esbuild.js --production && electron-builder",
     "typecheck": "tsc --noEmit"
+  },
+  "build": {
+    "appId": "com.britors.prisma4postgres",
+    "productName": "Prisma4Postgres",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "linux": {
+      "target": "AppImage"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    }
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/pg": "^8.11.0",
-    "@types/vscode": "^1.85.0",
     "@vscode/codicons": "^0.0.36",
+    "electron": "^29.4.6",
+    "electron-builder": "^24.13.3",
     "esbuild": "^0.20.0",
     "typescript": "^5.3.0"
   },
