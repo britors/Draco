@@ -10,7 +10,7 @@ import {
   getCompletionData, getTableDDL, getIndexes, getConstraints,
   getFKMap, getTableEstimates,
   getTableDetail, getERDData,
-  browseTableData, updateTableRow, getColumnStats, generatePrismaSchema, importTableRows,
+  browseTableData, updateTableRow, getColumnStats, importTableRows,
 } from '../db/queries';
 import { validateConnection, PgConnection } from '../types/PgConnection';
 import {
@@ -499,33 +499,6 @@ export function registerIpc(win: BrowserWindow): void {
         break;
       }
 
-      // ── Prisma schema gen (#60) ──────────────────────────────────────────
-
-      case 'generatePrismaSchema': {
-        const { connId, schema } = data as { connId: string; schema: string };
-        const driver = connManager.getDriver(connId);
-        if (!driver) { send('prismaSchemaGenerated', { error: 'Not connected.' }); break; }
-        try {
-          const prismaSchema = await generatePrismaSchema(driver, schema);
-          send('prismaSchemaGenerated', { schema: prismaSchema });
-        } catch (err) {
-          send('prismaSchemaGenerated', { error: String(err) });
-        }
-        break;
-      }
-
-      case 'savePrismaSchema': {
-        const { content } = data as { content: string };
-        const result = await dialog.showSaveDialog(mainWin, {
-          defaultPath: 'schema.prisma',
-          filters: [{ name: 'Prisma Schema', extensions: ['prisma'] }],
-        });
-        if (!result.canceled && result.filePath) {
-          fs.writeFileSync(result.filePath, content, 'utf-8');
-          send('prismaSchemasSaved', { ok: true, filePath: result.filePath });
-        }
-        break;
-      }
 
       // ── Activity viewer (#53) ─────────────────────────────────────────────
 
