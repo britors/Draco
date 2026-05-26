@@ -15,7 +15,7 @@ import {
 import { validateConnection, PgConnection } from '../types/PgConnection';
 import {
   listConnections, getConnection, saveConnection, deleteConnection, getPassword,
-  listHistory, addHistory, getSettings, patchSettings,
+  listHistory, addHistory, clearHistory, getSettings, patchSettings,
   listSnippets, saveSnippet, deleteSnippet,
   getSshPassword, storeSshPassword,
 } from './store';
@@ -341,6 +341,10 @@ export function registerIpc(win: BrowserWindow): void {
 
       case 'loadHistory':
         send('historyLoaded', listHistory());
+        break;
+
+      case 'clearHistory':
+        clearHistory();
         break;
 
       // ── DDL viewer ────────────────────────────────────────────────────────

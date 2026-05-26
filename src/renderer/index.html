@@ -558,7 +558,8 @@
       <div class="search-bar">
         <i class="search-icon codicon codicon-search"></i>
         <input class="search-input" id="history-search" type="text" placeholder="Search history…">
-        <button class="search-clear hidden" id="history-clear" title="Clear"><i class="codicon codicon-close"></i></button>
+        <button class="search-clear hidden" id="history-clear" title="Clear search"><i class="codicon codicon-close"></i></button>
+        <button class="btn-icon" id="history-clear-all" title="Clear all history" style="margin-left:4px"><i class="codicon codicon-trash"></i></button>
       </div>
       <div class="history-list" id="history-list">
         <div class="empty-state"><span>No history yet.</span></div>
@@ -2043,6 +2044,17 @@
     historySearch.addEventListener('input', function () { historyClear.classList.toggle('hidden', !historySearch.value); renderHistory(); });
     historySearch.addEventListener('keydown', function (e) { if (e.key === 'Escape') { historySearch.value = ''; historyClear.classList.add('hidden'); renderHistory(); } });
     historyClear.addEventListener('click', function () { historySearch.value = ''; historyClear.classList.add('hidden'); renderHistory(); });
+
+    document.getElementById('history-clear-all').addEventListener('click', function () {
+      if (!historyEntries.length) return;
+      if (!confirm('Clear all query history?')) return;
+      api.send('clearHistory');
+      historyEntries = [];
+      filteredHistory = [];
+      historySearch.value = '';
+      historyClear.classList.add('hidden');
+      renderHistory();
+    });
 
     function renderHistory() {
       var list = document.getElementById('history-list');

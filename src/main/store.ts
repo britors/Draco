@@ -133,6 +133,10 @@ export function addHistory(entry: Omit<HistoryEntry, 'id'>): void {
   writeJson('history.json', entries);
 }
 
+export function clearHistory(): void {
+  writeJson('history.json', []);
+}
+
 // ── Query snippets (#65) ─────────────────────────────────────────────────────
 
 export interface SnippetEntry {
