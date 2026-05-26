@@ -1726,15 +1726,6 @@
       });
     }
 
-    // ── Prisma ─────────────────────────────────────────────────────────────
-    document.getElementById('btn-browse-schema').addEventListener('click', function () {
-      api.invoke('open-schema-dialog').then(function (result) {
-        if (result && typeof result === 'string') {
-          // prismaSchema will be sent via 'prismaSchema' message from main
-        }
-      });
-    });
-
     // ── Messages from main process ─────────────────────────────────────────
     api.onMessage(function (msg) {
       var d = msg.data;
