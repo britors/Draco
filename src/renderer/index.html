@@ -1522,6 +1522,7 @@
           tabSize: 2,
           renderLineHighlight: 'all',
         });
+        monacoEditor.addCommand(monaco.KeyCode.F8, runQuery);
         monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runQuery);
         monacoEditor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, formatSQL);
         monacoEditor.onDidChangeModelContent(function () { activeQTab().sql = monacoEditor.getValue(); });
@@ -1835,8 +1836,10 @@
           statuses = d || {}; renderTree(); break;
         case 'connectionStatus': {
           statuses[d.id] = d.status; delete loadingNodes['c:' + d.id];
-          if (d.status === 'connected') { expanded['c:' + d.id] = true; loadingNodes['c:' + d.id] = true; api.send('loadSchemas', { connId: d.id }); }
-          else if (d.status !== 'connecting') { delete schemas[d.id]; }
+          if (d.status === 'connected') {
+            expanded['c:' + d.id] = true; loadingNodes['c:' + d.id] = true; api.send('loadSchemas', { connId: d.id });
+            if (monacoReady && activeQTab().connId === d.id) api.send('loadCompletions', { connId: d.id });
+          } else if (d.status !== 'connecting') { delete schemas[d.id]; }
           renderTree();
           if (persisted.tab === 'query') renderConnSelect();
           break;
