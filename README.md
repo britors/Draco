@@ -14,7 +14,7 @@
   </a>
 </p>
 
-**Prisma4Postgres** is a standalone Electron desktop app for exploring PostgreSQL databases and working with Prisma ORM — all without leaving a dedicated workspace. No VS Code required, no CLI wrappers, no config files: just connect and explore.
+**Prisma4Postgres** is a standalone Electron desktop app for exploring PostgreSQL databases — all without leaving a dedicated workspace. No VS Code required, no CLI wrappers, no config files: just connect and explore.
 
 ---
 
@@ -22,7 +22,7 @@
 
 ```
 ┌──────────────────┬──────────────────────────────────────────────┐
-│                  │  [Query] [History] [Prisma]                  │
+│                  │  [Query] [History] [Activity]                │
 │  Explorer        ├──────────────────────────────────────────────┤
 │  (left sidebar)  │  Monaco SQL editor                           │
 │                  ├╌╌╌ drag to resize ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
@@ -34,7 +34,7 @@
 ```
 
 - **Left sidebar** always visible, drag handle to resize (160 – 600 px, persisted)
-- **Right area** holds Query, History, and Prisma tabs
+- **Right area** holds Query, History, Activity tabs + dynamic table detail tabs
 - **Query/Results split** resizable (default 50/50, persisted per session)
 
 ---
@@ -45,19 +45,24 @@
 - Tree view of all schemas, tables, views, and functions
 - Folder icons matching **OpenBase.Icons** style — open/closed per node state
 - Column details with PK / FK badges and data types
-- Prisma model indicator on mapped tables
 - Filter / search nodes in real time
 - Drag handle to resize the sidebar
+- Double-click a table to open its detail tab
 
 ### SQL Query Editor
 - Monaco editor with SQL syntax highlighting and live autocomplete
 - Multi-tab queries — each tab shows an SQL file icon + name
 - **`Ctrl+Enter`** or **`F8`** to run (runs selection if text is selected)
+- **`Ctrl+T`** to open a new query tab
+- **`Shift+Alt+F`** to format SQL (keywords uppercase, clause newlines)
 - Connection selector per tab
 - Resizable split between editor and results (drag the divider)
-- Result grid with NULL highlighting
+- Result grid with NULL highlighting and clickable row detail panel
+- Copy results as **CSV**, **JSON**, or **Markdown** to clipboard
 - Export results as **CSV** or **JSON** via save dialog
 - Query history (last 50 runs, searchable, click to restore)
+- Cancel button stops a running query via `pg_cancel_backend`
+- Auto-reconnect on connection drop (retries once silently)
 
 ### EXPLAIN Plan Viewer
 - One-click `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` via **Explain** button
@@ -70,13 +75,18 @@
 - Indexes & constraints panel (size, type badges, definitions)
 - FK Map — outgoing and incoming foreign keys, click to navigate tree
 
-### Prisma Integration
-- Browse for `schema.prisma` via file dialog; path persisted in settings
-- Maps models to database tables — ✓ found / ✗ missing indicator
-- **Drift panel**: Prisma model fields vs actual DB columns with type compatibility check
-- Run **`prisma db pull`** with real-time streaming log
-- Run **`prisma migrate status`** with real-time streaming log
-- Migration history from `_prisma_migrations` with status indicators
+### Table Detail Tab
+- Open per-table detail tabs from the Explorer (click icon or double-click row)
+- Columns with type, nullable, default, PK/FK badges
+- Constraints, indexes, and FK map sections
+- **Run SELECT** button opens the table in the query editor
+- **Copy model** generates a Prisma `model {}` block for the table
+
+### Activity Viewer
+- **Activity** tab shows live `pg_stat_activity` for the selected connection
+- Auto-refreshes every 5 seconds (toggle)
+- Highlights long-running queries (> 5s amber, > 30s red)
+- Cancel individual queries per row
 
 ---
 
@@ -86,6 +96,8 @@
 |---|---|
 | `Ctrl+Enter` | Run query (or selection) |
 | `F8` | Run query (or selection) |
+| `Ctrl+T` | New query tab |
+| `Shift+Alt+F` | Format SQL |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / Redo in editor |
 
 ---
@@ -102,7 +114,7 @@
 
 - Click the **plug icon** next to a connection to connect
 - Expand the tree: schema → Tables & Views → columns
-- Hover over a table for quick actions: Preview, DDL, copy name
+- Double-click a table to open its detail tab
 
 ### Run a query
 
@@ -110,18 +122,12 @@
 2. Select your connection from the dropdown
 3. Write SQL and press `F8` (or `Ctrl+Enter`)
 4. Results appear in the bottom pane; drag the divider to resize
-5. Click **Export** to save as CSV or JSON
+5. Click a row to see its full key:value breakdown on the right
+6. Click **Export** to save as CSV or JSON, or use the clipboard copy buttons
 
 ### View EXPLAIN
 
 With a SELECT query in the editor, click **Explain** to see the full query plan tree with cost and timing for each node.
-
-### Prisma integration
-
-Switch to the **Prisma** tab and click **Browse…** to select your `schema.prisma` file. Then:
-- See all models with their mapped table names and existence status
-- Run `db pull` or `migrate status` from the action buttons
-- Click the **diff icon** next to any model to open the Drift panel
 
 ---
 
@@ -135,7 +141,6 @@ Settings are stored in the app's user-data directory (`userData/settings.json`).
 | `defaultPort` | `5432` | Pre-filled port for new connections |
 | `defaultSsl` | `false` | SSL enabled by default for new connections |
 | `showRowCount` | `false` | Show estimated row count badges in the Explorer |
-| `prismaSchemaPath` | — | Last used `schema.prisma` path |
 
 Passwords are encrypted with `electron.safeStorage` and stored separately in `userData/passwords.json`.
 

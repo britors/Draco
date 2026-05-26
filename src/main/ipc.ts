@@ -1,7 +1,5 @@
 import { BrowserWindow, ipcMain, dialog } from 'electron';
 import * as fs from 'fs';
-import * as path from 'path';
-import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 
 import { ConnectionManager } from '../db/ConnectionManager';
@@ -9,11 +7,10 @@ import { testConnection } from '../db/PgDriver';
 import {
   getSchemas, getTables, getColumns, getFunctions, getFunctionParams,
   getCompletionData, getTableDDL, getIndexes, getConstraints,
-  getFKMap, checkMigrationsTable, getMigrations, getTableEstimates,
+  getFKMap, getTableEstimates,
   getTableDetail,
 } from '../db/queries';
 import { validateConnection, PgConnection } from '../types/PgConnection';
-import { parsePrismaSchema, ParsedPrismaSchema } from '../prisma/PrismaParser';
 import {
   listConnections, getConnection, saveConnection, deleteConnection, getPassword,
   listHistory, addHistory, getSettings, patchSettings,
@@ -24,9 +21,8 @@ import { createPanelWindow } from './window';
 
 let mainWin: BrowserWindow;
 const connManager = new ConnectionManager();
-let prismaSchema: ParsedPrismaSchema | null = null;
 
-// Temporary store for panel data (DDL, Preview, Drift windows)
+// Temporary store for panel data (DDL windows)
 const panelStore = new Map<string, unknown>();
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -72,21 +68,12 @@ export function registerIpc(win: BrowserWindow): void {
 
       case 'ready': {
         pushConnections();
-        if (prismaSchema) send('prismaSchema', prismaSchema);
         const s = getSettings();
         send('settings', {
           defaultPort: s.defaultPort,
           defaultSsl: s.defaultSsl,
           showRowCount: s.showRowCount,
         });
-        // Auto-load saved Prisma schema path
-        if (s.prismaSchemaPath) {
-          try {
-            const content = fs.readFileSync(s.prismaSchemaPath, 'utf-8');
-            prismaSchema = parsePrismaSchema(s.prismaSchemaPath, content);
-            send('prismaSchema', prismaSchema);
-          } catch { /* file may have been moved */ }
-        }
         break;
       }
 
@@ -448,82 +435,6 @@ export function registerIpc(win: BrowserWindow): void {
         break;
       }
 
-      // ── Prisma integration ────────────────────────────────────────────────
-
-      case 'loadMigrations': {
-        const { connId } = data as { connId: string };
-        const driver = connManager.getDriver(connId);
-        if (!driver) return;
-        try {
-          const hasTable = await checkMigrationsTable(driver);
-          if (!hasTable) { send('migrationsLoaded', { hasTable: false, entries: [] }); return; }
-          send('migrationsLoaded', { hasTable: true, entries: await getMigrations(driver) });
-        } catch (err) {
-          send('migrationsLoaded', { hasTable: false, error: String(err) });
-        }
-        break;
-      }
-
-      case 'runPrismaCommand': {
-        const { command: prismaCmd, connId } = data as { command: 'db-pull' | 'migrate-status'; connId: string };
-        if (!prismaSchema) {
-          send('prismaLog', { text: 'No schema.prisma selected. Use the Browse button.\n', done: true });
-          return;
-        }
-        const conn = getConnection(connId);
-        if (!conn) {
-          send('prismaLog', { text: 'No connection selected.\n', done: true });
-          return;
-        }
-        const password = getPassword(connId);
-        const databaseUrl = buildDatabaseUrl(conn, password);
-        const schemaPath = prismaSchema.filePath;
-        const args = prismaCmd === 'db-pull'
-          ? ['prisma', 'db', 'pull', '--schema', schemaPath]
-          : ['prisma', 'migrate', 'status', '--schema', schemaPath];
-
-        const proc = spawn('npx', args, {
-          cwd: path.dirname(schemaPath),
-          env: { ...process.env, DATABASE_URL: databaseUrl },
-          shell: process.platform === 'win32',
-        });
-
-        send('prismaLog', { text: `> npx ${args.join(' ')}\n`, done: false });
-        proc.stdout.on('data', (d: Buffer) => send('prismaLog', { text: d.toString(), done: false }));
-        proc.stderr.on('data', (d: Buffer) => send('prismaLog', { text: d.toString(), done: false }));
-        proc.on('close', (code: number | null) => {
-          send('prismaLog', { text: `\nFinished (exit ${code ?? '?'}).\n`, done: true });
-          if (prismaCmd === 'db-pull' && code === 0 && prismaSchema) {
-            try {
-              const updated = fs.readFileSync(schemaPath, 'utf-8');
-              prismaSchema = parsePrismaSchema(schemaPath, updated);
-              send('prismaSchema', prismaSchema);
-            } catch { /* best-effort */ }
-          }
-        });
-        proc.on('error', (err: Error) => {
-          send('prismaLog', { text: `Error: ${err.message}\n`, done: true });
-        });
-        break;
-      }
-
-      case 'openDrift': {
-        const { connId, schema, tableName, modelName } = data as {
-          connId: string; schema: string; tableName: string; modelName: string;
-        };
-        const driver = connManager.getDriver(connId);
-        if (!driver) { send('formError', 'Not connected.'); return; }
-        const model = prismaSchema?.models.find(m => m.name === modelName);
-        if (!model) { send('formError', `Model "${modelName}" not found.`); return; }
-        try {
-          const columns = await getColumns(driver, schema, tableName);
-          send('driftResult', { modelName, tableName, schema, model, columns });
-        } catch (err) {
-          send('formError', `Failed to load columns: ${String(err)}`);
-        }
-        break;
-      }
-
       case 'saveSettings': {
         patchSettings(data as Record<string, unknown>);
         break;
@@ -534,25 +445,6 @@ export function registerIpc(win: BrowserWindow): void {
   // ── Invoke handlers (request-response) ───────────────────────────────────
   ipcMain.handle('ipc-invoke', async (_event, { command, data }: { command: string; data: unknown }) => {
     switch (command) {
-
-      case 'open-schema-dialog': {
-        const result = await dialog.showOpenDialog(mainWin, {
-          title: 'Select schema.prisma',
-          properties: ['openFile'],
-          filters: [{ name: 'Prisma Schema', extensions: ['prisma'] }],
-        });
-        if (result.canceled || result.filePaths.length === 0) return null;
-        const filePath = result.filePaths[0];
-        try {
-          const content = fs.readFileSync(filePath, 'utf-8');
-          prismaSchema = parsePrismaSchema(filePath, content);
-          patchSettings({ prismaSchemaPath: filePath });
-          send('prismaSchema', prismaSchema);
-          return filePath;
-        } catch (err) {
-          return { error: String(err) };
-        }
-      }
 
       case 'get-panel-data': {
         const key = data as string;

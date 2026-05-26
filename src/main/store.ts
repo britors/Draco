@@ -22,7 +22,6 @@ export interface AppSettings {
   defaultSsl: boolean;
   defaultPort: number;
   showRowCount: boolean;
-  prismaSchemaPath?: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
