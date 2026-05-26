@@ -26,14 +26,39 @@ export interface ParsedPrismaSchema {
 }
 
 export function parsePrismaSchema(filePath: string, content: string): ParsedPrismaSchema {
-  const clean = content
-    .replace(/\/\/[^\n]*/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const clean = stripComments(content);
   return {
     filePath,
     datasource: parseDatasource(clean),
     models: parseModels(clean),
   };
+}
+
+function stripComments(src: string): string {
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    if (src[i] === '"') {
+      // consume string literal verbatim
+      out += src[i++];
+      while (i < src.length && src[i] !== '"') {
+        if (src[i] === '\\') out += src[i++]; // skip escape
+        out += src[i++];
+      }
+      if (i < src.length) out += src[i++]; // closing "
+    } else if (src[i] === '/' && src[i + 1] === '/') {
+      // line comment — skip to end of line
+      while (i < src.length && src[i] !== '\n') i++;
+    } else if (src[i] === '/' && src[i + 1] === '*') {
+      // block comment — skip to */
+      i += 2;
+      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
+      i += 2;
+    } else {
+      out += src[i++];
+    }
+  }
+  return out;
 }
 
 function parseDatasource(content: string): PrismaDataSource | null {

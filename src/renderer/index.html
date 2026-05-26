@@ -8,84 +8,52 @@
   <link rel="stylesheet" href="./codicon.css">
   <title>Prisma4Postgres</title>
   <style>
-    /* ── VS Code theme variables (dark default, light via media query) ── */
+    /* ── OpenBase.Theme colors ── https://github.com/britors/OpenBase.Theme ── */
     :root {
       color-scheme: dark;
       --vscode-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', sans-serif;
       --vscode-font-size: 13px;
-      --vscode-foreground: #cccccc;
-      --vscode-sideBar-background: #1e1e1e;
-      --vscode-editorGroupHeader-tabsBackground: #252526;
-      --vscode-panel-border: #444444;
-      --vscode-editor-background: #1e1e1e;
-      --vscode-input-background: #3c3c3c;
-      --vscode-input-foreground: #cccccc;
-      --vscode-input-border: transparent;
-      --vscode-button-background: #0e639c;
+      --vscode-foreground: #e2e2f0;
+      --vscode-sideBar-background: #090b14;
+      --vscode-editorGroupHeader-tabsBackground: #080a12;
+      --vscode-panel-border: #1e2040;
+      --vscode-editor-background: #0d0f1a;
+      --vscode-input-background: #0a0c16;
+      --vscode-input-foreground: #e2e2f0;
+      --vscode-input-border: #1e2040;
+      --vscode-button-background: #b44fff;
       --vscode-button-foreground: #ffffff;
-      --vscode-button-hoverBackground: #1177bb;
-      --vscode-button-secondaryBackground: #3a3d41;
-      --vscode-button-secondaryForeground: #cccccc;
-      --vscode-button-secondaryHoverBackground: #45494e;
-      --vscode-focusBorder: #007fd4;
-      --vscode-tab-activeForeground: #ffffff;
-      --vscode-tab-inactiveForeground: rgba(255,255,255,0.5);
-      --vscode-tab-activeBackground: #1e1e1e;
-      --vscode-tab-hoverBackground: rgba(255,255,255,0.05);
-      --vscode-list-hoverBackground: #2a2d2e;
-      --vscode-badge-background: #4d4d4d;
-      --vscode-badge-foreground: #cccccc;
-      --vscode-dropdown-background: #3c3c3c;
-      --vscode-dropdown-foreground: #cccccc;
-      --vscode-dropdown-border: transparent;
-      --vscode-descriptionForeground: rgba(204,204,204,0.7);
-      --vscode-icon-foreground: #c5c5c5;
-      --vscode-toolbar-hoverBackground: rgba(90,93,94,0.31);
-      --vscode-textLink-foreground: #3794ff;
-      --vscode-errorForeground: #f48771;
-      --vscode-testing-iconPassed: #73c991;
-      --vscode-editorWarning-foreground: #cca700;
-      --vscode-progressBar-background: #0e70c0;
-      --vscode-sideBarSectionHeader-background: #2c2c2c;
-      --vscode-textPreformat-foreground: #d7ba7d;
-      --vscode-terminal-background: #1e1e1e;
-      --vscode-terminal-foreground: #cccccc;
+      --vscode-button-hoverBackground: #c868ff;
+      --vscode-button-secondaryBackground: #1e2040;
+      --vscode-button-secondaryForeground: #e2e2f0;
+      --vscode-button-secondaryHoverBackground: #2a2d5a;
+      --vscode-focusBorder: #b44fff;
+      --vscode-tab-activeForeground: #e2e2f0;
+      --vscode-tab-inactiveForeground: #4a4a6a;
+      --vscode-tab-activeBackground: #0d0f1a;
+      --vscode-tab-hoverBackground: #131629;
+      --vscode-list-hoverBackground: #131629;
+      --vscode-badge-background: #ff5f57;
+      --vscode-badge-foreground: #ffffff;
+      --vscode-dropdown-background: #131629;
+      --vscode-dropdown-foreground: #e2e2f0;
+      --vscode-dropdown-border: #1e2040;
+      --vscode-descriptionForeground: #8888aa;
+      --vscode-icon-foreground: #8e8e93;
+      --vscode-toolbar-hoverBackground: #b44fff22;
+      --vscode-textLink-foreground: #6ea6ff;
+      --vscode-errorForeground: #ff5572;
+      --vscode-testing-iconPassed: #3dd68c;
+      --vscode-editorWarning-foreground: #ffcc66;
+      --vscode-progressBar-background: #b44fff;
+      --vscode-sideBarSectionHeader-background: #0d0f1a;
+      --vscode-sideBarSectionHeader-foreground: #8888aa;
+      --vscode-sideBarSectionHeader-border: #1e2040;
+      --vscode-textPreformat-foreground: #00d4aa;
+      --vscode-terminal-background: #0d0f1a;
+      --vscode-terminal-foreground: #e2e2f0;
       --vscode-editor-font-family: 'Cascadia Code', 'Droid Sans Mono', 'monospace', monospace;
-      --vscode-editor-findMatchHighlightBackground: rgba(234,92,0,0.33);
-    }
-    @media (prefers-color-scheme: light) {
-      :root {
-        color-scheme: light;
-        --vscode-foreground: #383838;
-        --vscode-sideBar-background: #f3f3f3;
-        --vscode-editorGroupHeader-tabsBackground: #f3f3f3;
-        --vscode-panel-border: #e5e5e5;
-        --vscode-editor-background: #ffffff;
-        --vscode-input-background: #ffffff;
-        --vscode-input-foreground: #383838;
-        --vscode-input-border: #cecece;
-        --vscode-button-background: #007acc;
-        --vscode-button-secondaryBackground: #5f6a79;
-        --vscode-button-secondaryForeground: #ffffff;
-        --vscode-button-secondaryHoverBackground: #4c5561;
-        --vscode-tab-activeForeground: #333333;
-        --vscode-tab-inactiveForeground: rgba(51,51,51,0.7);
-        --vscode-tab-activeBackground: #ffffff;
-        --vscode-tab-hoverBackground: rgba(0,0,0,0.05);
-        --vscode-list-hoverBackground: #e8e8e8;
-        --vscode-badge-background: #c4c4c4;
-        --vscode-badge-foreground: #333333;
-        --vscode-dropdown-background: #ffffff;
-        --vscode-dropdown-foreground: #383838;
-        --vscode-dropdown-border: #cecece;
-        --vscode-descriptionForeground: rgba(97,97,97,0.8);
-        --vscode-icon-foreground: #424242;
-        --vscode-toolbar-hoverBackground: rgba(184,184,184,0.31);
-        --vscode-sideBarSectionHeader-background: #e8e8e8;
-        --vscode-textPreformat-foreground: #a31515;
-        --vscode-terminal-background: #ffffff;
-        --vscode-terminal-foreground: #383838;
-      }
+      --vscode-editor-findMatchHighlightBackground: #ff3fa433;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -97,25 +65,56 @@
       height: 100vh;
       overflow: hidden;
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
     }
     .hidden { display: none !important; }
 
+    /* ── Sidebar ── */
+    .sidebar {
+      display: flex; flex-direction: column;
+      flex-shrink: 0;
+      width: var(--sidebar-width, 240px);
+      min-width: 160px; max-width: 600px;
+      border-right: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-sideBar-background);
+      overflow: hidden;
+    }
+    .sidebar-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 8px 4px 10px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-descriptionForeground));
+      background: var(--vscode-sideBarSectionHeader-background);
+      border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+      flex-shrink: 0; user-select: none;
+    }
+    .sidebar-header-actions { display: flex; gap: 1px; }
+    .resize-handle {
+      width: 4px; flex-shrink: 0; cursor: col-resize;
+      background: transparent;
+      transition: background 0.15s;
+    }
+    .resize-handle:hover, .resize-handle.dragging { background: var(--vscode-focusBorder); }
+    .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+    /* ── Tab bar (right side only: Query / History / Prisma) ── */
     .tab-bar {
       display: flex; flex-shrink: 0;
       border-bottom: 1px solid var(--vscode-panel-border);
       background: var(--vscode-editorGroupHeader-tabsBackground);
     }
     .tab {
-      display: flex; align-items: center; gap: 4px;
-      padding: 6px 12px; background: transparent;
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px; background: transparent;
       border: none; border-bottom: 2px solid transparent;
       color: var(--vscode-tab-inactiveForeground); cursor: pointer;
       font-size: var(--vscode-font-size); font-family: var(--vscode-font-family);
-      white-space: nowrap;
+      white-space: nowrap; letter-spacing: 0.01em;
     }
+    .tab .codicon { font-size: 14px; opacity: 0.8; }
     .tab.active { color: var(--vscode-tab-activeForeground); border-bottom-color: var(--vscode-focusBorder); background: var(--vscode-tab-activeBackground); }
-    .tab:hover:not(.active) { background: var(--vscode-tab-hoverBackground); }
+    .tab.active .codicon { opacity: 1; }
+    .tab:hover:not(.active) { background: var(--vscode-tab-hoverBackground); color: var(--vscode-foreground); }
 
     .panel { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
     .view  { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
@@ -191,17 +190,29 @@
     .query-tab-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
     .query-tab-close { width: 14px; height: 14px; font-size: 11px; flex-shrink: 0; padding: 0; background: transparent; border: none; cursor: pointer; color: var(--vscode-icon-foreground); border-radius: 2px; display: inline-flex; align-items: center; justify-content: center; }
     .query-tab-close:hover { background: var(--vscode-toolbar-hoverBackground); }
+    .query-tab-close.invisible { visibility: hidden; pointer-events: none; }
     .btn-new-tab { flex-shrink: 0; align-self: center; margin: 0 4px; }
 
     .query-toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--vscode-panel-border); flex-shrink: 0; }
     .conn-select { flex: 1; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border, transparent); padding: 2px 4px; font-size: var(--vscode-font-size); font-family: var(--vscode-font-family); outline: none; max-width: 180px; }
 
-    #monaco-container { flex: 1; min-height: 120px; overflow: hidden; }
+    /* ── Query split pane ── */
+    .query-split { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+    .query-editor-pane { display: flex; flex-direction: column; overflow: hidden; min-height: 80px; }
+    #monaco-container { flex: 1; min-height: 0; overflow: hidden; }
+    .query-h-resize {
+      height: 4px; flex-shrink: 0; cursor: row-resize; background: transparent;
+      border-top: 1px solid var(--vscode-panel-border);
+      transition: background 0.15s;
+    }
+    .query-h-resize:hover, .query-h-resize.dragging { background: var(--vscode-focusBorder); }
+    .query-results-pane { display: flex; flex-direction: column; overflow: hidden; min-height: 80px; }
 
     .query-status { padding: 2px 8px; font-size: 11px; flex-shrink: 0; color: var(--vscode-descriptionForeground); background: var(--vscode-editorGroupHeader-tabsBackground); border-top: 1px solid var(--vscode-panel-border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .query-status.error { color: var(--vscode-errorForeground); }
 
-    .results-section { flex-shrink: 0; max-height: 220px; overflow: auto; border-top: 1px solid var(--vscode-panel-border); }
+    .results-section { flex: 1; overflow: auto; }
+    .results-placeholder { display: flex; align-items: center; justify-content: center; flex: 1; color: var(--vscode-descriptionForeground); font-style: italic; font-size: 12px; }
     .result-grid { width: max-content; min-width: 100%; border-collapse: collapse; }
     .result-grid th { position: sticky; top: 0; z-index: 1; background: var(--vscode-editorGroupHeader-tabsBackground); padding: 3px 8px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--vscode-panel-border); white-space: nowrap; font-size: 11px; }
     .result-grid td { padding: 2px 8px; border-bottom: 1px solid rgba(128,128,128,0.1); white-space: nowrap; font-size: 11px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
@@ -285,29 +296,27 @@
 </head>
 <body>
 
-  <!-- Tab bar -->
-  <div class="tab-bar">
-    <button class="tab" data-tab="explorer"><i class="codicon codicon-database"></i>Explorer</button>
-    <button class="tab" data-tab="query"><i class="codicon codicon-file-code"></i>Query</button>
-    <button class="tab" data-tab="history"><i class="codicon codicon-history"></i>History</button>
-    <button class="tab" data-tab="prisma" id="tab-btn-prisma"><i class="codicon codicon-symbol-class"></i>Prisma</button>
-  </div>
-
-  <!-- Explorer panel -->
-  <div class="panel" id="panel-explorer">
-    <div class="view" id="view-tree">
-      <div class="search-bar">
-        <i class="search-icon codicon codicon-search"></i>
-        <input class="search-input" id="search-input" type="text" placeholder="Filter tables, views, functions…">
-        <button class="search-clear hidden" id="search-clear" title="Clear"><i class="codicon codicon-close"></i></button>
-      </div>
-      <div class="tree" id="tree"></div>
-      <div class="list-footer">
-        <button class="btn btn-secondary" id="btn-add-conn"><i class="codicon codicon-add"></i>Add Connection</button>
+  <!-- ── Left sidebar: Explorer (always visible) ── -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      Explorer
+      <div class="sidebar-header-actions">
+        <button class="btn-icon" id="btn-add-conn" title="Add Connection"><i class="codicon codicon-add"></i></button>
       </div>
     </div>
 
-    <div class="view hidden" id="view-form">
+    <!-- Tree view -->
+    <div class="view" id="view-tree" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+      <div class="search-bar">
+        <i class="search-icon codicon codicon-search"></i>
+        <input class="search-input" id="search-input" type="text" placeholder="Filter tables, views…">
+        <button class="search-clear hidden" id="search-clear" title="Clear"><i class="codicon codicon-close"></i></button>
+      </div>
+      <div class="tree" id="tree"></div>
+    </div>
+
+    <!-- Connection form (replaces tree view) -->
+    <div class="view hidden" id="view-form" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
       <div class="form-header">
         <button class="btn-icon" id="btn-back" title="Back"><i class="codicon codicon-arrow-left"></i></button>
         <span id="form-title">Add Connection</span>
@@ -358,71 +367,97 @@
     </div>
   </div>
 
-  <!-- Query panel -->
-  <div class="panel hidden" id="panel-query">
-    <div class="query-tabs-bar">
-      <div class="query-tab-list" id="query-tab-list"></div>
-      <button class="btn-icon btn-new-tab" id="btn-new-tab" title="New query tab"><i class="codicon codicon-add"></i></button>
-    </div>
-    <div class="query-toolbar">
-      <select class="conn-select" id="conn-select"><option value="">Select connection…</option></select>
-      <button class="btn btn-primary" id="btn-run"><i class="codicon codicon-play"></i>Run</button>
-      <button class="btn btn-secondary" id="btn-explain"><i class="codicon codicon-graph"></i>Explain</button>
-    </div>
-    <div id="monaco-container"></div>
-    <div class="query-status hidden" id="query-status"></div>
-    <div class="results-section hidden" id="results-section"></div>
-  </div>
+  <!-- Drag-resize handle -->
+  <div class="resize-handle" id="resize-handle"></div>
 
-  <!-- History panel -->
-  <div class="panel hidden" id="panel-history">
-    <div class="search-bar">
-      <i class="search-icon codicon codicon-search"></i>
-      <input class="search-input" id="history-search" type="text" placeholder="Search history…">
-      <button class="search-clear hidden" id="history-clear" title="Clear"><i class="codicon codicon-close"></i></button>
-    </div>
-    <div class="history-list" id="history-list">
-      <div class="empty-state"><span>No history yet.</span></div>
-    </div>
-  </div>
+  <!-- ── Right area: tabbed panels ── -->
+  <div class="main-area" id="main-area">
 
-  <!-- Prisma panel -->
-  <div class="panel hidden" id="panel-prisma">
-    <div class="prisma-scroll">
-      <div class="prisma-section">
-        <div class="prisma-section-body" style="padding:6px 10px">
-          <select class="conn-select-sm" id="prisma-conn-select">
-            <option value="">Select connection…</option>
-          </select>
-        </div>
+    <!-- Tab bar (Query / History / Prisma) -->
+    <div class="tab-bar">
+      <button class="tab" data-tab="query"><i class="codicon codicon-file-code"></i>Query</button>
+      <button class="tab" data-tab="history"><i class="codicon codicon-history"></i>History</button>
+      <button class="tab" data-tab="prisma" id="tab-btn-prisma"><i class="codicon codicon-symbol-class"></i>Prisma</button>
+    </div>
+
+    <!-- Query panel -->
+    <div class="panel hidden" id="panel-query">
+      <div class="query-tabs-bar">
+        <div class="query-tab-list" id="query-tab-list"></div>
+        <button class="btn-icon btn-new-tab" id="btn-new-tab" title="New query tab"><i class="codicon codicon-add"></i></button>
       </div>
-      <div class="prisma-section">
-        <div class="prisma-section-header"><i class="codicon codicon-file-code"></i>Schema File</div>
-        <div class="prisma-section-body" id="prisma-schema-body">
-          <div class="no-schema-msg">No schema.prisma selected.</div>
-          <div class="prisma-actions-row">
-            <button class="btn btn-secondary btn-xs" id="btn-browse-schema"><i class="codicon codicon-folder-opened"></i>Browse…</button>
+      <div class="query-toolbar">
+        <select class="conn-select" id="conn-select"><option value="">Select connection…</option></select>
+        <button class="btn btn-primary" id="btn-run"><i class="codicon codicon-play"></i>Run</button>
+        <button class="btn btn-secondary" id="btn-explain"><i class="codicon codicon-graph"></i>Explain</button>
+      </div>
+
+      <!-- Resizable split: editor (top) + results (bottom) -->
+      <div class="query-split" id="query-split">
+        <div class="query-editor-pane" id="query-editor-pane">
+          <div id="monaco-container"></div>
+        </div>
+        <div class="query-h-resize" id="query-h-resize"></div>
+        <div class="query-results-pane" id="query-results-pane">
+          <div class="query-status hidden" id="query-status"></div>
+          <div class="results-section" id="results-section">
+            <div class="results-placeholder" id="results-placeholder">Run a query to see results</div>
           </div>
         </div>
       </div>
-      <div class="prisma-section">
-        <div class="prisma-section-header"><i class="codicon codicon-symbol-class"></i>Models <span id="prisma-models-badge" style="margin-left:4px"></span></div>
-        <div class="prisma-section-body" id="prisma-models-body">
-          <div class="no-schema-msg">No schema loaded.</div>
-        </div>
+    </div>
+
+    <!-- History panel -->
+    <div class="panel hidden" id="panel-history">
+      <div class="search-bar">
+        <i class="search-icon codicon codicon-search"></i>
+        <input class="search-input" id="history-search" type="text" placeholder="Search history…">
+        <button class="search-clear hidden" id="history-clear" title="Clear"><i class="codicon codicon-close"></i></button>
       </div>
-      <div class="prisma-section">
-        <div class="prisma-section-header"><i class="codicon codicon-history"></i>Migrations</div>
-        <div class="prisma-section-body" id="prisma-migrations-body">
-          <div class="no-schema-msg">Select a connection to load migrations.</div>
-        </div>
-      </div>
-      <div class="prisma-section">
-        <div class="prisma-section-header"><i class="codicon codicon-terminal"></i>Log</div>
-        <div class="prisma-log" id="prisma-log">Ready.</div>
+      <div class="history-list" id="history-list">
+        <div class="empty-state"><span>No history yet.</span></div>
       </div>
     </div>
-  </div>
+
+    <!-- Prisma panel -->
+    <div class="panel hidden" id="panel-prisma">
+      <div class="prisma-scroll">
+        <div class="prisma-section">
+          <div class="prisma-section-body" style="padding:6px 10px">
+            <select class="conn-select-sm" id="prisma-conn-select">
+              <option value="">Select connection…</option>
+            </select>
+          </div>
+        </div>
+        <div class="prisma-section">
+          <div class="prisma-section-header"><i class="codicon codicon-file-code"></i>Schema File</div>
+          <div class="prisma-section-body" id="prisma-schema-body">
+            <div class="no-schema-msg">No schema.prisma selected.</div>
+            <div class="prisma-actions-row">
+              <button class="btn btn-secondary btn-xs" id="btn-browse-schema"><i class="codicon codicon-folder-opened"></i>Browse…</button>
+            </div>
+          </div>
+        </div>
+        <div class="prisma-section">
+          <div class="prisma-section-header"><i class="codicon codicon-symbol-class"></i>Models <span id="prisma-models-badge" style="margin-left:4px"></span></div>
+          <div class="prisma-section-body" id="prisma-models-body">
+            <div class="no-schema-msg">No schema loaded.</div>
+          </div>
+        </div>
+        <div class="prisma-section">
+          <div class="prisma-section-header"><i class="codicon codicon-history"></i>Migrations</div>
+          <div class="prisma-section-body" id="prisma-migrations-body">
+            <div class="no-schema-msg">Select a connection to load migrations.</div>
+          </div>
+        </div>
+        <div class="prisma-section">
+          <div class="prisma-section-header"><i class="codicon codicon-terminal"></i>Log</div>
+          <div class="prisma-log" id="prisma-log">Ready.</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.main-area -->
 
   <!-- Preview overlay (inline) -->
   <div class="preview-overlay hidden" id="preview-overlay">
@@ -450,7 +485,7 @@
     var MONACO_CDN = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs';
 
     // ── State ──────────────────────────────────────────────────────────────
-    var persisted = JSON.parse(localStorage.getItem('p4p-state') || 'null') || { tab: 'explorer', tabs: null, activeTabId: null };
+    var persisted = JSON.parse(localStorage.getItem('p4p-state') || 'null') || { tab: 'query', tabs: null, activeTabId: null, sidebarWidth: 240, querySplitRatio: 0.5 };
 
     var connections  = [];
     var statuses     = {};
@@ -520,6 +555,116 @@
         + '<span class="tree-label" style="color:var(--vscode-descriptionForeground)">Loading…</span></div>';
     }
 
+    // ── OpenBase-style SVG icons ───────────────────────────────────────────
+    // 16×16 viewBox, stroke-based, dark-transparent fill so they work on any bg
+    var ICONS = {
+      server:
+        '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<rect x="1.5" y="2.5" width="13" height="4" rx="1" stroke="#b44fff" stroke-width="1.2"/>'
+        + '<rect x="1.5" y="9.5" width="13" height="4" rx="1" stroke="#b44fff" stroke-width="1.2"/>'
+        + '<circle cx="12.5" cy="4.5" r="0.8" fill="#b44fff"/>'
+        + '<circle cx="12.5" cy="11.5" r="0.8" fill="#b44fff"/>'
+        + '</svg>',
+      // ── File icons (viewBox 32×32 rendered at 16×16 — identical to OpenBase.Icons file_sql.svg) ──
+      fileSql:
+        '<svg width="14" height="14" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;margin-right:1px">'
+        + '<path d="M5 2h14l8 8v20H5z" fill="#0d0f1a" stroke="#00d4aa" stroke-width="1.5" stroke-linejoin="round"/>'
+        + '<path d="M19 2v8h8" fill="none" stroke="#00d4aa" stroke-width="1.5" stroke-linejoin="round"/>'
+        + '<text x="16" y="24" text-anchor="middle" font-family="\'Segoe UI\',Arial,sans-serif" font-size="8" font-weight="700" fill="#00d4aa">SQL</text>'
+        + '</svg>',
+
+      // ── Folder icons (viewBox 32×32 rendered at 16×16 — identical path shapes to OpenBase.Icons) ──
+      // closed-folder base: tabbed folder, fill #131629, stroke #b44fff 1.5
+      folderSchemaClosed:
+        '<svg width="16" height="16" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<path d="M2 9c0-2 1-3 3-3h7l3 3h14c1 0 2 1 2 3v17c0 1-1 2-2 2H5c-2 0-3-1-3-2z" fill="#131629" stroke="#b44fff" stroke-width="1.5" stroke-linejoin="round"/>'
+        + '<line x1="2" y1="13" x2="30" y2="13" stroke="#b44fff" stroke-width="1" opacity="0.3"/>'
+        + '<text x="16" y="25" text-anchor="middle" font-family="\'Segoe UI\',Arial,sans-serif" font-size="8" font-weight="700" fill="#b44fff" opacity="0.85">DB</text>'
+        + '</svg>',
+      folderSchemaOpen:
+        '<svg width="16" height="16" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<path d="M2 9c0-2 1-3 3-3h7l3 3h14c1 0 2 1 2 3v1H2z" fill="#1e2040" stroke="#b44fff" stroke-width="1.5" stroke-linejoin="round"/>'
+        + '<path d="M1 13h30l-3 17H4z" fill="#131629" stroke="#b44fff" stroke-width="1.5" stroke-linejoin="round"/>'
+        + '<text x="16" y="26" text-anchor="middle" font-family="\'Segoe UI\',Arial,sans-serif" font-size="8" font-weight="700" fill="#b44fff" opacity="0.85">DB</text>'
+        + '</svg>',
+      folderTablesClosed:
+        '<svg width="16" height="16" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<path d="M2 9c0-2 1-3 3-3h7l3 3h14c1 0 2 1 2 3v17c0 1-1 2-2 2H5c-2 0-3-1-3-2z" fill="#131629" stroke="#b44fff" stroke-width="1.5" stroke-linejoin="round"/>'
+        + '<line x1="2" y1="13" x2="30" y2="13" stroke="#b44fff" stroke-width="1" opacity="0.3"/>'
+        + '<line x1="7" y1="17" x2="25" y2="17" stroke="#b44fff" stroke-width="1" opacity="0.6"/>'
+        + '<line x1="7" y1="21" x2="25" y2="21" stroke="#b44fff" stroke-width="1" opacity="0.6"/>'
+        + '<line x1="7" y1="25" x2="25" y2="25" stroke="#b44fff" stroke-width="1" opacity="0.6"/>'
+        + '<line x1="14" y1="13" x2="14" y2="28" stroke="#b44fff" stroke-width="1" opacity="0.3"/>'
+        + '</svg>',
+      folderTablesOpen:
+        '<svg width="16" height="16" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<path d="M2 9c0-2 1-3 3-3h7l3 3h14c1 0 2 1 2 3v1H2z" fill="#1e2040" stroke="#b44fff" stroke-width="1.5" stroke-linejoin="round"/>'
+        + '<path d="M1 13h30l-3 17H4z" fill="#131629" stroke="#b44fff" stroke-width="1.5" stroke-linejoin="round"/>'
+        + '<line x1="6" y1="17" x2="26" y2="17" stroke="#b44fff" stroke-width="1" opacity="0.6"/>'
+        + '<line x1="6" y1="21" x2="26" y2="21" stroke="#b44fff" stroke-width="1" opacity="0.6"/>'
+        + '<line x1="6" y1="25" x2="26" y2="25" stroke="#b44fff" stroke-width="1" opacity="0.6"/>'
+        + '<line x1="14" y1="13" x2="12" y2="30" stroke="#b44fff" stroke-width="1" opacity="0.3"/>'
+        + '</svg>',
+      folderFuncsClosed:
+        '<svg width="16" height="16" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<path d="M2 9c0-2 1-3 3-3h7l3 3h14c1 0 2 1 2 3v17c0 1-1 2-2 2H5c-2 0-3-1-3-2z" fill="#131629" stroke="#b44fff" stroke-width="1.5" stroke-linejoin="round"/>'
+        + '<line x1="2" y1="13" x2="30" y2="13" stroke="#b44fff" stroke-width="1" opacity="0.3"/>'
+        + '<text x="16" y="25" text-anchor="middle" font-family="\'Segoe UI\',Arial,sans-serif" font-size="8" font-weight="700" fill="#b44fff" opacity="0.85">fn</text>'
+        + '</svg>',
+      folderFuncsOpen:
+        '<svg width="16" height="16" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<path d="M2 9c0-2 1-3 3-3h7l3 3h14c1 0 2 1 2 3v1H2z" fill="#1e2040" stroke="#b44fff" stroke-width="1.5" stroke-linejoin="round"/>'
+        + '<path d="M1 13h30l-3 17H4z" fill="#131629" stroke="#b44fff" stroke-width="1.5" stroke-linejoin="round"/>'
+        + '<text x="16" y="26" text-anchor="middle" font-family="\'Segoe UI\',Arial,sans-serif" font-size="8" font-weight="700" fill="#b44fff" opacity="0.85">fn</text>'
+        + '</svg>',
+      table:
+        '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<rect x="1.5" y="2.5" width="13" height="11" rx="1" stroke="#00d4aa" stroke-width="1.2"/>'
+        + '<line x1="1.5" y1="5.5" x2="14.5" y2="5.5" stroke="#00d4aa" stroke-width="1.2"/>'
+        + '<line x1="6" y1="5.5" x2="6" y2="13.5" stroke="#00d4aa" stroke-width="1" opacity="0.5"/>'
+        + '</svg>',
+      view:
+        '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<rect x="1.5" y="2.5" width="13" height="11" rx="1" stroke="#ff61d3" stroke-width="1.2"/>'
+        + '<line x1="1.5" y1="5.5" x2="14.5" y2="5.5" stroke="#ff61d3" stroke-width="1.2"/>'
+        + '<ellipse cx="8" cy="10" rx="2.5" ry="1.5" stroke="#ff61d3" stroke-width="1"/>'
+        + '<circle cx="8" cy="10" r="0.8" fill="#ff61d3"/>'
+        + '</svg>',
+      func:
+        '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<path d="M5 2.5c-1.5 0-2 .8-2 1.8v1.9c0 .9-.5 1.3-1.5 1.3.9 0 1.5.4 1.5 1.3v1.9c0 1 .5 1.8 2 1.8" stroke="#00d4aa" stroke-width="1.2" stroke-linecap="round"/>'
+        + '<path d="M11 2.5c1.5 0 2 .8 2 1.8v1.9c0 .9.5 1.3 1.5 1.3-.9 0-1.5.4-1.5 1.3v1.9c0 1-.5 1.8-2 1.8" stroke="#00d4aa" stroke-width="1.2" stroke-linecap="round"/>'
+        + '<path d="M6.5 8.5 9.5 8.5M8 6.5v4" stroke="#00d4aa" stroke-width="1.2" stroke-linecap="round"/>'
+        + '</svg>',
+      procedure:
+        '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<circle cx="8" cy="8" r="5.5" stroke="#ff61d3" stroke-width="1.2"/>'
+        + '<path d="M6 6l4 2-4 2V6z" fill="#ff61d3"/>'
+        + '</svg>',
+      column:
+        '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<line x1="4" y1="4" x2="4" y2="12" stroke="#00d4aa" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>'
+        + '<line x1="3" y1="6" x2="13" y2="6" stroke="#00d4aa" stroke-width="1" stroke-linecap="round" opacity="0.5"/>'
+        + '<line x1="3" y1="10" x2="13" y2="10" stroke="#00d4aa" stroke-width="1" stroke-linecap="round" opacity="0.5"/>'
+        + '<rect x="2.5" y="3" width="11" height="10" rx="1" stroke="#00d4aa" stroke-width="1.2" opacity="0.6"/>'
+        + '</svg>',
+      pk:
+        '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<circle cx="6" cy="7" r="3" stroke="#cca700" stroke-width="1.2"/>'
+        + '<path d="M9 7h4.5M11.5 7v2.5M13.5 7v1.5" stroke="#cca700" stroke-width="1.2" stroke-linecap="round"/>'
+        + '</svg>',
+      fk:
+        '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<path d="M2.5 8a2.5 2.5 0 0 1 5 0 2.5 2.5 0 0 0 5 0" stroke="#007acc" stroke-width="1.2" stroke-linecap="round" fill="none"/>'
+        + '<circle cx="4.5" cy="8" r="1.5" stroke="#007acc" stroke-width="1.2"/>'
+        + '<circle cx="11.5" cy="8" r="1.5" stroke="#007acc" stroke-width="1.2"/>'
+        + '</svg>',
+    };
+
+    function treeIcon(name) {
+      return '<span class="tree-icon">' + (ICONS[name] || '') + '</span>';
+    }
+
     function infoRow(level, text) {
       return '<div class="tree-row"><span class="indent" style="width:' + (level * 16) + 'px"></span>'
         + '<span class="toggle"></span>'
@@ -581,7 +726,7 @@
         + '<span class="indent" style="width:0px"></span>'
         + '<span class="toggle codicon ' + toggleCls + '"></span>'
         + '<span class="status-dot ' + status + '"></span>'
-        + '<i class="tree-icon codicon codicon-server"></i>'
+        + treeIcon('server')
         + '<span class="tree-label">' + hl(conn.label, f) + '</span>'
         + '<div class="tree-actions">' + acts + '</div></div>';
 
@@ -600,7 +745,7 @@
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:16px"></span>'
         + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
-        + '<i class="tree-icon codicon codicon-symbol-namespace"></i>'
+        + treeIcon(isExp ? 'folderSchemaOpen' : 'folderSchemaClosed')
         + '<span class="tree-label">' + hl(schemaName, f) + '</span>'
         + '<div class="tree-actions"></div></div>';
       if (isExp) {
@@ -617,7 +762,7 @@
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:32px"></span>'
         + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
-        + '<i class="tree-icon codicon codicon-list-flat"></i>'
+        + treeIcon(isExp ? 'folderTablesOpen' : 'folderTablesClosed')
         + '<span class="tree-label">Tables &amp; Views</span>'
         + (tList ? '<span class="tree-badge">' + tList.length + '</span>' : '')
         + '<div class="tree-actions"></div></div>';
@@ -640,7 +785,7 @@
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:32px"></span>'
         + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
-        + '<i class="tree-icon codicon codicon-symbol-method"></i>'
+        + treeIcon(isExp ? 'folderFuncsOpen' : 'folderFuncsClosed')
         + '<span class="tree-label">Functions</span>'
         + (fList ? '<span class="tree-badge">' + fList.length + '</span>' : '')
         + '<div class="tree-actions"></div></div>';
@@ -679,7 +824,7 @@
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:48px"></span>'
         + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
-        + '<i class="tree-icon codicon ' + (isView ? 'codicon-layout' : 'codicon-table') + '"></i>'
+        + treeIcon(isView ? 'view' : 'table')
         + '<span class="tree-label">' + hl(t.name, f) + '</span>'
         + prismaPin + badgeHtml
         + '<div class="tree-actions">' + acts + '</div></div>';
@@ -693,10 +838,10 @@
     }
 
     function renderColRow(c) {
-      var icon = c.isPrimaryKey ? 'codicon-key' : c.isForeignKey ? 'codicon-link' : 'codicon-symbol-field';
+      var iconName = c.isPrimaryKey ? 'pk' : c.isForeignKey ? 'fk' : 'column';
       return '<div class="tree-row"><span class="indent" style="width:64px"></span>'
         + '<span class="toggle" style="width:16px;display:inline-block"></span>'
-        + '<i class="tree-icon codicon ' + icon + '"></i>'
+        + treeIcon(iconName)
         + '<span class="tree-label">' + esc(c.name) + '</span>'
         + (c.isPrimaryKey ? '<span class="col-badge pk">PK</span>' : '')
         + (c.isForeignKey ? '<span class="col-badge fk">FK</span>' : '')
@@ -710,7 +855,7 @@
       var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
         + '<span class="indent" style="width:48px"></span>'
         + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
-        + '<i class="tree-icon codicon ' + (fn.type === 'FUNCTION' ? 'codicon-symbol-function' : 'codicon-symbol-operator') + '"></i>'
+        + treeIcon(fn.type === 'FUNCTION' ? 'func' : 'procedure')
         + '<span class="tree-label">' + hl(fn.name, f) + '</span>'
         + (fn.returnType ? '<span class="col-type">→ ' + esc(fn.returnType) + '</span>' : '')
         + '<div class="tree-actions">' + btnIcon('copy-name', { name: fn.name }, 'codicon-copy', 'Copy name') + '</div></div>';
@@ -816,11 +961,12 @@
 
     // ── Tab switching ──────────────────────────────────────────────────────
     function switchMainTab(tab) {
+      if (tab === 'explorer') tab = 'query'; // explorer is always visible now
       persisted.tab = tab;
       saveState();
       document.querySelectorAll('.tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === tab); });
-      document.querySelectorAll('.panel').forEach(function (p) { p.classList.toggle('hidden', p.id !== 'panel-' + tab); });
-      if (tab === 'query') { setTimeout(ensureMonacoReady, 30); renderQueryTabs(); renderConnSelect(); }
+      document.querySelectorAll('#main-area .panel').forEach(function (p) { p.classList.toggle('hidden', p.id !== 'panel-' + tab); });
+      if (tab === 'query') { setTimeout(ensureMonacoReady, 30); renderQueryTabs(); renderConnSelect(); if (window.__initQuerySplit) window.__initQuerySplit(); }
       if (tab === 'history') { if (!historyEntries.length) api.send('loadHistory'); renderHistory(); }
       if (tab === 'prisma') { renderPrismaConnSelect(); renderPrismaSchemaInfo(); renderPrismaModels(); }
     }
@@ -828,6 +974,110 @@
     document.querySelectorAll('.tab').forEach(function (btn) {
       btn.addEventListener('click', function () { switchMainTab(btn.dataset.tab); });
     });
+
+    // ── Sidebar resize ─────────────────────────────────────────────────────
+    (function () {
+      var sidebar = document.getElementById('sidebar');
+      var handle  = document.getElementById('resize-handle');
+      var MIN_W = 160, MAX_W = 600;
+      var startX, startW;
+
+      var savedW = persisted.sidebarWidth || 240;
+      sidebar.style.setProperty('--sidebar-width', savedW + 'px');
+      sidebar.style.width = savedW + 'px';
+
+      handle.addEventListener('mousedown', function (e) {
+        startX = e.clientX;
+        startW = sidebar.getBoundingClientRect().width;
+        handle.classList.add('dragging');
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        e.preventDefault();
+      });
+
+      function onMove(e) {
+        var w = Math.min(MAX_W, Math.max(MIN_W, startW + (e.clientX - startX)));
+        sidebar.style.width = w + 'px';
+      }
+
+      function onUp(e) {
+        handle.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        var w = Math.min(MAX_W, Math.max(MIN_W, startW + (e.clientX - startX)));
+        persisted.sidebarWidth = w;
+        saveState();
+      }
+    }());
+
+    // ── Query split resize ─────────────────────────────────────────────────
+    (function () {
+      var splitEl   = document.getElementById('query-split');
+      var editorPane = document.getElementById('query-editor-pane');
+      var handle    = document.getElementById('query-h-resize');
+      var MIN_H = 80;
+      var startY, startEditorH, startSplitH;
+
+      function applyRatio(ratio) {
+        var splitH = splitEl.getBoundingClientRect().height;
+        if (!splitH) return;
+        var handleH = handle.getBoundingClientRect().height || 4;
+        var available = splitH - handleH;
+        var editorH = Math.max(MIN_H, Math.min(available - MIN_H, Math.round(available * ratio)));
+        editorPane.style.height = editorH + 'px';
+        editorPane.style.flex = 'none';
+        if (monacoEditor) monacoEditor.layout();
+      }
+
+      // restore saved ratio or default 0.5
+      var savedRatio = persisted.querySplitRatio != null ? persisted.querySplitRatio : 0.5;
+      // defer until the panel is visible (it starts hidden)
+      var splitInitDone = false;
+      function initSplit() {
+        if (splitInitDone) return;
+        if (!splitEl.getBoundingClientRect().height) return;
+        splitInitDone = true;
+        applyRatio(savedRatio);
+      }
+
+      handle.addEventListener('mousedown', function (e) {
+        initSplit();
+        startY = e.clientY;
+        startEditorH = editorPane.getBoundingClientRect().height;
+        startSplitH  = splitEl.getBoundingClientRect().height;
+        handle.classList.add('dragging');
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        e.preventDefault();
+      });
+
+      function onMove(e) {
+        var handleH = handle.getBoundingClientRect().height || 4;
+        var available = startSplitH - handleH;
+        var newH = Math.max(MIN_H, Math.min(available - MIN_H, startEditorH + (e.clientY - startY)));
+        editorPane.style.height = newH + 'px';
+        editorPane.style.flex = 'none';
+        if (monacoEditor) monacoEditor.layout();
+      }
+
+      function onUp(e) {
+        handle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        var handleH = handle.getBoundingClientRect().height || 4;
+        var available = startSplitH - handleH;
+        var newH = Math.max(MIN_H, Math.min(available - MIN_H, startEditorH + (e.clientY - startY)));
+        persisted.querySplitRatio = newH / available;
+        saveState();
+      }
+
+      // call initSplit whenever the query tab becomes visible
+      window.__initQuerySplit = function () { splitInitDone = false; setTimeout(initSplit, 30); };
+    }());
 
     // ── Connection form ────────────────────────────────────────────────────
     function showForm(conn) {
@@ -880,8 +1130,9 @@
       tabs.forEach(function (t) {
         var isAct = t.id === activeQTabId;
         html += '<div class="query-tab ' + (isAct ? 'active' : '') + '" data-qtab="' + esc(t.id) + '">'
+          + ICONS.fileSql
           + '<span class="query-tab-name">' + esc(t.name) + '</span>'
-          + (tabs.length > 1 ? '<button class="query-tab-close" data-close-tab="' + esc(t.id) + '" title="Close"><i class="codicon codicon-close"></i></button>' : '')
+          + '<button class="query-tab-close' + (tabs.length > 1 ? '' : ' invisible') + '" data-close-tab="' + esc(t.id) + '" title="Close"><i class="codicon codicon-close"></i></button>'
           + '</div>';
       });
       document.getElementById('query-tab-list').innerHTML = html;
@@ -1010,10 +1261,18 @@
       el.className = 'query-status' + (isErr ? ' error' : '');
     }
 
+    function showResultsPlaceholder(msg) {
+      var section = document.getElementById('results-section');
+      lastResult = null;
+      section.innerHTML = '<div class="results-placeholder">' + esc(msg || 'Run a query to see results') + '</div>';
+    }
+
     function renderResults(result) {
       var section = document.getElementById('results-section');
-      if (!result || result.error || !result.columns || !result.columns.length) { section.classList.add('hidden'); lastResult = null; return; }
-      section.classList.remove('hidden');
+      if (!result || result.error || !result.columns || !result.columns.length) {
+        showResultsPlaceholder(result && result.error ? result.error : 'No rows returned');
+        lastResult = null; return;
+      }
       lastResult = result;
       var html = '<div class="export-bar">'
         + '<button class="btn btn-secondary btn-xs" id="btn-export-csv"><i class="codicon codicon-export"></i>CSV</button>'
@@ -1048,8 +1307,7 @@
     // ── EXPLAIN plan renderer ──────────────────────────────────────────────
     function renderExplain(plan) {
       var section = document.getElementById('results-section');
-      if (!plan) { section.classList.add('hidden'); return; }
-      section.classList.remove('hidden');
+      if (!plan) { showResultsPlaceholder('No plan returned'); return; }
       lastResult = null;
       var rootPlan = plan[0];
       var execTime = rootPlan['Execution Time'] || 0;
@@ -1433,7 +1691,7 @@
           if (!d.tabId || d.tabId === activeQTabId) {
             if (d.error) {
               setStatus('EXPLAIN error: ' + d.error, true);
-              document.getElementById('results-section').classList.add('hidden');
+              showResultsPlaceholder('EXPLAIN error: ' + d.error);
             } else {
               setStatus('Query plan ready', false);
               renderExplain(d.plan);
@@ -1468,7 +1726,7 @@
           renderTree(); break;
         }
         case 'navigateToTable':
-          switchMainTab('explorer');
+          // Explorer is always visible in the sidebar — just expand the tree
           expanded['c:' + d.connId] = true;
           expanded['s:' + d.connId + ':' + d.schema] = true;
           expanded['tg:' + d.connId + ':' + d.schema] = true;
@@ -1484,8 +1742,16 @@
       }
     });
 
+    // ── Global keyboard shortcuts ──────────────────────────────────────────
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'F8' && persisted.tab === 'query') {
+        e.preventDefault();
+        runQuery();
+      }
+    });
+
     // ── Init ───────────────────────────────────────────────────────────────
-    switchMainTab(persisted.tab || 'explorer');
+    switchMainTab(persisted.tab || 'query');
     renderTree();
     api.send('ready');
   }());

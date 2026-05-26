@@ -15,7 +15,8 @@
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "package": "node esbuild.js --production && electron-builder",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/__tests__/PgConnection.test.ts src/__tests__/PrismaParser.test.ts src/__tests__/ConnectionManager.test.ts"
   },
   "build": {
     "appId": "com.britors.prisma4postgres",
@@ -43,6 +44,7 @@
     "electron": "^29.4.6",
     "electron-builder": "^24.13.3",
     "esbuild": "^0.20.0",
+    "tsx": "^4.22.3",
     "typescript": "^5.3.0"
   },
   "dependencies": {

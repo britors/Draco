@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=britors.prisma4postgres">
-    <img src="https://img.shields.io/visual-studio-marketplace/v/britors.prisma4postgres?label=VS%20Code%20Marketplace&color=007acc" alt="Marketplace">
+  <a href="https://github.com/britors/Prisma4Postgres/releases">
+    <img src="https://img.shields.io/github/v/release/britors/Prisma4Postgres?label=release&color=b44fff" alt="Release">
   </a>
   <a href="https://github.com/britors/Prisma4Postgres/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/britors/Prisma4Postgres" alt="License">
@@ -14,29 +14,53 @@
   </a>
 </p>
 
-**Prisma4Postgres** is a VS Code extension that turns the sidebar into a full PostgreSQL workspace — schema explorer, SQL query editor, Prisma ORM integration, and more. No CLI wrappers, no configuration files: just connect and explore.
+**Prisma4Postgres** is a standalone Electron desktop app for exploring PostgreSQL databases and working with Prisma ORM — all without leaving a dedicated workspace. No VS Code required, no CLI wrappers, no config files: just connect and explore.
+
+---
+
+## Layout
+
+```
+┌──────────────────┬──────────────────────────────────────────────┐
+│                  │  [Query] [History] [Prisma]                  │
+│  Explorer        ├──────────────────────────────────────────────┤
+│  (left sidebar)  │  Monaco SQL editor                           │
+│                  ├╌╌╌ drag to resize ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│  connections     │  Result grid / EXPLAIN plan                  │
+│  └ schemas       └──────────────────────────────────────────────┘
+│    └ tables
+│      └ columns
+└──────────────────
+```
+
+- **Left sidebar** always visible, drag handle to resize (160 – 600 px, persisted)
+- **Right area** holds Query, History, and Prisma tabs
+- **Query/Results split** resizable (default 50/50, persisted per session)
 
 ---
 
 ## Features
 
-### Database Explorer
+### Explorer (left sidebar)
 - Tree view of all schemas, tables, views, and functions
+- Folder icons matching **OpenBase.Icons** style — open/closed per node state
 - Column details with PK / FK badges and data types
 - Prisma model indicator on mapped tables
 - Filter / search nodes in real time
+- Drag handle to resize the sidebar
 
 ### SQL Query Editor
-- Monaco-based editor with SQL syntax highlighting
-- Multi-tab queries (`Ctrl+Enter` to run)
+- Monaco editor with SQL syntax highlighting and live autocomplete
+- Multi-tab queries — each tab shows an SQL file icon + name
+- **`Ctrl+Enter`** or **`F8`** to run (runs selection if text is selected)
 - Connection selector per tab
+- Resizable split between editor and results (drag the divider)
 - Result grid with NULL highlighting
-- Export results as **CSV** or **JSON** via a save dialog
+- Export results as **CSV** or **JSON** via save dialog
 - Query history (last 50 runs, searchable, click to restore)
-- SQL autocomplete from live schema (tables, views, functions)
 
 ### EXPLAIN Plan Viewer
-- One-click `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` on any query
+- One-click `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` via **Explain** button
 - Expandable node tree with cost, actual time, and row counts
 - Expensive nodes highlighted (Seq Scan, high relative cost)
 - Toggle between tree view and raw JSON
@@ -48,26 +72,22 @@
 - Table preview (first N rows, configurable)
 
 ### Prisma Integration
-- Auto-detects `schema.prisma` in the workspace (file watcher)
+- Browse for `schema.prisma` via file dialog; path persisted in settings
 - Maps models to database tables — ✓ found / ✗ missing indicator
-- **Drift panel**: side-by-side Prisma model fields vs actual DB columns with type compatibility check
+- **Drift panel**: Prisma model fields vs actual DB columns with type compatibility check
 - Run **`prisma db pull`** with real-time streaming log
 - Run **`prisma migrate status`** with real-time streaming log
 - Migration history from `_prisma_migrations` with status indicators
 
 ---
 
-## Installation
+## Keyboard Shortcuts
 
-1. Open VS Code
-2. Go to **Extensions** (`Ctrl+Shift+X`)
-3. Search for `Prisma4Postgres`
-4. Click **Install**
-
-Or install from the command line:
-```bash
-code --install-extension britors.prisma4postgres
-```
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Enter` | Run query (or selection) |
+| `F8` | Run query (or selection) |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / Redo in editor |
 
 ---
 
@@ -75,23 +95,23 @@ code --install-extension britors.prisma4postgres
 
 ### Add a connection
 
-1. Click the **Prisma4Postgres** icon in the Activity Bar
-2. Click **Add Connection** (or the `+` button in the toolbar)
-3. Fill in host, port, database, user, and password
-4. Click **Test** to verify, then **Save**
+1. Click **+** in the Explorer sidebar header
+2. Fill in host, port, database, user, and optional password
+3. Click **Test** to verify connectivity, then **Save**
 
 ### Connect and explore
 
 - Click the **plug icon** next to a connection to connect
-- Expand the tree to browse schemas → Tables & Views → columns
+- Expand the tree: schema → Tables & Views → columns
 - Hover over a table for quick actions: Preview, DDL, copy name
 
 ### Run a query
 
 1. Switch to the **Query** tab
 2. Select your connection from the dropdown
-3. Write SQL and press `Ctrl+Enter` (or click **Run**)
-4. Results appear in the grid below; use **Export** to save
+3. Write SQL and press `F8` (or `Ctrl+Enter`)
+4. Results appear in the bottom pane; drag the divider to resize
+5. Click **Export** to save as CSV or JSON
 
 ### View EXPLAIN
 
@@ -99,31 +119,81 @@ With a SELECT query in the editor, click **Explain** to see the full query plan 
 
 ### Prisma integration
 
-Open a workspace that contains a `schema.prisma` file. Switch to the **Prisma** tab to see:
-- Schema file status and datasource info
-- All models with their mapped table names and existence status
+Switch to the **Prisma** tab and click **Browse…** to select your `schema.prisma` file. Then:
+- See all models with their mapped table names and existence status
 - Run `db pull` or `migrate status` from the action buttons
-- Click **diff icon** next to any model to open the Drift panel
+- Click the **diff icon** next to any model to open the Drift panel
 
 ---
 
-## Configuration
+## Settings
 
-All settings are available under **File → Preferences → Settings** → search `prisma4postgres`.
+Settings are stored in the app's user-data directory (`userData/settings.json`).
 
 | Setting | Default | Description |
 |---|---|---|
-| `prisma4postgres.queryTimeout` | `30000` | Query timeout in milliseconds |
-| `prisma4postgres.previewRowLimit` | `100` | Max rows in table preview |
-| `prisma4postgres.defaultPort` | `5432` | Pre-filled port for new connections |
-| `prisma4postgres.defaultSsl` | `false` | SSL enabled by default for new connections |
-| `prisma4postgres.showRowCount` | `false` | Show estimated row count in the Explorer tree |
+| `queryTimeout` | `30000` | Query timeout (ms) |
+| `previewRowLimit` | `100` | Max rows in table preview |
+| `defaultPort` | `5432` | Pre-filled port for new connections |
+| `defaultSsl` | `false` | SSL enabled by default for new connections |
+| `showRowCount` | `false` | Show estimated row count badges in the Explorer |
+| `prismaSchemaPath` | — | Last used `schema.prisma` path |
+
+Passwords are encrypted with `electron.safeStorage` and stored separately in `userData/passwords.json`.
 
 ---
 
-## Diagnostics
+## Development
 
-The extension writes detailed logs to the **Prisma4Postgres** output channel (`View → Output → Prisma4Postgres`). Connection events, query timing, and errors are all captured there.
+### Prerequisites
+
+- Node.js 20+ (via [nvm](https://github.com/nvm-sh/nvm) recommended)
+- npm
+
+### Setup
+
+```bash
+git clone https://github.com/britors/Prisma4Postgres.git
+cd Prisma4Postgres
+npm install
+```
+
+### Run in development
+
+```bash
+npm run dev
+```
+
+### Run tests
+
+```bash
+npm test
+```
+
+46 unit tests covering `PgConnection` validation, `PrismaParser`, and `ConnectionManager`.
+
+### Build for distribution
+
+```bash
+npm run package
+```
+
+Produces an **AppImage** (Linux), **dmg** (macOS), or **NSIS installer** (Windows) in `dist/`.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Shell | Electron 29 |
+| Language | TypeScript 5 |
+| DB driver | node-postgres (`pg`) |
+| SQL editor | Monaco Editor 0.45 (CDN) |
+| Icons | [OpenBase.Icons](https://github.com/britors/OpenBase.Icons) style (inline SVG) |
+| Theme | [OpenBase.Theme](https://github.com/britors/OpenBase.Theme) colors |
+| Build | esbuild |
+| Tests | Node built-in `node:test` + `tsx` |
 
 ---
 
