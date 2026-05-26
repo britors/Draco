@@ -18,6 +18,17 @@
 
 ---
 
+## Download
+
+Get the latest installer from the [**Releases page**](https://github.com/britors/Prisma4Postgres/releases/latest):
+
+| Platform | File |
+|---|---|
+| Windows | `.exe` (NSIS installer) |
+| Linux | `.AppImage` |
+
+---
+
 ## Features
 
 ### Explorer (left sidebar)
