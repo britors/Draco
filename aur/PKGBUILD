@@ -7,6 +7,7 @@ arch=('x86_64')
 url="https://github.com/britors/Prisma4Postgres"
 license=('MIT')
 depends=('gtk3' 'nss' 'alsa-lib' 'libnotify' 'libxss' 'libxtst')
+makedepends=('librsvg')
 provides=('prisma4postgres')
 conflicts=('prisma4postgres')
 options=('!debug' '!strip')
@@ -22,8 +23,15 @@ prepare() {
 package() {
     bsdtar -xf data.tar.xz -C "${pkgdir}"
 
-    # ícone SVG correto (o .deb pode conter o ícone padrão do Electron)
+    # ícone SVG correto
     install -Dm644 "logo.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/prisma4postgres.svg"
+
+    # gera PNGs a partir do SVG, sobrescrevendo os PNGs do Electron incluídos no .deb
+    for size in 16 32 48 64 128 256; do
+        install -dm755 "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps"
+        rsvg-convert -w "${size}" -h "${size}" "logo.svg" \
+            -o "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/prisma4postgres.png"
+    done
 
     # symlink no PATH
     install -dm755 "${pkgdir}/usr/bin"
