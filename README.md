@@ -18,14 +18,20 @@
 
 ---
 
-## Download
+<p align="center">
+  <a href="https://github.com/britors/Prisma4Postgres/releases/latest">
+    <img src="https://img.shields.io/badge/⬇%20Download%20latest%20release-b44fff?style=for-the-badge&logoColor=white" alt="Download latest release">
+  </a>
+</p>
 
-Get the latest installer from the [**Releases page**](https://github.com/britors/Prisma4Postgres/releases/latest):
+## ⬇ Download
+
+> **[👉 GitHub Releases — download the latest version](https://github.com/britors/Prisma4Postgres/releases/latest)**
 
 | Platform | File |
 |---|---|
-| Windows | `.exe` (NSIS installer) |
-| Linux | `.AppImage` |
+| 🪟 Windows | `.exe` (NSIS installer) |
+| 🐧 Linux | `.AppImage` |
 
 ---
 
