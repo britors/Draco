@@ -194,11 +194,6 @@
     .btn-new-tab { flex-shrink: 0; align-self: center; margin: 0 4px; }
 
     .query-toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--vscode-panel-border); flex-shrink: 0; }
-    .line-editor-bar { display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-input-background); flex-shrink: 0; }
-    .line-editor-bar.hidden { display: none; }
-    .line-editor-prompt { font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; color: var(--vscode-descriptionForeground); flex-shrink: 0; user-select: none; }
-    .line-editor-input { flex: 1; background: transparent; border: none; outline: none; color: var(--vscode-input-foreground); font-family: var(--vscode-editor-font-family, monospace); font-size: 13px; padding: 1px 0; }
-    .line-editor-input::placeholder { color: var(--vscode-input-placeholderForeground); opacity: 0.6; }
     .conn-select { flex: 1; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border, transparent); padding: 2px 4px; font-size: var(--vscode-font-size); font-family: var(--vscode-font-family); outline: none; max-width: 180px; }
 
     /* ── Query split pane ── */
@@ -509,15 +504,9 @@
         <button class="btn btn-secondary" id="btn-explain"><i class="codicon codicon-graph"></i>Explain</button>
         <div style="flex:1"></div>
         <button class="btn btn-secondary" id="btn-snippets" title="Saved query snippets"><i class="codicon codicon-bookmark"></i>Snippets</button>
-        <button class="btn-icon" id="btn-toggle-line-editor" title="Toggle line editor (SQL command bar)"><i class="codicon codicon-terminal-cmd"></i></button>
         <div style="display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:3px;background:var(--vscode-badge-background);font-size:10px;color:var(--vscode-badge-foreground);opacity:0.6;user-select:none">F8 / Ctrl+Enter</div>
       </div>
 
-      <!-- Line editor (SQL command bar) -->
-      <div class="line-editor-bar hidden" id="line-editor-bar">
-        <span class="line-editor-prompt">sql&gt;</span>
-        <input class="line-editor-input" id="line-editor-input" type="text" spellcheck="false" autocomplete="off" placeholder="Enter SQL and press Enter…">
-      </div>
 
       <!-- Resizable split: editor (top) + results (bottom) -->
       <div class="query-split" id="query-split">
@@ -677,7 +666,7 @@
     var MONACO_CDN = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs';
 
     // ── State ──────────────────────────────────────────────────────────────
-    var persisted = JSON.parse(localStorage.getItem('p4p-state') || 'null') || { tab: 'query', tabs: null, activeTabId: null, sidebarWidth: 240, querySplitRatio: 0.5, lineEditorVisible: false };
+    var persisted = JSON.parse(localStorage.getItem('p4p-state') || 'null') || { tab: 'query', tabs: null, activeTabId: null, sidebarWidth: 240, querySplitRatio: 0.5 };
 
     var connections  = [];
     var statuses     = {};
@@ -2655,66 +2644,6 @@
 
     // listen for CREATE TABLE result
     // (handled in the queryResult case — tabId === '__ct__')
-
-    // ── Line editor (#57) ──────────────────────────────────────────────────
-    var lineEditorHistory = [];
-    var lineEditorHistoryIdx = -1;
-
-    function applyLineEditorVisibility() {
-      var bar = document.getElementById('line-editor-bar');
-      var btn = document.getElementById('btn-toggle-line-editor');
-      if (!bar) return;
-      if (persisted.lineEditorVisible) {
-        bar.classList.remove('hidden');
-        if (btn) btn.classList.add('active');
-      } else {
-        bar.classList.add('hidden');
-        if (btn) btn.classList.remove('active');
-      }
-    }
-
-    document.getElementById('btn-toggle-line-editor').addEventListener('click', function () {
-      persisted.lineEditorVisible = !persisted.lineEditorVisible;
-      saveState();
-      applyLineEditorVisibility();
-      if (persisted.lineEditorVisible) document.getElementById('line-editor-input').focus();
-    });
-
-    document.getElementById('line-editor-input').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        var sql = this.value.trim();
-        if (!sql) return;
-        var tab = activeQTab();
-        if (!tab.connId) { showToast('Select a connection first.'); return; }
-        // push to history (avoid consecutive duplicates)
-        if (!lineEditorHistory.length || lineEditorHistory[0] !== sql) lineEditorHistory.unshift(sql);
-        if (lineEditorHistory.length > 20) lineEditorHistory.pop();
-        lineEditorHistoryIdx = -1;
-        this.value = '';
-        runningConnId = tab.connId;
-        document.getElementById('btn-run').disabled = true;
-        document.getElementById('btn-cancel').classList.remove('hidden');
-        setStatus('Executing…', false);
-        api.send('executeQuery', { connId: tab.connId, sql: sql, tabId: tab.id });
-        switchMainTab('query');
-      } else if (e.key === 'Escape') {
-        this.value = '';
-        lineEditorHistoryIdx = -1;
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (!lineEditorHistory.length) return;
-        lineEditorHistoryIdx = Math.min(lineEditorHistoryIdx + 1, lineEditorHistory.length - 1);
-        this.value = lineEditorHistory[lineEditorHistoryIdx];
-        setTimeout(function () { document.getElementById('line-editor-input').setSelectionRange(9999, 9999); }, 0);
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        lineEditorHistoryIdx = Math.max(lineEditorHistoryIdx - 1, -1);
-        this.value = lineEditorHistoryIdx < 0 ? '' : lineEditorHistory[lineEditorHistoryIdx];
-      }
-    });
-
-    applyLineEditorVisibility();
 
     // ── Global keyboard shortcuts ──────────────────────────────────────────
     document.addEventListener('keydown', function (e) {
