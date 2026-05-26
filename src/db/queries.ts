@@ -551,6 +551,170 @@ export async function getERDData(
   return { tables, relations };
 }
 
+// ── Browse table data (#62) ──────────────────────────────────────────────────
+
+export async function browseTableData(
+  driver: PgDriver,
+  schema: string,
+  table: string,
+  offset: number,
+  limit: number
+): Promise<{ columns: string[]; rows: Record<string, unknown>[]; total: number }> {
+  const qSchema = schema.replace(/"/g, '""');
+  const qTable  = table.replace(/"/g, '""');
+  const [countRows, rows] = await Promise.all([
+    driver.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM "${qSchema}"."${qTable}"`),
+    driver.query<Record<string, unknown>>(`SELECT * FROM "${qSchema}"."${qTable}" LIMIT $1 OFFSET $2`, [limit, offset]),
+  ]);
+  return { columns: rows.length ? Object.keys(rows[0]) : [], rows, total: Number(countRows[0]?.count ?? 0) };
+}
+
+// ── Update table row (#63) ────────────────────────────────────────────────────
+
+export async function updateTableRow(
+  driver: PgDriver,
+  schema: string,
+  table: string,
+  pkCols: string[],
+  pkVals: unknown[],
+  column: string,
+  newValue: string | null
+): Promise<void> {
+  const qSchema = schema.replace(/"/g, '""');
+  const qTable  = table.replace(/"/g, '""');
+  const qCol    = column.replace(/"/g, '""');
+  const where   = pkCols.map((c, i) => `"${c.replace(/"/g, '""')}" = $${i + 2}`).join(' AND ');
+  await driver.query(
+    `UPDATE "${qSchema}"."${qTable}" SET "${qCol}" = $1 WHERE ${where}`,
+    [newValue === '' ? null : newValue, ...pkVals]
+  );
+}
+
+// ── Column statistics (#67) ──────────────────────────────────────────────────
+
+export interface ColumnStat {
+  column: string;
+  nullFrac: number;
+  nDistinct: number;
+  mostCommonVals: string | null;
+  histogramBounds: string | null;
+}
+
+export async function getColumnStats(driver: PgDriver, schema: string, table: string): Promise<ColumnStat[]> {
+  return driver.query<ColumnStat>(
+    `SELECT attname          AS "column",
+            null_frac        AS "nullFrac",
+            n_distinct       AS "nDistinct",
+            most_common_vals::text AS "mostCommonVals",
+            histogram_bounds::text AS "histogramBounds"
+     FROM pg_stats
+     WHERE schemaname = $1 AND tablename = $2
+     ORDER BY (
+       SELECT ordinal_position FROM information_schema.columns c
+       WHERE c.table_schema = $1 AND c.table_name = $2 AND c.column_name = pg_stats.attname
+     )`,
+    [schema, table]
+  );
+}
+
+// ── Prisma schema generator (#60) ────────────────────────────────────────────
+
+const PG_TO_PRISMA: Record<string, string> = {
+  integer: 'Int', int4: 'Int', int2: 'Int', smallint: 'Int', int: 'Int',
+  bigint: 'BigInt', int8: 'BigInt',
+  boolean: 'Boolean', bool: 'Boolean',
+  text: 'String', varchar: 'String', 'character varying': 'String', bpchar: 'String', char: 'String',
+  uuid: 'String', json: 'Json', jsonb: 'Json',
+  numeric: 'Decimal', decimal: 'Decimal', money: 'Decimal',
+  real: 'Float', float4: 'Float', float8: 'Float', 'double precision': 'Float',
+  timestamp: 'DateTime', 'timestamp without time zone': 'DateTime',
+  timestamptz: 'DateTime', 'timestamp with time zone': 'DateTime',
+  date: 'DateTime', time: 'String', 'time without time zone': 'String',
+  bytea: 'Bytes',
+  serial: 'Int', bigserial: 'BigInt', smallserial: 'Int',
+};
+
+function _toPascal(s: string): string { return s.replace(/(?:^|_)(\w)/g, (_, c: string) => c.toUpperCase()); }
+function _toCamel(s: string): string  { const p = _toPascal(s); return p.charAt(0).toLowerCase() + p.slice(1); }
+
+export async function generatePrismaSchema(driver: PgDriver, schema: string): Promise<string> {
+  const [tables, columns, pks, fks, uniques] = await Promise.all([
+    driver.query<{ name: string }>(
+      `SELECT table_name AS name FROM information_schema.tables WHERE table_schema=$1 AND table_type='BASE TABLE' ORDER BY table_name`, [schema]),
+    driver.query<{ table_name: string; column_name: string; data_type: string; udt_name: string; is_nullable: string; column_default: string | null }>(
+      `SELECT table_name, column_name, data_type, udt_name, is_nullable, column_default FROM information_schema.columns WHERE table_schema=$1 ORDER BY table_name, ordinal_position`, [schema]),
+    driver.query<{ table_name: string; column_name: string }>(
+      `SELECT tc.table_name, kcu.column_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu USING(constraint_name,table_schema,table_name) WHERE tc.constraint_type='PRIMARY KEY' AND tc.table_schema=$1`, [schema]),
+    driver.query<{ table_name: string; column_name: string; foreign_table: string; foreign_column: string }>(
+      `SELECT kcu.table_name, kcu.column_name, ccu.table_name AS foreign_table, ccu.column_name AS foreign_column FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu USING(constraint_name,table_schema,table_name) JOIN information_schema.referential_constraints rc USING(constraint_name,constraint_schema) JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name=rc.unique_constraint_name AND ccu.constraint_schema=$1 WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_schema=$1`, [schema]),
+    driver.query<{ table_name: string; column_name: string }>(
+      `SELECT tc.table_name, kcu.column_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu USING(constraint_name,table_schema,table_name) WHERE tc.constraint_type='UNIQUE' AND tc.table_schema=$1`, [schema]),
+  ]);
+
+  const pkSet     = new Set(pks.map(p => `${p.table_name}.${p.column_name}`));
+  const uniqueSet = new Set(uniques.map(u => `${u.table_name}.${u.column_name}`));
+  const fkMap     = new Map(fks.map(f => [`${f.table_name}.${f.column_name}`, f]));
+  const colsByTable = new Map<string, typeof columns[0][]>();
+  for (const c of columns) {
+    if (!colsByTable.has(c.table_name)) colsByTable.set(c.table_name, []);
+    colsByTable.get(c.table_name)!.push(c);
+  }
+
+  let out = `generator client {\n  provider = "prisma-client-js"\n}\n\ndatasource db {\n  provider = "postgresql"\n  url      = env("DATABASE_URL")\n}\n\n`;
+
+  for (const table of tables) {
+    const cols      = colsByTable.get(table.name) ?? [];
+    const modelName = _toPascal(table.name);
+    out += `model ${modelName} {\n`;
+    for (const col of cols) {
+      const isPk  = pkSet.has(`${table.name}.${col.column_name}`);
+      const isNull = col.is_nullable === 'YES' && !isPk;
+      const isUniq = uniqueSet.has(`${table.name}.${col.column_name}`) && !isPk;
+      const prismaType = (PG_TO_PRISMA[col.data_type] ?? PG_TO_PRISMA[col.udt_name] ?? 'String') + (isNull ? '?' : '');
+      const fieldName  = _toCamel(col.column_name);
+      const attrs: string[] = [];
+      if (isPk) attrs.push('@id');
+      if (col.column_default?.includes('nextval(')) attrs.push('@default(autoincrement())');
+      else if (col.column_default === 'gen_random_uuid()' || col.column_default?.includes('uuid_generate')) attrs.push('@default(uuid())');
+      else if (col.column_default?.includes('now()') || col.column_default?.includes('CURRENT_TIMESTAMP')) attrs.push('@default(now())');
+      if (isUniq) attrs.push('@unique');
+      if (fieldName !== col.column_name) attrs.push(`@map("${col.column_name}")`);
+      out += `  ${fieldName.padEnd(24)}${prismaType.padEnd(12)}${attrs.length ? attrs.join(' ') : ''}\n`;
+    }
+    out += `\n  @@map("${table.name}")\n}\n\n`;
+  }
+  return out.trimEnd();
+}
+
+// ── Import table data (#66) ───────────────────────────────────────────────────
+
+export async function importTableRows(
+  driver: PgDriver,
+  schema: string,
+  table: string,
+  columns: string[],
+  rows: (string | null)[][]
+): Promise<number> {
+  if (!rows.length) return 0;
+  const qSchema = schema.replace(/"/g, '""');
+  const qTable  = table.replace(/"/g, '""');
+  const colList = columns.map(c => `"${c.replace(/"/g, '""')}"`).join(', ');
+  let inserted = 0;
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    const placeholders = chunk.map((_, ri) =>
+      '(' + columns.map((_, ci) => `$${ri * columns.length + ci + 1}`).join(', ') + ')'
+    ).join(', ');
+    await driver.query(
+      `INSERT INTO "${qSchema}"."${qTable}" (${colList}) VALUES ${placeholders}`,
+      chunk.flat()
+    );
+    inserted += chunk.length;
+  }
+  return inserted;
+}
+
 export async function checkMigrationsTable(driver: PgDriver, schema = 'public'): Promise<boolean> {
   const rows = await driver.query<{ exists: boolean }>(
     `SELECT EXISTS (

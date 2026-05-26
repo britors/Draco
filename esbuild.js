@@ -11,7 +11,7 @@ const shared = {
   platform: 'node',
   sourcemap: !isProd,
   minify: isProd,
-  external: ['electron'],
+  external: ['electron', 'ssh2', 'cpu-features'],
 };
 
 function copyAssets() {

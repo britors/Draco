@@ -308,6 +308,56 @@
     .tdetail-loading { display: flex; align-items: center; gap: 10px; padding: 32px; color: var(--vscode-descriptionForeground); }
     .tdetail-error { padding: 24px; color: var(--vscode-errorForeground); font-size: 12px; }
 
+    /* ── Browse data grid (#62) ── */
+    .browse-toolbar { display:flex;align-items:center;gap:4px;padding:4px 10px;flex-wrap:wrap;border-bottom:1px solid var(--vscode-panel-border); }
+    .browse-page-info { font-size:11px;color:var(--vscode-descriptionForeground);margin:0 6px; }
+    .browse-grid-wrap { overflow-x:auto;max-height:340px;overflow-y:auto; }
+    .browse-grid { width:100%;border-collapse:collapse;font-size:12px; }
+    .browse-grid th { position:sticky;top:0;z-index:1;background:var(--vscode-editorGroupHeader-tabsBackground);padding:3px 8px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--vscode-descriptionForeground);border-bottom:2px solid var(--vscode-panel-border);white-space:nowrap; }
+    .browse-grid td { padding:2px 8px;border-bottom:1px solid rgba(128,128,128,0.08);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;cursor:default; }
+    .browse-grid tr:hover td { background:var(--vscode-list-hoverBackground); }
+    .browse-grid td.pk-col { font-size:11px;color:var(--vscode-descriptionForeground); }
+    .browse-cell-null { color:var(--vscode-descriptionForeground);font-style:italic;font-size:11px; }
+    .browse-cell-editing { padding:0!important; }
+    .browse-cell-editing input { width:100%;border:none;background:var(--vscode-input-background);color:var(--vscode-input-foreground);font-size:12px;padding:2px 4px;outline:2px solid var(--vscode-focusBorder);outline-offset:-1px; }
+
+    /* ── Snippets panel (#65) ── */
+    .snippets-panel { position:absolute;right:0;top:0;bottom:0;width:290px;background:var(--vscode-sideBar-background);border-left:1px solid var(--vscode-panel-border);display:flex;flex-direction:column;z-index:20; }
+    .snippets-panel.hidden { display:none; }
+    .snippets-hdr { display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--vscode-panel-border);background:var(--vscode-editorGroupHeader-tabsBackground); }
+    .snippets-hdr-title { flex:1;font-size:12px;font-weight:600; }
+    .snippets-list { flex:1;overflow-y:auto; }
+    .snippet-item { padding:6px 10px;border-bottom:1px solid rgba(128,128,128,0.06);cursor:pointer; }
+    .snippet-item:hover { background:var(--vscode-list-hoverBackground); }
+    .snippet-item-row { display:flex;align-items:center;gap:4px; }
+    .snippet-name { font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .snippet-sql-preview { font-size:10px;color:var(--vscode-descriptionForeground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--vscode-editor-font-family,monospace);margin-top:2px; }
+
+    /* ── Import dialog (#66) ── */
+    .import-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;display:flex;align-items:center;justify-content:center; }
+    .import-overlay.hidden { display:none; }
+    .import-dialog { background:var(--vscode-editorWidget-background,var(--vscode-editor-background));border:1px solid var(--vscode-editorWidget-border,var(--vscode-panel-border));border-radius:4px;padding:20px;min-width:480px;max-width:600px;max-height:80vh;display:flex;flex-direction:column;gap:12px; }
+    .import-dialog h3 { margin:0;font-size:14px; }
+    .import-preview-wrap { overflow:auto;max-height:200px;border:1px solid var(--vscode-panel-border);border-radius:2px; }
+    .import-preview { border-collapse:collapse;font-size:11px;width:100%; }
+    .import-preview th,.import-preview td { padding:2px 6px;border-bottom:1px solid rgba(128,128,128,0.12);white-space:nowrap; }
+    .import-preview th { background:var(--vscode-editorGroupHeader-tabsBackground);font-weight:700; }
+
+    /* ── Prisma tab (#60) ── */
+    .prisma-wrap { flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px; }
+    .prisma-toolbar { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .prisma-schema-out { flex:1;min-height:300px;font-family:var(--vscode-editor-font-family,monospace);font-size:12px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border);border-radius:2px;padding:10px;resize:none;overflow:auto;white-space:pre; }
+
+    /* ── SSH tunnel form (#64) ── */
+    .ssh-section { border:1px solid var(--vscode-panel-border);border-radius:3px;padding:8px 10px;font-size:12px; }
+    .ssh-section summary { cursor:pointer;font-weight:600;font-size:11px;color:var(--vscode-descriptionForeground);text-transform:uppercase;letter-spacing:0.4px;user-select:none; }
+    .ssh-section summary:hover { color:var(--vscode-foreground); }
+    .ssh-fields { display:flex;flex-direction:column;gap:8px;margin-top:8px; }
+
+    /* ── Column stats (#67) ── */
+    .col-stat { font-size:10px;color:var(--vscode-descriptionForeground);margin-top:2px; }
+    .col-stat span { margin-right:8px; }
+
     /* ── Visual table creator ── */
     .create-table-wrap { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
     .create-table-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -402,6 +452,24 @@
               <label for="f-ssl">Enable SSL</label>
             </div>
           </div>
+          <details class="ssh-section" id="ssh-section">
+            <summary>SSH Tunnel</summary>
+            <div class="ssh-fields">
+              <div class="checkbox-row">
+                <input type="checkbox" id="f-ssh-enabled">
+                <label for="f-ssh-enabled">Enable SSH tunnel</label>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label>SSH Host</label><input type="text" id="f-ssh-host" placeholder="jump.example.com"></div>
+                <div class="form-group"><label>SSH Port</label><input type="number" id="f-ssh-port" value="22" min="1" max="65535"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label>SSH User</label><input type="text" id="f-ssh-user" placeholder="ubuntu"></div>
+                <div class="form-group"><label>SSH Password</label><input type="password" id="f-ssh-password" placeholder="or use key"></div>
+              </div>
+              <div class="form-group"><label>Private key path (optional)</label><input type="text" id="f-ssh-key" placeholder="~/.ssh/id_rsa"></div>
+            </div>
+          </details>
           <div class="form-actions">
             <button type="button" class="btn btn-secondary" id="btn-test"><i class="codicon codicon-plug"></i>Test</button>
             <span class="test-status" id="test-status"></span>
@@ -424,11 +492,12 @@
       <button class="tab" data-tab="history"><i class="codicon codicon-history"></i>History</button>
       <button class="tab" data-tab="activity"><i class="codicon codicon-pulse"></i>Activity</button>
       <button class="tab" data-tab="erd"><i class="codicon codicon-type-hierarchy"></i>ERD</button>
+      <button class="tab" data-tab="prisma"><i class="codicon codicon-symbol-class"></i>Prisma</button>
       <div id="table-tab-list" style="display:flex;overflow-x:auto;"></div>
     </div>
 
     <!-- Query panel -->
-    <div class="panel hidden" id="panel-query">
+    <div class="panel hidden" id="panel-query" style="position:relative">
       <div class="query-tabs-bar">
         <div class="query-tab-list" id="query-tab-list"></div>
         <button class="btn-icon btn-new-tab" id="btn-new-tab" title="New query tab"><i class="codicon codicon-add"></i></button>
@@ -439,6 +508,7 @@
         <button class="btn btn-secondary hidden" id="btn-cancel"><i class="codicon codicon-stop-circle"></i>Cancel</button>
         <button class="btn btn-secondary" id="btn-explain"><i class="codicon codicon-graph"></i>Explain</button>
         <div style="flex:1"></div>
+        <button class="btn btn-secondary" id="btn-snippets" title="Saved query snippets"><i class="codicon codicon-bookmark"></i>Snippets</button>
         <button class="btn-icon" id="btn-toggle-line-editor" title="Toggle line editor (SQL command bar)"><i class="codicon codicon-terminal-cmd"></i></button>
         <div style="display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:3px;background:var(--vscode-badge-background);font-size:10px;color:var(--vscode-badge-foreground);opacity:0.6;user-select:none">F8 / Ctrl+Enter</div>
       </div>
@@ -471,6 +541,15 @@
             </div>
           </div>
         </div>
+      </div>
+      <!-- Snippets panel (#65) -->
+      <div class="snippets-panel hidden" id="snippets-panel">
+        <div class="snippets-hdr">
+          <span class="snippets-hdr-title"><i class="codicon codicon-bookmark"></i> Snippets</span>
+          <button class="btn btn-secondary" id="btn-save-snippet" title="Save current query as snippet" style="padding:2px 8px;font-size:11px"><i class="codicon codicon-add"></i>Save</button>
+          <button class="btn-icon" id="btn-snippets-close"><i class="codicon codicon-close"></i></button>
+        </div>
+        <div class="snippets-list" id="snippets-list"></div>
       </div>
     </div>
 
@@ -549,8 +628,41 @@
         <button class="btn btn-secondary" id="btn-copy-prisma-model" style="flex-shrink:0" title="Copy Prisma model to clipboard">
           <i class="codicon codicon-symbol-class"></i>Copy model
         </button>
+        <button class="btn btn-secondary" id="btn-import-data" style="flex-shrink:0" title="Import CSV/JSON into table">
+          <i class="codicon codicon-cloud-upload"></i>Import
+        </button>
       </div>
       <div class="tdetail-wrap" id="table-detail-content"></div>
+    </div>
+
+    <!-- Import dialog overlay (#66) -->
+    <div class="import-overlay hidden" id="import-overlay">
+      <div class="import-dialog">
+        <h3><i class="codicon codicon-cloud-upload"></i> Import data</h3>
+        <div id="import-info" style="font-size:12px;color:var(--vscode-descriptionForeground)"></div>
+        <div class="import-preview-wrap"><table class="import-preview" id="import-preview-table"></table></div>
+        <div id="import-error" style="color:var(--vscode-errorForeground);font-size:12px"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-secondary" id="btn-import-cancel">Cancel</button>
+          <button class="btn btn-primary" id="btn-import-confirm" disabled><i class="codicon codicon-cloud-upload"></i>Import</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prisma schema generator panel (#60) -->
+    <div class="panel hidden" id="panel-prisma">
+      <div class="prisma-wrap">
+        <div style="font-size:13px;font-weight:600"><i class="codicon codicon-symbol-class"></i> Prisma Schema Generator</div>
+        <div class="prisma-toolbar">
+          <select id="prisma-conn-select" class="conn-select"><option value="">Select connection…</option></select>
+          <select id="prisma-schema-select" style="width:140px"><option value="">Select schema…</option></select>
+          <button class="btn btn-primary" id="btn-generate-prisma"><i class="codicon codicon-refresh"></i>Generate</button>
+          <button class="btn btn-secondary" id="btn-save-prisma" disabled><i class="codicon codicon-save"></i>Save schema.prisma</button>
+          <button class="btn btn-secondary" id="btn-copy-prisma-full" disabled><i class="codicon codicon-copy"></i>Copy</button>
+        </div>
+        <div id="prisma-gen-status" style="font-size:12px;color:var(--vscode-descriptionForeground)"></div>
+        <textarea class="prisma-schema-out" id="prisma-schema-out" readonly placeholder="Generated schema.prisma will appear here…"></textarea>
+      </div>
     </div>
 
   </div><!-- /.main-area -->
@@ -1079,6 +1191,7 @@
       if (tab === 'history') { if (!historyEntries.length) api.send('loadHistory'); renderHistory(); }
       if (tab === 'activity') { renderActivityConnSelect(); }
       if (tab === 'erd') { if (window.__erdOnTabActivated) window.__erdOnTabActivated(); }
+      if (tab === 'prisma') { if (window.__prismaOnConnections) window.__prismaOnConnections(); }
       if (tab === 'create-table') { renderCreateTable(); }
       if (tab.indexOf('tdetail-') === 0) { activeTableTabId = tab; renderActiveTableDetail(); }
     }
@@ -1097,11 +1210,14 @@
       if (existing) { switchMainTab(existing.id); return; }
 
       var id = 'tdetail-' + (nextTableTabId++);
-      var tab = { id: id, connId: connId, schema: schema, tableName: tableName, loading: true, data: null, error: null };
+      var tab = { id: id, connId: connId, schema: schema, tableName: tableName, loading: true, data: null, error: null,
+                  browsePage: 0, browsePageSize: 50, browseData: null, browseTotal: 0, browseLoading: true, browseError: null,
+                  colStats: null, colStatsLoading: false };
       tableTabs.push(tab);
       renderTableTabs();
       switchMainTab(id);
       api.send('loadTableDetail', { connId: connId, schema: schema, tableName: tableName });
+      api.send('browseTable', { connId: connId, schema: schema, tableName: tableName, offset: 0, limit: tab.browsePageSize });
     }
 
     function closeTableTab(id) {
@@ -1181,22 +1297,45 @@
 
       var html = '';
 
+      // ── Data browser (#62) ──
+      html += buildBrowseSection(tab);
+
       // ── Columns ──
+      var statsMap = {};
+      if (tab.colStats) tab.colStats.forEach(function(s) { statsMap[s.column] = s; });
       html += '<div class="tdetail-section">'
-        + '<div class="tdetail-section-hdr"><i class="codicon codicon-list-flat"></i>Columns <span style="margin-left:4px;font-weight:400;opacity:0.6">(' + d.columns.length + ')</span></div>'
+        + '<div class="tdetail-section-hdr"><i class="codicon codicon-list-flat"></i>Columns <span style="margin-left:4px;font-weight:400;opacity:0.6">(' + d.columns.length + ')</span>'
+        + '<span style="flex:1"></span>'
+        + (tab.colStatsLoading
+            ? '<span style="font-size:10px;font-weight:400;opacity:0.6"><i class="codicon codicon-loading codicon-modifier-spin"></i> loading stats…</span>'
+            : '<button class="btn-icon" style="font-size:10px;padding:0 4px" data-action="load-col-stats" title="Load column statistics"><i class="codicon codicon-graph"></i>Stats</button>')
+        + '</div>'
         + '<div class="tdetail-section-body"><table class="tdetail-table"><thead><tr>'
-        + '<th>#</th><th>Column</th><th>Type</th><th>Nullable</th><th>Default</th>'
+        + '<th>#</th><th>Column</th><th>Type</th><th>Nullable</th><th>Default</th><th>Statistics</th>'
         + '</tr></thead><tbody>';
       d.columns.forEach(function (c) {
         var badges = '';
         if (c.isPrimaryKey) badges += '<span class="tdetail-badge pk">PK</span>';
         if (c.isForeignKey) badges += '<span class="tdetail-badge fk">FK</span>';
+        var stat = statsMap[c.name];
+        var statHtml = '';
+        if (stat) {
+          var nullPct = (stat.nullFrac * 100).toFixed(1) + '% null';
+          var distVal = stat.nDistinct < 0 ? Math.abs(stat.nDistinct * 100).toFixed(0) + '% distinct' : stat.nDistinct + ' distinct';
+          statHtml = '<span class="col-stat"><span>' + nullPct + '</span><span>' + distVal + '</span>';
+          if (stat.histogramBounds) {
+            var bounds = stat.histogramBounds.replace(/^\{|\}$/g, '').split(',');
+            if (bounds.length >= 2) statHtml += '<span>range: ' + esc(bounds[0]) + ' – ' + esc(bounds[bounds.length-1]) + '</span>';
+          }
+          statHtml += '</span>';
+        }
         html += '<tr>'
           + '<td style="color:var(--vscode-descriptionForeground);font-size:10px">' + c.ordinalPosition + '</td>'
           + '<td><strong>' + esc(c.name) + '</strong>' + badges + '</td>'
           + '<td style="font-family:var(--vscode-editor-font-family,monospace);font-size:11px">' + esc(c.fullType) + '</td>'
           + '<td>' + (c.isNullable ? '<span class="tdetail-null">NULL</span>' : 'NOT NULL') + '</td>'
           + '<td class="tdetail-default">' + (c.columnDefault !== null ? esc(c.columnDefault) : '<span class="tdetail-null">—</span>') + '</td>'
+          + '<td>' + statHtml + '</td>'
           + '</tr>';
       });
       html += '</tbody></table></div></div>';
@@ -1266,13 +1405,132 @@
         // FK navigation links
         content.querySelectorAll('[data-action="navigate-fk"]').forEach(function (el) {
           el.addEventListener('click', function () {
-            var connId2 = el.dataset.connId;
-            var fkSchema = el.dataset.schema;
-            var fkTable = el.dataset.table;
-            openTableTab(connId2, fkSchema, fkTable);
+            openTableTab(el.dataset.connId, el.dataset.schema, el.dataset.table);
           });
         });
+        // Browse pagination
+        attachBrowseListeners(content, tab);
+        // Load col stats button
+        var statsBtn = content.querySelector('[data-action="load-col-stats"]');
+        if (statsBtn) {
+          statsBtn.addEventListener('click', function () {
+            tab.colStatsLoading = true;
+            renderActiveTableDetail();
+            api.send('loadColumnStats', { connId: tab.connId, schema: tab.schema, tableName: tab.tableName });
+          });
+        }
+        // Import button
+        var importBtn = document.getElementById('btn-import-data');
+        if (importBtn) importBtn.onclick = function () {
+          api.send('openImportDialog', { connId: tab.connId, schema: tab.schema, tableName: tab.tableName });
+        };
       }
+    }
+
+    // ── Browse data helpers (#62 + #63) ────────────────────────────────────
+
+    function buildBrowseSection(tab) {
+      var totalPages = Math.max(1, Math.ceil(tab.browseTotal / tab.browsePageSize));
+      var currentPage = tab.browsePage + 1;
+      var hdr = '<div class="tdetail-section-hdr" style="cursor:default">'
+        + '<i class="codicon codicon-table"></i>Data'
+        + '<div class="browse-toolbar" style="flex:1;padding:0 0 0 10px">'
+        + '<button class="btn-icon" data-browse="first" title="First page" ' + (tab.browsePage === 0 ? 'disabled' : '') + '>«</button>'
+        + '<button class="btn-icon" data-browse="prev" title="Previous page" ' + (tab.browsePage === 0 ? 'disabled' : '') + '>‹</button>'
+        + '<span class="browse-page-info">Page ' + currentPage + ' / ' + totalPages + ' · ' + tab.browseTotal + ' rows</span>'
+        + '<button class="btn-icon" data-browse="next" title="Next page" ' + (currentPage >= totalPages ? 'disabled' : '') + '>›</button>'
+        + '<button class="btn-icon" data-browse="last" title="Last page" ' + (currentPage >= totalPages ? 'disabled' : '') + '>»</button>'
+        + '<select data-browse="pagesize" style="font-size:11px;margin-left:4px">'
+        + [25, 50, 100, 200].map(function(n){ return '<option value="' + n + '"' + (n === tab.browsePageSize ? ' selected' : '') + '>' + n + ' rows</option>'; }).join('')
+        + '</select>'
+        + '</div></div>';
+
+      var body = '';
+      if (tab.browseLoading) {
+        body = '<div class="tdetail-loading"><i class="codicon codicon-loading codicon-modifier-spin"></i>Loading data…</div>';
+      } else if (tab.browseError) {
+        body = '<div class="tdetail-error"><i class="codicon codicon-warning"></i> ' + esc(tab.browseError) + '</div>';
+      } else if (tab.browseData && tab.browseData.columns.length) {
+        var pkCols = (tab.data && tab.data.columns) ? tab.data.columns.filter(function(c){ return c.isPrimaryKey; }).map(function(c){ return c.name; }) : [];
+        var colHeaders = tab.browseData.columns.map(function(c) {
+          var isPk = pkCols.indexOf(c) >= 0;
+          return '<th>' + esc(c) + (isPk ? ' <span class="tdetail-badge pk" style="font-size:8px">PK</span>' : '') + '</th>';
+        }).join('');
+        var rows = tab.browseData.rows.map(function(row, ri) {
+          var cells = tab.browseData.columns.map(function(c) {
+            var isPk = pkCols.indexOf(c) >= 0;
+            var val = row[c];
+            var display = val === null || val === undefined
+              ? '<span class="browse-cell-null">NULL</span>'
+              : esc(typeof val === 'object' ? JSON.stringify(val) : String(val));
+            return '<td class="' + (isPk ? 'pk-col' : '') + '" data-row="' + ri + '" data-col="' + esc(c) + '" data-pk-cols="' + esc(JSON.stringify(pkCols)) + '" data-pk-vals="' + esc(JSON.stringify(pkCols.map(function(k){ return row[k]; }))) + '">' + display + '</td>';
+          }).join('');
+          return '<tr>' + cells + '</tr>';
+        }).join('');
+        body = '<div class="browse-grid-wrap"><table class="browse-grid"><thead><tr>' + colHeaders + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+      } else {
+        body = '<div style="padding:16px;color:var(--vscode-descriptionForeground);font-size:12px">No data.</div>';
+      }
+      return '<div class="tdetail-section">' + hdr + '<div class="tdetail-section-body">' + body + '</div></div>';
+    }
+
+    function attachBrowseListeners(content, tab) {
+      // Pagination buttons
+      content.querySelectorAll('[data-browse]').forEach(function(el) {
+        var action = el.dataset.browse;
+        if (action === 'pagesize') {
+          el.addEventListener('change', function() {
+            tab.browsePageSize = Number(el.value);
+            tab.browsePage = 0;
+            doLoadBrowse(tab);
+          });
+        } else {
+          el.addEventListener('click', function() {
+            var totalPages = Math.max(1, Math.ceil(tab.browseTotal / tab.browsePageSize));
+            if (action === 'first') tab.browsePage = 0;
+            else if (action === 'prev') tab.browsePage = Math.max(0, tab.browsePage - 1);
+            else if (action === 'next') tab.browsePage = Math.min(totalPages - 1, tab.browsePage + 1);
+            else if (action === 'last') tab.browsePage = totalPages - 1;
+            doLoadBrowse(tab);
+          });
+        }
+      });
+      // Double-click to edit (#63)
+      var grid = content.querySelector('.browse-grid');
+      if (!grid) return;
+      grid.addEventListener('dblclick', function(e) {
+        var td = e.target.closest('td[data-col]');
+        if (!td || td.classList.contains('pk-col')) return;
+        var col = td.dataset.col;
+        var pkCols = JSON.parse(td.dataset.pkCols || '[]');
+        if (!pkCols.length) return; // no PK — can't safely update
+        var pkVals = JSON.parse(td.dataset.pkVals || '[]');
+        var currentText = td.querySelector('.browse-cell-null') ? '' : td.textContent;
+        td.classList.add('browse-cell-editing');
+        var inp = document.createElement('input');
+        inp.value = currentText;
+        td.innerHTML = '';
+        td.appendChild(inp);
+        inp.focus(); inp.select();
+        function commit() {
+          var newVal = inp.value;
+          td.classList.remove('browse-cell-editing');
+          td.textContent = newVal || ''; // optimistic
+          api.send('updateTableRow', { connId: tab.connId, schema: tab.schema, tableName: tab.tableName, pkCols: pkCols, pkVals: pkVals, column: col, newValue: newVal });
+        }
+        inp.addEventListener('keydown', function(ev) {
+          if (ev.key === 'Enter') { commit(); }
+          if (ev.key === 'Escape') { td.classList.remove('browse-cell-editing'); doLoadBrowse(tab); }
+        });
+        inp.addEventListener('blur', commit);
+      });
+    }
+
+    function doLoadBrowse(tab) {
+      tab.browseLoading = true;
+      tab.browseData = null;
+      renderActiveTableDetail();
+      api.send('browseTable', { connId: tab.connId, schema: tab.schema, tableName: tab.tableName, offset: tab.browsePage * tab.browsePageSize, limit: tab.browsePageSize });
     }
 
     // ── Sidebar resize ─────────────────────────────────────────────────────
@@ -1390,6 +1648,14 @@
       document.getElementById('f-user').value     = conn ? conn.user     : '';
       document.getElementById('f-password').value = '';
       document.getElementById('f-ssl').checked    = conn ? conn.ssl      : settings.defaultSsl;
+      // SSH fields
+      document.getElementById('f-ssh-enabled').checked = conn ? !!conn.sshEnabled : false;
+      document.getElementById('f-ssh-host').value      = (conn && conn.sshHost)    ? conn.sshHost    : '';
+      document.getElementById('f-ssh-port').value      = (conn && conn.sshPort)    ? String(conn.sshPort) : '22';
+      document.getElementById('f-ssh-user').value      = (conn && conn.sshUser)    ? conn.sshUser    : '';
+      document.getElementById('f-ssh-key').value       = (conn && conn.sshKeyPath) ? conn.sshKeyPath : '';
+      document.getElementById('f-ssh-password').value  = '';
+      if (conn && conn.sshEnabled) document.getElementById('ssh-section').open = true;
       var ts = document.getElementById('test-status'); ts.textContent = ''; ts.className = 'test-status';
       document.getElementById('view-tree').classList.add('hidden');
       document.getElementById('view-form').classList.remove('hidden');
@@ -1398,17 +1664,24 @@
     function showTree() { editingId = null; document.getElementById('view-form').classList.add('hidden'); document.getElementById('view-tree').classList.remove('hidden'); }
 
     function getFormData() {
+      var sshEnabled = document.getElementById('f-ssh-enabled').checked;
       return {
         conn: {
           id: editingId,
-          label: document.getElementById('f-label').value.trim(),
-          host: document.getElementById('f-host').value.trim(),
-          port: parseInt(document.getElementById('f-port').value, 10) || 5432,
-          database: document.getElementById('f-database').value.trim(),
-          user: document.getElementById('f-user').value.trim(),
-          ssl: document.getElementById('f-ssl').checked
+          label:     document.getElementById('f-label').value.trim(),
+          host:      document.getElementById('f-host').value.trim(),
+          port:      parseInt(document.getElementById('f-port').value, 10) || 5432,
+          database:  document.getElementById('f-database').value.trim(),
+          user:      document.getElementById('f-user').value.trim(),
+          ssl:       document.getElementById('f-ssl').checked,
+          sshEnabled: sshEnabled,
+          sshHost:   document.getElementById('f-ssh-host').value.trim() || undefined,
+          sshPort:   parseInt(document.getElementById('f-ssh-port').value, 10) || 22,
+          sshUser:   document.getElementById('f-ssh-user').value.trim() || undefined,
+          sshKeyPath: document.getElementById('f-ssh-key').value.trim() || undefined,
         },
-        password: document.getElementById('f-password').value
+        password:    document.getElementById('f-password').value,
+        sshPassword: document.getElementById('f-ssh-password').value,
       };
     }
 
@@ -1831,6 +2104,7 @@
           if (!document.getElementById('view-form').classList.contains('hidden')) showTree();
           if (persisted.tab === 'query') renderConnSelect();
           if (window.__erdOnConnections) window.__erdOnConnections();
+          if (window.__prismaOnConnections) window.__prismaOnConnections();
           break;
         case 'updateStatuses':
           statuses = d || {}; renderTree(); break;
@@ -1847,6 +2121,7 @@
         case 'schemasLoaded':
           schemas[d.connId] = d.schemas; delete loadingNodes['c:' + d.connId]; renderTree();
           if (window.__erdOnSchemas) window.__erdOnSchemas(d.connId, d.schemas);
+          if (window.__prismaOnSchemas) window.__prismaOnSchemas(d.connId, d.schemas);
           break;
         case 'tablesLoaded':  tables[d.connId + ':' + d.schema] = d.tables; delete loadingNodes['tg:' + d.connId + ':' + d.schema]; renderTree(); break;
         case 'columnsLoaded': cols[d.connId + ':' + d.schema + ':' + d.table] = d.columns; delete loadingNodes[(d.isView ? 'v:' : 't:') + d.connId + ':' + d.schema + ':' + d.table]; renderTree(); break;
@@ -1977,6 +2252,83 @@
           if (activeTableTabId === td.id) renderActiveTableDetail();
           break;
         }
+
+        // ── Browse data result (#62) ─────────────────────────────────────
+        case 'browseTableResult': {
+          var bt = tableTabs.find(function(t){ return t.connId===d.connId && t.schema===d.schema && t.tableName===d.tableName; });
+          if (!bt) break;
+          bt.browseLoading = false;
+          if (d.error) { bt.browseError = d.error; bt.browseData = null; }
+          else { bt.browseData = { columns: d.columns, rows: d.rows }; bt.browseTotal = d.total; bt.browseError = null; }
+          if (activeTableTabId === bt.id) renderActiveTableDetail();
+          break;
+        }
+
+        // ── Update row result (#63) ──────────────────────────────────────
+        case 'updateRowResult': {
+          if (d.error) { setStatus('Update failed: ' + d.error, true); break; }
+          var ut = tableTabs.find(function(t){ return t.connId===d.connId && t.schema===d.schema && t.tableName===d.tableName; });
+          if (ut && activeTableTabId === ut.id) doLoadBrowse(ut);
+          break;
+        }
+
+        // ── Column stats (#67) ───────────────────────────────────────────
+        case 'columnStatsLoaded': {
+          var ct = tableTabs.find(function(t){ return t.connId===d.connId && t.schema===d.schema && t.tableName===d.tableName; });
+          if (!ct) break;
+          ct.colStatsLoading = false;
+          if (d.error) { setStatus('Stats error: ' + d.error, true); }
+          else { ct.colStats = d.stats; }
+          if (activeTableTabId === ct.id) renderActiveTableDetail();
+          break;
+        }
+
+        // ── Snippets (#65) ───────────────────────────────────────────────
+        case 'snippetsLoaded': renderSnippets(d); break;
+
+        // ── Import (#66) ─────────────────────────────────────────────────
+        case 'importPreview': {
+          var overlay = document.getElementById('import-overlay');
+          var infoEl  = document.getElementById('import-info');
+          var tbl     = document.getElementById('import-preview-table');
+          var errEl   = document.getElementById('import-error');
+          var confirmBtn = document.getElementById('btn-import-confirm');
+          if (d.error) { if (errEl) errEl.textContent = d.error; overlay.classList.remove('hidden'); break; }
+          overlay.classList.remove('hidden');
+          overlay._importData = d;
+          if (infoEl) infoEl.textContent = 'Importing ' + d.totalRows + ' rows into ' + d.schema + '.' + d.tableName + '. Preview (first 5):';
+          if (tbl) {
+            var th = d.columns.map(function(c){ return '<th>' + esc(c) + '</th>'; }).join('');
+            var tbody = d.rows.map(function(r){ return '<tr>' + r.map(function(v){ return '<td>' + (v === null ? '<em>null</em>' : esc(String(v))) + '</td>'; }).join('') + '</tr>'; }).join('');
+            tbl.innerHTML = '<thead><tr>' + th + '</tr></thead><tbody>' + tbody + '</tbody>';
+          }
+          if (errEl) errEl.textContent = '';
+          if (confirmBtn) { confirmBtn.disabled = false; }
+          break;
+        }
+        case 'importResult': {
+          document.getElementById('import-overlay').classList.add('hidden');
+          if (d.error) { setStatus('Import failed: ' + d.error, true); }
+          else { setStatus('Imported ' + d.inserted + ' rows.', false); }
+          break;
+        }
+
+        // ── Prisma schema (#60) ──────────────────────────────────────────
+        case 'prismaSchemaGenerated': {
+          var outEl = document.getElementById('prisma-schema-out');
+          var stEl  = document.getElementById('prisma-gen-status');
+          var saveBtn2 = document.getElementById('btn-save-prisma');
+          var copyBtn2 = document.getElementById('btn-copy-prisma-full');
+          if (d.error) { if (stEl) stEl.textContent = 'Error: ' + d.error; if (outEl) outEl.value = ''; break; }
+          if (outEl) outEl.value = d.schema;
+          if (stEl) stEl.textContent = 'Generated ' + (d.schema.match(/^model /mg) || []).length + ' models.';
+          if (saveBtn2) saveBtn2.disabled = false;
+          if (copyBtn2) copyBtn2.disabled = false;
+          break;
+        }
+        case 'prismaSchemasSaved':
+          setStatus('Saved: ' + (d.filePath || ''), false);
+          break;
       }
     });
 
@@ -2811,6 +3163,113 @@
       window.__erdOnData = function (d) { buildERD(d); };
       window.__erdOnTabActivated = function () { renderERDConnSelect(); };
     }());
+
+    // ── Snippets (#65) ─────────────────────────────────────────────────────
+    var snippetsData = [];
+    function renderSnippets(list) {
+      snippetsData = list || [];
+      var container = document.getElementById('snippets-list');
+      if (!container) return;
+      if (!snippetsData.length) {
+        container.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--vscode-descriptionForeground)">No snippets yet. Save a query with the Save button above.</div>';
+        return;
+      }
+      container.innerHTML = snippetsData.map(function(s) {
+        return '<div class="snippet-item" data-snippet-id="' + esc(s.id) + '">'
+          + '<div class="snippet-item-row"><span class="snippet-name">' + esc(s.name) + '</span>'
+          + '<button class="btn-icon" data-delete-snippet="' + esc(s.id) + '" title="Delete snippet" style="flex-shrink:0"><i class="codicon codicon-trash"></i></button>'
+          + '</div>'
+          + '<div class="snippet-sql-preview">' + esc(s.sql.substring(0, 80)) + '</div>'
+          + '</div>';
+      }).join('');
+      container.querySelectorAll('.snippet-item').forEach(function(el) {
+        el.addEventListener('click', function(e) {
+          if (e.target.closest('[data-delete-snippet]')) return;
+          var s = snippetsData.find(function(x){ return x.id === el.dataset.snippetId; });
+          if (s && monacoEditor) monacoEditor.setValue(s.sql);
+          document.getElementById('snippets-panel').classList.add('hidden');
+        });
+      });
+      container.querySelectorAll('[data-delete-snippet]').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          api.send('deleteSnippet', { id: btn.dataset.deleteSnippet });
+        });
+      });
+    }
+    document.getElementById('btn-snippets').addEventListener('click', function() {
+      var panel = document.getElementById('snippets-panel');
+      panel.classList.remove('hidden');
+      api.send('loadSnippets');
+    });
+    document.getElementById('btn-snippets-close').addEventListener('click', function() {
+      document.getElementById('snippets-panel').classList.add('hidden');
+    });
+    document.getElementById('btn-save-snippet').addEventListener('click', function() {
+      var sql = monacoEditor ? monacoEditor.getValue().trim() : '';
+      if (!sql) return;
+      var name = prompt('Snippet name:');
+      if (!name || !name.trim()) return;
+      api.send('saveSnippet', { name: name.trim(), sql: sql });
+    });
+
+    // ── Import overlay (#66) ────────────────────────────────────────────────
+    document.getElementById('btn-import-cancel').addEventListener('click', function() {
+      document.getElementById('import-overlay').classList.add('hidden');
+    });
+    document.getElementById('btn-import-confirm').addEventListener('click', function() {
+      var overlay = document.getElementById('import-overlay');
+      var d = overlay._importData;
+      if (!d) return;
+      document.getElementById('btn-import-confirm').disabled = true;
+      api.send('importTableData', { connId: d.connId, schema: d.schema, tableName: d.tableName, columns: d.columns, rows: d.allRows });
+    });
+
+    // ── Prisma tab (#60) ────────────────────────────────────────────────────
+    (function() {
+      function renderPrismaConnSelect() {
+        var sel = document.getElementById('prisma-conn-select');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">Select connection…</option>'
+          + connections.filter(function(c){ return statuses[c.id] === 'connected'; }).map(function(c){
+            return '<option value="' + esc(c.id) + '">' + esc(c.label) + '</option>';
+          }).join('');
+      }
+      function renderPrismaSchemaSelect(connId) {
+        var sel = document.getElementById('prisma-schema-select');
+        if (!sel) return;
+        var s = schemas[connId] || [];
+        sel.innerHTML = '<option value="">Select schema…</option>'
+          + s.map(function(sc){ return '<option value="' + esc(sc.name) + '">' + esc(sc.name) + '</option>'; }).join('');
+      }
+      document.getElementById('prisma-conn-select').addEventListener('change', function() {
+        renderPrismaSchemaSelect(this.value);
+        var stEl = document.getElementById('prisma-gen-status');
+        if (stEl) stEl.textContent = '';
+        var outEl = document.getElementById('prisma-schema-out');
+        if (outEl) outEl.value = '';
+      });
+      document.getElementById('btn-generate-prisma').addEventListener('click', function() {
+        var connId = document.getElementById('prisma-conn-select').value;
+        var schema = document.getElementById('prisma-schema-select').value;
+        if (!connId || !schema) { setStatus('Select a connection and schema.', true); return; }
+        var stEl = document.getElementById('prisma-gen-status');
+        if (stEl) stEl.textContent = 'Generating…';
+        api.send('generatePrismaSchema', { connId: connId, schema: schema });
+      });
+      document.getElementById('btn-save-prisma').addEventListener('click', function() {
+        var outEl = document.getElementById('prisma-schema-out');
+        if (outEl && outEl.value) api.send('savePrismaSchema', { content: outEl.value });
+      });
+      document.getElementById('btn-copy-prisma-full').addEventListener('click', function() {
+        var outEl = document.getElementById('prisma-schema-out');
+        if (outEl && outEl.value) navigator.clipboard.writeText(outEl.value).then(function(){ setStatus('Copied!', false); });
+      });
+      window.__prismaOnConnections = function() { renderPrismaConnSelect(); };
+      window.__prismaOnSchemas = function(connId) { if (document.getElementById('prisma-conn-select').value === connId) renderPrismaSchemaSelect(connId); };
+    }());
+
+    // SSH fields are now integrated directly into getFormData() and showForm()
 
     // ── Init ───────────────────────────────────────────────────────────────
     switchMainTab(persisted.tab || 'query');

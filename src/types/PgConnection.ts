@@ -6,6 +6,11 @@ export interface PgConnection {
   database: string;
   user: string;
   ssl: boolean;
+  sshEnabled?: boolean;
+  sshHost?: string;
+  sshPort?: number;
+  sshUser?: string;
+  sshKeyPath?: string;
 }
 
 export function validateConnection(conn: Partial<PgConnection>): string[] {

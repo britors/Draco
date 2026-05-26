@@ -1,5 +1,6 @@
-import { BrowserWindow, ipcMain, dialog } from 'electron';
+import { BrowserWindow, ipcMain, dialog, Notification } from 'electron';
 import * as fs from 'fs';
+import * as path from 'path';
 import { randomUUID } from 'crypto';
 
 import { ConnectionManager } from '../db/ConnectionManager';
@@ -9,11 +10,14 @@ import {
   getCompletionData, getTableDDL, getIndexes, getConstraints,
   getFKMap, getTableEstimates,
   getTableDetail, getERDData,
+  browseTableData, updateTableRow, getColumnStats, generatePrismaSchema, importTableRows,
 } from '../db/queries';
 import { validateConnection, PgConnection } from '../types/PgConnection';
 import {
   listConnections, getConnection, saveConnection, deleteConnection, getPassword,
   listHistory, addHistory, getSettings, patchSettings,
+  listSnippets, saveSnippet, deleteSnippet,
+  getSshPassword, storeSshPassword,
 } from './store';
 import { createPanelWindow } from './window';
 
@@ -84,7 +88,9 @@ export function registerIpc(win: BrowserWindow): void {
       // ── Connection CRUD ───────────────────────────────────────────────────
 
       case 'saveConnection': {
-        const { conn, password } = data as { conn: Omit<PgConnection, 'id'> & { id?: string }; password: string };
+        const { conn, password, sshPassword } = data as {
+          conn: Omit<PgConnection, 'id'> & { id?: string }; password: string; sshPassword?: string;
+        };
         const errors = validateConnection(conn);
         if (errors.length > 0) { send('formError', errors.join(', ')); return; }
 
@@ -92,7 +98,8 @@ export function registerIpc(win: BrowserWindow): void {
         if (!finalPassword && conn.id) finalPassword = getPassword(conn.id);
 
         try {
-          saveConnection(conn, finalPassword);
+          const saved = saveConnection(conn, finalPassword);
+          if (sshPassword !== undefined) storeSshPassword(saved.id, sshPassword);
           pushConnections();
         } catch (err) {
           send('formError', `Failed to save connection: ${String(err)}`);
@@ -137,10 +144,11 @@ export function registerIpc(win: BrowserWindow): void {
 
       case 'connect': {
         const { connId } = data as { connId: string };
-        const password = getPassword(connId);
+        const password    = getPassword(connId);
+        const sshPassword = getSshPassword(connId);
         const timeout = getSettings().queryTimeout;
         try {
-          await connManager.connect(connId, password, timeout);
+          await connManager.connect(connId, password, timeout, sshPassword || undefined);
           send('connectionStatus', { id: connId, status: 'connected' });
         } catch (err) {
           const msg = String(err);
@@ -267,6 +275,13 @@ export function registerIpc(win: BrowserWindow): void {
             sql, connId, connLabel: conn?.label ?? connId,
             timestamp: Date.now(), durationMs, rowCount: rows.length,
           });
+          // Desktop notification for long queries (#68)
+          if (durationMs >= 5_000 && Notification.isSupported()) {
+            new Notification({
+              title: 'Query finished',
+              body: `Completed in ${(durationMs / 1000).toFixed(1)}s — ${rows.length} rows`,
+            }).show();
+          }
         } catch (err) {
           const msg = String(err);
           const isConnErr = /connection.*terminated|connection.*closed|connection.*reset|ECONNRESET|ECONNREFUSED|pool.*destroyed/i.test(msg);
@@ -283,6 +298,9 @@ export function registerIpc(win: BrowserWindow): void {
               const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
               send('queryResult', { tabId, columns, rows, durationMs });
               addHistory({ sql, connId, connLabel: conn?.label ?? connId, timestamp: Date.now(), durationMs, rowCount: rows.length });
+              if (durationMs >= 5_000 && Notification.isSupported()) {
+                new Notification({ title: 'Query finished', body: `Completed in ${(durationMs / 1000).toFixed(1)}s — ${rows.length} rows` }).show();
+              }
             } catch (err2) {
               send('connectionStatus', { id: connId, status: 'error' });
               send('queryResult', { tabId, error: String(err2), durationMs: Date.now() - start, isTimeout: false });
@@ -367,6 +385,165 @@ export function registerIpc(win: BrowserWindow): void {
       }
 
 
+
+      // ── Browse table (#62) ───────────────────────────────────────────────
+
+      case 'browseTable': {
+        const { connId, schema, tableName, offset, limit } = data as { connId: string; schema: string; tableName: string; offset: number; limit: number };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('browseTableResult', { connId, schema, tableName, offset, error: 'Not connected.' }); break; }
+        try {
+          const result = await browseTableData(driver, schema, tableName, offset, limit);
+          send('browseTableResult', { connId, schema, tableName, offset, limit, ...result });
+        } catch (err) {
+          send('browseTableResult', { connId, schema, tableName, offset, error: String(err) });
+        }
+        break;
+      }
+
+      // ── Update row (#63) ─────────────────────────────────────────────────
+
+      case 'updateTableRow': {
+        const { connId, schema, tableName, pkCols, pkVals, column, newValue } = data as {
+          connId: string; schema: string; tableName: string;
+          pkCols: string[]; pkVals: unknown[]; column: string; newValue: string | null;
+        };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('updateRowResult', { error: 'Not connected.' }); break; }
+        try {
+          await updateTableRow(driver, schema, tableName, pkCols, pkVals, column, newValue);
+          send('updateRowResult', { ok: true, connId, schema, tableName });
+        } catch (err) {
+          send('updateRowResult', { error: String(err) });
+        }
+        break;
+      }
+
+      // ── Column stats (#67) ───────────────────────────────────────────────
+
+      case 'loadColumnStats': {
+        const { connId, schema, tableName } = data as { connId: string; schema: string; tableName: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('columnStatsLoaded', { connId, schema, tableName, error: 'Not connected.' }); break; }
+        try {
+          const stats = await getColumnStats(driver, schema, tableName);
+          send('columnStatsLoaded', { connId, schema, tableName, stats });
+        } catch (err) {
+          send('columnStatsLoaded', { connId, schema, tableName, error: String(err) });
+        }
+        break;
+      }
+
+      // ── Snippets (#65) ───────────────────────────────────────────────────
+
+      case 'loadSnippets':
+        send('snippetsLoaded', listSnippets());
+        break;
+
+      case 'saveSnippet': {
+        const { name, sql } = data as { name: string; sql: string };
+        const entry = saveSnippet({ name, sql });
+        send('snippetsLoaded', listSnippets());
+        send('snippetSaved', entry);
+        break;
+      }
+
+      case 'deleteSnippet': {
+        const { id } = data as { id: string };
+        deleteSnippet(id);
+        send('snippetsLoaded', listSnippets());
+        break;
+      }
+
+      // ── Import data (#66) ────────────────────────────────────────────────
+
+      case 'openImportDialog': {
+        const { connId, schema, tableName } = data as { connId: string; schema: string; tableName: string };
+        const result = await dialog.showOpenDialog(mainWin, {
+          title: `Import data into ${schema}.${tableName}`,
+          filters: [
+            { name: 'CSV files', extensions: ['csv'] },
+            { name: 'JSON files', extensions: ['json'] },
+          ],
+          properties: ['openFile'],
+        });
+        if (result.canceled || !result.filePaths.length) break;
+        const filePath = result.filePaths[0];
+        const ext = path.extname(filePath).toLowerCase();
+        try {
+          const raw = fs.readFileSync(filePath, 'utf-8');
+          let columns: string[];
+          let rows: (string | null)[][];
+          if (ext === '.json') {
+            const arr: Record<string, unknown>[] = JSON.parse(raw);
+            if (!Array.isArray(arr) || !arr.length) { send('importPreview', { error: 'JSON must be an array of objects.' }); break; }
+            columns = Object.keys(arr[0]);
+            rows = arr.map(r => columns.map(c => r[c] == null ? null : String(r[c])));
+          } else {
+            const lines = raw.split(/\r?\n/).filter(l => l.trim());
+            const parseCsv = (line: string) => {
+              const result: string[] = []; let cur = ''; let inQ = false;
+              for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '"') { if (inQ && line[i + 1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+                else if (ch === ',' && !inQ) { result.push(cur); cur = ''; }
+                else cur += ch;
+              }
+              result.push(cur); return result;
+            };
+            columns = parseCsv(lines[0]);
+            rows = lines.slice(1).map(l => parseCsv(l).map(v => v === '' ? null : v));
+          }
+          send('importPreview', { connId, schema, tableName, columns, rows: rows.slice(0, 5), totalRows: rows.length, allRows: rows });
+        } catch (err) {
+          send('importPreview', { error: String(err) });
+        }
+        break;
+      }
+
+      case 'importTableData': {
+        const { connId, schema, tableName, columns, rows } = data as {
+          connId: string; schema: string; tableName: string;
+          columns: string[]; rows: (string | null)[][];
+        };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('importResult', { error: 'Not connected.' }); break; }
+        try {
+          const inserted = await importTableRows(driver, schema, tableName, columns, rows);
+          send('importResult', { ok: true, inserted });
+        } catch (err) {
+          send('importResult', { error: String(err) });
+        }
+        break;
+      }
+
+      // ── Prisma schema gen (#60) ──────────────────────────────────────────
+
+      case 'generatePrismaSchema': {
+        const { connId, schema } = data as { connId: string; schema: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('prismaSchemaGenerated', { error: 'Not connected.' }); break; }
+        try {
+          const prismaSchema = await generatePrismaSchema(driver, schema);
+          send('prismaSchemaGenerated', { schema: prismaSchema });
+        } catch (err) {
+          send('prismaSchemaGenerated', { error: String(err) });
+        }
+        break;
+      }
+
+      case 'savePrismaSchema': {
+        const { content } = data as { content: string };
+        const result = await dialog.showSaveDialog(mainWin, {
+          defaultPath: 'schema.prisma',
+          filters: [{ name: 'Prisma Schema', extensions: ['prisma'] }],
+        });
+        if (!result.canceled && result.filePath) {
+          fs.writeFileSync(result.filePath, content, 'utf-8');
+          send('prismaSchemasSaved', { ok: true, filePath: result.filePath });
+        }
+        break;
+      }
 
       // ── Activity viewer (#53) ─────────────────────────────────────────────
 

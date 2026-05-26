@@ -104,6 +104,9 @@ function removePassword(id: string): void {
   writeJson('passwords.json', map);
 }
 
+export function getSshPassword(id: string): string { return getPassword('ssh:' + id); }
+export function storeSshPassword(id: string, password: string): void { storePassword('ssh:' + id, password); }
+
 export function getPassword(id: string): string {
   const map = getPasswordMap();
   const encoded = map[id];
@@ -128,6 +131,31 @@ export function addHistory(entry: Omit<HistoryEntry, 'id'>): void {
   entries.unshift({ ...entry, id: randomUUID() });
   if (entries.length > MAX_HISTORY) entries.length = MAX_HISTORY;
   writeJson('history.json', entries);
+}
+
+// ── Query snippets (#65) ─────────────────────────────────────────────────────
+
+export interface SnippetEntry {
+  id: string;
+  name: string;
+  sql: string;
+  createdAt: number;
+}
+
+export function listSnippets(): SnippetEntry[] {
+  return readJson<SnippetEntry[]>('snippets.json', []);
+}
+
+export function saveSnippet(entry: Omit<SnippetEntry, 'id' | 'createdAt'>): SnippetEntry {
+  const snippets = listSnippets();
+  const newEntry: SnippetEntry = { ...entry, id: randomUUID(), createdAt: Date.now() };
+  snippets.push(newEntry);
+  writeJson('snippets.json', snippets);
+  return newEntry;
+}
+
+export function deleteSnippet(id: string): void {
+  writeJson('snippets.json', listSnippets().filter(s => s.id !== id));
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
