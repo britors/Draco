@@ -9,6 +9,7 @@ license=('MIT')
 depends=('gtk3' 'nss' 'alsa-lib' 'libnotify' 'libxss' 'libxtst')
 provides=('prisma4postgres')
 conflicts=('prisma4postgres')
+options=('!debug' '!strip')
 source=("https://github.com/britors/Prisma4Postgres/releases/download/v${pkgver}/prisma4postgres_${pkgver}_amd64.deb"
         "https://raw.githubusercontent.com/britors/Prisma4Postgres/main/logo.svg")
 sha256sums=('b4bf1a898ce9c3a81e980807c30fe14d9126f6698b68a2ba9cfb013acd7cc7da'
