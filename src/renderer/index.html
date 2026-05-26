@@ -1082,7 +1082,14 @@
       var actionEl = e.target.closest('[data-action]');
       if (actionEl) { e.stopPropagation(); handleTreeAction(actionEl); return; }
       var rowEl = e.target.closest('.tree-row[data-node]');
-      if (rowEl && rowEl.dataset.node) toggleNode(rowEl.dataset.node);
+      if (!rowEl || !rowEl.dataset.node) return;
+      var nid = rowEl.dataset.node;
+      // disconnected connection rows: skip toggle so dblclick can fire reliably
+      if (nid.startsWith('c:')) {
+        var st = statuses[nid.slice(2)] || 'disconnected';
+        if (st === 'disconnected' || st === 'error') return;
+      }
+      toggleNode(nid);
     });
 
     document.getElementById('tree').addEventListener('dblclick', function (e) {
