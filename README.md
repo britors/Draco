@@ -18,28 +18,6 @@
 
 ---
 
-## Layout
-
-```
-┌──────────────────┬──────────────────────────────────────────────────────┐
-│                  │  [Query] [History] [Activity]  [users] [orders] …    │
-│  Explorer        ├──────────────────────────────────────────────────────┤
-│  (left sidebar)  │  sql> ______________________________  ← line editor  │
-│                  │  Monaco SQL editor                                   │
-│  + connections   ├╌╌╌ drag to resize ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
-│  └ schemas       │  Result grid / EXPLAIN plan  │  Row detail           │
-│    └ tables      └──────────────────────────────────────────────────────┘
-│      └ columns
-└──────────────────
-```
-
-- **Left sidebar** always visible, drag handle to resize (160–600 px, persisted)
-- **Right area** holds Query, History, Activity tabs + dynamic table detail tabs
-- **Query/Results split** resizable (default 50/50, persisted per session)
-- **Row detail panel** slides in on the right when you click a result row
-
----
-
 ## Features
 
 ### Explorer (left sidebar)
@@ -182,6 +160,17 @@ Passwords are encrypted with `electron.safeStorage` and stored separately in `us
 
 ---
 
+## Layout
+
+![Prisma4Postgres — Explorer sidebar and SQL query editor](image.png)
+
+- **Left sidebar** always visible, drag handle to resize (160–600 px, persisted)
+- **Right area** holds Query, History, Activity tabs + dynamic table detail tabs
+- **Query/Results split** resizable (default 50/50, persisted per session)
+- **Row detail panel** slides in on the right when you click a result row
+
+---
+
 ## Development
 
 ### Prerequisites
@@ -223,30 +212,31 @@ Produces an **AppImage** (Linux), **dmg** (macOS), or **NSIS installer** (Window
 
 > Requires [flatpak-builder](https://docs.flatpak.org/en/latest/flatpak-builder.html) and the `flatpak-node-generator` tool.
 
-**1. Install build tools**
+#### 1. Install build tools
 
 ```bash
-pip install flatpak-node-generator
-flatpak install flathub org.freedesktop.Sdk//23.08 org.freedesktop.Platform//23.08
-flatpak install flathub org.electronjs.Electron2.BaseApp//23.08
-flatpak install flathub org.freedesktop.Sdk.Extension.node20//23.08
+# Install the official flatpak-node-generator (not the outdated PyPI package)
+pip install git+https://github.com/flatpak/flatpak-builder-tools.git#subdirectory=node
+
+flatpak install flathub org.freedesktop.Sdk//24.08 org.freedesktop.Platform//24.08
+flatpak install flathub org.electronjs.Electron2.BaseApp//24.08
+flatpak install flathub org.freedesktop.Sdk.Extension.node20//24.08
 ```
 
-**2. Generate offline npm source list**
+#### 2. Generate offline npm source list
 
 ```bash
 npm run flatpak:gen-sources
 # produces flatpak/generated-sources.json
 ```
 
-**3. Build and install**
+#### 3. Build and install
 
 ```bash
-npm run flatpak:build
 flatpak-builder --user --install --force-clean build-dir flatpak/br.com.w3ti.Prisma4Postgres.yml
 ```
 
-**4. Run**
+#### 4. Run
 
 ```bash
 flatpak run br.com.w3ti.Prisma4Postgres
