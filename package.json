@@ -2,7 +2,7 @@
   "name": "prisma4postgres",
   "productName": "Prisma4Postgres",
   "description": "PostgreSQL explorer and Prisma ORM integration",
-  "version": "10.0.1",
+  "version": "10.4.0",
   "author": "britors",
   "license": "MIT",
   "repository": {
@@ -31,7 +31,7 @@
       "out/**/*"
     ],
     "linux": {
-      "target": "AppImage"
+      "target": ["deb", "rpm"]
     },
     "win": {
       "target": "nsis"
