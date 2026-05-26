@@ -16,7 +16,6 @@ import { validateConnection, PgConnection } from '../types/PgConnection';
 import {
   listConnections, getConnection, saveConnection, deleteConnection, getPassword,
   listHistory, addHistory, clearHistory, getSettings, patchSettings,
-  listSnippets, saveSnippet, deleteSnippet,
   getSshPassword, storeSshPassword,
 } from './store';
 import { createPanelWindow } from './window';
@@ -435,27 +434,6 @@ export function registerIpc(win: BrowserWindow): void {
         } catch (err) {
           send('columnStatsLoaded', { connId, schema, tableName, error: String(err) });
         }
-        break;
-      }
-
-      // ── Snippets (#65) ───────────────────────────────────────────────────
-
-      case 'loadSnippets':
-        send('snippetsLoaded', listSnippets());
-        break;
-
-      case 'saveSnippet': {
-        const { name, sql } = data as { name: string; sql: string };
-        const entry = saveSnippet({ name, sql });
-        send('snippetsLoaded', listSnippets());
-        send('snippetSaved', entry);
-        break;
-      }
-
-      case 'deleteSnippet': {
-        const { id } = data as { id: string };
-        deleteSnippet(id);
-        send('snippetsLoaded', listSnippets());
         break;
       }
 

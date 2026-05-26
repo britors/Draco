@@ -316,17 +316,6 @@
     .browse-cell-editing { padding:0!important; }
     .browse-cell-editing input { width:100%;border:none;background:var(--vscode-input-background);color:var(--vscode-input-foreground);font-size:12px;padding:2px 4px;outline:2px solid var(--vscode-focusBorder);outline-offset:-1px; }
 
-    /* ── Snippets panel (#65) ── */
-    .snippets-panel { position:absolute;right:0;top:0;bottom:0;width:290px;background:var(--vscode-sideBar-background);border-left:1px solid var(--vscode-panel-border);display:flex;flex-direction:column;z-index:20; }
-    .snippets-panel.hidden { display:none; }
-    .snippets-hdr { display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--vscode-panel-border);background:var(--vscode-editorGroupHeader-tabsBackground); }
-    .snippets-hdr-title { flex:1;font-size:12px;font-weight:600; }
-    .snippets-list { flex:1;overflow-y:auto; }
-    .snippet-item { padding:6px 10px;border-bottom:1px solid rgba(128,128,128,0.06);cursor:pointer; }
-    .snippet-item:hover { background:var(--vscode-list-hoverBackground); }
-    .snippet-item-row { display:flex;align-items:center;gap:4px; }
-    .snippet-name { font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-    .snippet-sql-preview { font-size:10px;color:var(--vscode-descriptionForeground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--vscode-editor-font-family,monospace);margin-top:2px; }
 
     /* ── Import dialog (#66) ── */
     .import-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;display:flex;align-items:center;justify-content:center; }
@@ -503,7 +492,6 @@
         <button class="btn btn-secondary hidden" id="btn-cancel"><i class="codicon codicon-stop-circle"></i>Cancel</button>
         <button class="btn btn-secondary" id="btn-explain"><i class="codicon codicon-graph"></i>Explain</button>
         <div style="flex:1"></div>
-        <button class="btn btn-secondary" id="btn-snippets" title="Saved query snippets"><i class="codicon codicon-bookmark"></i>Snippets</button>
         <div style="display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:3px;background:var(--vscode-badge-background);font-size:10px;color:var(--vscode-badge-foreground);opacity:0.6;user-select:none">F8 / Ctrl+Enter</div>
       </div>
 
@@ -530,15 +518,6 @@
             </div>
           </div>
         </div>
-      </div>
-      <!-- Snippets panel (#65) -->
-      <div class="snippets-panel hidden" id="snippets-panel">
-        <div class="snippets-hdr">
-          <span class="snippets-hdr-title"><i class="codicon codicon-bookmark"></i> Snippets</span>
-          <button class="btn btn-secondary" id="btn-save-snippet" title="Save current query as snippet" style="padding:2px 8px;font-size:11px"><i class="codicon codicon-add"></i>Save</button>
-          <button class="btn-icon" id="btn-snippets-close"><i class="codicon codicon-close"></i></button>
-        </div>
-        <div class="snippets-list" id="snippets-list"></div>
       </div>
     </div>
 
@@ -2284,9 +2263,6 @@
           break;
         }
 
-        // ── Snippets (#65) ───────────────────────────────────────────────
-        case 'snippetsLoaded': renderSnippets(d); break;
-
         // ── Import (#66) ─────────────────────────────────────────────────
         case 'importPreview': {
           var overlay = document.getElementById('import-overlay');
@@ -3104,55 +3080,6 @@
       window.__erdOnData = function (d) { buildERD(d); };
       window.__erdOnTabActivated = function () { renderERDConnSelect(); };
     }());
-
-    // ── Snippets (#65) ─────────────────────────────────────────────────────
-    var snippetsData = [];
-    function renderSnippets(list) {
-      snippetsData = list || [];
-      var container = document.getElementById('snippets-list');
-      if (!container) return;
-      if (!snippetsData.length) {
-        container.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--vscode-descriptionForeground)">No snippets yet. Save a query with the Save button above.</div>';
-        return;
-      }
-      container.innerHTML = snippetsData.map(function(s) {
-        return '<div class="snippet-item" data-snippet-id="' + esc(s.id) + '">'
-          + '<div class="snippet-item-row"><span class="snippet-name">' + esc(s.name) + '</span>'
-          + '<button class="btn-icon" data-delete-snippet="' + esc(s.id) + '" title="Delete snippet" style="flex-shrink:0"><i class="codicon codicon-trash"></i></button>'
-          + '</div>'
-          + '<div class="snippet-sql-preview">' + esc(s.sql.substring(0, 80)) + '</div>'
-          + '</div>';
-      }).join('');
-      container.querySelectorAll('.snippet-item').forEach(function(el) {
-        el.addEventListener('click', function(e) {
-          if (e.target.closest('[data-delete-snippet]')) return;
-          var s = snippetsData.find(function(x){ return x.id === el.dataset.snippetId; });
-          if (s && monacoEditor) monacoEditor.setValue(s.sql);
-          document.getElementById('snippets-panel').classList.add('hidden');
-        });
-      });
-      container.querySelectorAll('[data-delete-snippet]').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          api.send('deleteSnippet', { id: btn.dataset.deleteSnippet });
-        });
-      });
-    }
-    document.getElementById('btn-snippets').addEventListener('click', function() {
-      var panel = document.getElementById('snippets-panel');
-      panel.classList.remove('hidden');
-      api.send('loadSnippets');
-    });
-    document.getElementById('btn-snippets-close').addEventListener('click', function() {
-      document.getElementById('snippets-panel').classList.add('hidden');
-    });
-    document.getElementById('btn-save-snippet').addEventListener('click', function() {
-      var sql = monacoEditor ? monacoEditor.getValue().trim() : '';
-      if (!sql) return;
-      var name = prompt('Snippet name:');
-      if (!name || !name.trim()) return;
-      api.send('saveSnippet', { name: name.trim(), sql: sql });
-    });
 
     // ── Import overlay (#66) ────────────────────────────────────────────────
     document.getElementById('btn-import-cancel').addEventListener('click', function() {

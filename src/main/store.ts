@@ -137,31 +137,6 @@ export function clearHistory(): void {
   writeJson('history.json', []);
 }
 
-// ── Query snippets (#65) ─────────────────────────────────────────────────────
-
-export interface SnippetEntry {
-  id: string;
-  name: string;
-  sql: string;
-  createdAt: number;
-}
-
-export function listSnippets(): SnippetEntry[] {
-  return readJson<SnippetEntry[]>('snippets.json', []);
-}
-
-export function saveSnippet(entry: Omit<SnippetEntry, 'id' | 'createdAt'>): SnippetEntry {
-  const snippets = listSnippets();
-  const newEntry: SnippetEntry = { ...entry, id: randomUUID(), createdAt: Date.now() };
-  snippets.push(newEntry);
-  writeJson('snippets.json', snippets);
-  return newEntry;
-}
-
-export function deleteSnippet(id: string): void {
-  writeJson('snippets.json', listSnippets().filter(s => s.id !== id));
-}
-
 // ── Settings ─────────────────────────────────────────────────────────────────
 
 export function getSettings(): AppSettings {
