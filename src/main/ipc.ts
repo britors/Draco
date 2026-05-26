@@ -8,7 +8,7 @@ import {
   getSchemas, getTables, getColumns, getFunctions, getFunctionParams,
   getCompletionData, getTableDDL, getIndexes, getConstraints,
   getFKMap, getTableEstimates,
-  getTableDetail,
+  getTableDetail, getERDData,
 } from '../db/queries';
 import { validateConnection, PgConnection } from '../types/PgConnection';
 import {
@@ -437,6 +437,19 @@ export function registerIpc(win: BrowserWindow): void {
 
       case 'saveSettings': {
         patchSettings(data as Record<string, unknown>);
+        break;
+      }
+
+      case 'loadERDData': {
+        const { connId, schema } = data as { connId: string; schema: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('erdDataLoaded', { connId, schema, error: 'Not connected.' }); return; }
+        try {
+          const erd = await getERDData(driver, schema);
+          send('erdDataLoaded', { connId, schema, ...erd });
+        } catch (err) {
+          send('erdDataLoaded', { connId, schema, error: String(err) });
+        }
         break;
       }
     }

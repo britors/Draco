@@ -326,6 +326,14 @@
     .ct-sql-preview { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 3px; padding: 10px 12px; font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; white-space: pre; overflow-x: auto; color: var(--vscode-editor-foreground); min-height: 60px; }
     .ct-toolbar { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
 
+    /* ── ERD ── */
+    .erd-node-card { cursor: grab; }
+    .erd-node-card:active { cursor: grabbing; }
+    .erd-node-card.selected .erd-card-bg { stroke: var(--vscode-focusBorder); stroke-width: 2; }
+    .erd-edge { stroke: #6ea6ff; stroke-width: 1.5; fill: none; opacity: 0.45; transition: opacity 0.15s; }
+    .erd-edge.highlighted { opacity: 1; stroke-width: 2; }
+    .erd-edge.dimmed { opacity: 0.1; }
+
     /* Error toast */
     .toast { position: fixed; bottom: 16px; right: 16px; background: var(--vscode-errorForeground); color: #fff; padding: 8px 14px; border-radius: 3px; font-size: 12px; max-width: 360px; z-index: 200; opacity: 1; transition: opacity 0.3s; }
     .toast.fade { opacity: 0; }
@@ -415,6 +423,7 @@
       <button class="tab" data-tab="query"><i class="codicon codicon-file-code"></i>Query</button>
       <button class="tab" data-tab="history"><i class="codicon codicon-history"></i>History</button>
       <button class="tab" data-tab="activity"><i class="codicon codicon-pulse"></i>Activity</button>
+      <button class="tab" data-tab="erd"><i class="codicon codicon-type-hierarchy"></i>ERD</button>
       <div id="table-tab-list" style="display:flex;overflow-x:auto;"></div>
     </div>
 
@@ -491,6 +500,34 @@
       </div>
       <div class="results-section" id="activity-results" style="overflow:auto">
         <div class="results-placeholder">Select a connection and click Refresh</div>
+      </div>
+    </div>
+
+    <!-- ERD panel -->
+    <div class="panel hidden" id="panel-erd">
+      <div class="query-toolbar" style="gap:8px;flex-shrink:0">
+        <span style="font-weight:600;font-size:12px">ERD</span>
+        <select class="conn-select" id="erd-conn-select" style="max-width:200px"><option value="">Select connection…</option></select>
+        <select class="conn-select" id="erd-schema-select" style="max-width:160px"><option value="">Schema…</option></select>
+        <button class="btn btn-secondary" id="btn-erd-load"><i class="codicon codicon-refresh"></i>Load</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-secondary btn-xs" id="btn-erd-fit" title="Fit to screen"><i class="codicon codicon-screen-full"></i>Fit</button>
+        <button class="btn btn-secondary btn-xs" id="btn-erd-export-svg" title="Export SVG"><i class="codicon codicon-export"></i>SVG</button>
+        <button class="btn btn-secondary btn-xs" id="btn-erd-export-png" title="Export PNG"><i class="codicon codicon-file-media"></i>PNG</button>
+      </div>
+      <div id="erd-canvas-wrap" style="flex:1;overflow:hidden;position:relative;background:var(--vscode-editor-background)">
+        <div class="results-placeholder" id="erd-placeholder">Select a connection and schema, then click Load</div>
+        <svg id="erd-svg" style="width:100%;height:100%;display:none;cursor:grab" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="erd-arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L8,3 z" fill="#6ea6ff" opacity="0.7"/>
+            </marker>
+          </defs>
+          <g id="erd-viewport">
+            <g id="erd-edges"></g>
+            <g id="erd-nodes"></g>
+          </g>
+        </svg>
       </div>
     </div>
 
@@ -1041,6 +1078,7 @@
       if (tab === 'query') { setTimeout(ensureMonacoReady, 30); renderQueryTabs(); renderConnSelect(); if (window.__initQuerySplit) window.__initQuerySplit(); }
       if (tab === 'history') { if (!historyEntries.length) api.send('loadHistory'); renderHistory(); }
       if (tab === 'activity') { renderActivityConnSelect(); }
+      if (tab === 'erd') { if (window.__erdOnTabActivated) window.__erdOnTabActivated(); }
       if (tab === 'create-table') { renderCreateTable(); }
       if (tab.indexOf('tdetail-') === 0) { activeTableTabId = tab; renderActiveTableDetail(); }
     }
@@ -1791,6 +1829,7 @@
           renderTree();
           if (!document.getElementById('view-form').classList.contains('hidden')) showTree();
           if (persisted.tab === 'query') renderConnSelect();
+          if (window.__erdOnConnections) window.__erdOnConnections();
           break;
         case 'updateStatuses':
           statuses = d || {}; renderTree(); break;
@@ -1802,7 +1841,10 @@
           if (persisted.tab === 'query') renderConnSelect();
           break;
         }
-        case 'schemasLoaded': schemas[d.connId] = d.schemas; delete loadingNodes['c:' + d.connId]; renderTree(); break;
+        case 'schemasLoaded':
+          schemas[d.connId] = d.schemas; delete loadingNodes['c:' + d.connId]; renderTree();
+          if (window.__erdOnSchemas) window.__erdOnSchemas(d.connId, d.schemas);
+          break;
         case 'tablesLoaded':  tables[d.connId + ':' + d.schema] = d.tables; delete loadingNodes['tg:' + d.connId + ':' + d.schema]; renderTree(); break;
         case 'columnsLoaded': cols[d.connId + ':' + d.schema + ':' + d.table] = d.columns; delete loadingNodes[(d.isView ? 'v:' : 't:') + d.connId + ':' + d.schema + ':' + d.table]; renderTree(); break;
         case 'functionsLoaded': funcs[d.connId + ':' + d.schema] = d.functions; delete loadingNodes['fg:' + d.connId + ':' + d.schema]; renderTree(); break;
@@ -1917,6 +1959,9 @@
           });
           break;
         }
+        case 'erdDataLoaded':
+          if (window.__erdOnData) window.__erdOnData(d);
+          break;
         case 'tableDetailLoaded': {
           var td = tableTabs.find(function(t) {
             return t.connId === d.connId && t.schema === d.schema && t.tableName === d.tableName;
@@ -2313,6 +2358,456 @@
         e.preventDefault(); newQTab();
       }
     });
+
+    // ── ERD ───────────────────────────────────────────────────────────────
+    (function () {
+      var CARD_W = 210;
+      var HEADER_H = 28;
+      var ROW_H = 20;
+      var CARD_PAD = 10;
+
+      var erdConnSelect    = document.getElementById('erd-conn-select');
+      var erdSchemaSelect  = document.getElementById('erd-schema-select');
+      var erdSvg           = document.getElementById('erd-svg');
+      var erdViewport      = document.getElementById('erd-viewport');
+      var erdEdgesLayer    = document.getElementById('erd-edges');
+      var erdNodesLayer    = document.getElementById('erd-nodes');
+      var erdPlaceholder   = document.getElementById('erd-placeholder');
+
+      var erdNodes     = [];   // { name, type, columns, x, y, w, h }
+      var erdRelations = [];
+      var erdPan       = { x: 40, y: 40, scale: 1 };
+      var erdSelected  = null;
+      var erdDrag      = null; // { nodeIdx, startX, startY, origX, origY }
+      var erdPanning   = null; // { startX, startY, origPanX, origPanY }
+
+      function svgEsc(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      function cardHeight(node) {
+        return HEADER_H + node.columns.length * ROW_H + 6;
+      }
+
+      function renderERDConnSelect() {
+        var opts = '<option value="">Select connection…</option>';
+        connections.forEach(function (c) {
+          opts += '<option value="' + esc(c.id) + '"' + (statuses[c.id] === 'connected' ? '' : ' disabled') + '>'
+            + esc(c.label) + (statuses[c.id] === 'connected' ? '' : ' (disconnected)') + '</option>';
+        });
+        erdConnSelect.innerHTML = opts;
+      }
+
+      erdConnSelect.addEventListener('change', function () {
+        erdSchemaSelect.innerHTML = '<option value="">Schema…</option>';
+        if (!erdConnSelect.value) return;
+        var connSchemas = schemas[erdConnSelect.value];
+        if (connSchemas) populateERDSchemas(connSchemas);
+        else api.send('loadSchemas', { connId: erdConnSelect.value });
+      });
+
+      function populateERDSchemas(list) {
+        var opts = '<option value="">Schema…</option>';
+        list.forEach(function (s) { opts += '<option value="' + esc(s.name) + '">' + esc(s.name) + '</option>'; });
+        erdSchemaSelect.innerHTML = opts;
+        if (list.length === 1) erdSchemaSelect.value = list[0].name;
+      }
+
+      document.getElementById('btn-erd-load').addEventListener('click', function () {
+        var connId = erdConnSelect.value;
+        var schema = erdSchemaSelect.value;
+        if (!connId || !schema) return;
+        erdPlaceholder.textContent = 'Loading…';
+        erdPlaceholder.style.display = 'flex';
+        erdSvg.style.display = 'none';
+        api.send('loadERDData', { connId: connId, schema: schema });
+      });
+
+      // Build ERD from data received from main
+      function buildERD(data) {
+        if (data.error) {
+          erdPlaceholder.textContent = 'Error: ' + data.error;
+          erdPlaceholder.style.display = 'flex';
+          erdSvg.style.display = 'none';
+          return;
+        }
+        if (!data.tables || !data.tables.length) {
+          erdPlaceholder.textContent = 'No tables found in this schema.';
+          erdPlaceholder.style.display = 'flex';
+          erdSvg.style.display = 'none';
+          return;
+        }
+
+        // Build node list
+        erdNodes = data.tables.map(function (t) {
+          return { name: t.name, type: t.type, columns: t.columns, x: 0, y: 0, w: CARD_W, h: 0 };
+        });
+        erdNodes.forEach(function (n) { n.h = cardHeight(n); });
+        erdRelations = data.relations || [];
+        erdSelected = null;
+
+        runForceLayout();
+        fitView();
+        renderERD();
+
+        erdPlaceholder.style.display = 'none';
+        erdSvg.style.display = '';
+      }
+
+      // Force-directed layout
+      function runForceLayout() {
+        var n = erdNodes.length;
+        if (!n) return;
+        var cols = Math.max(1, Math.ceil(Math.sqrt(n)));
+        var GAP_X = 80, GAP_Y = 60;
+        // Grid init
+        erdNodes.forEach(function (node, i) {
+          node.x = (i % cols) * (CARD_W + GAP_X) + 40;
+          node.y = Math.floor(i / cols) * (240 + GAP_Y) + 40;
+          node.vx = 0; node.vy = 0;
+        });
+
+        var nodeMap = {};
+        erdNodes.forEach(function (n) { nodeMap[n.name] = n; });
+
+        for (var iter = 0; iter < 120; iter++) {
+          var alpha = Math.max(0.05, 1 - iter / 120);
+
+          // Repulsion
+          for (var i = 0; i < erdNodes.length; i++) {
+            for (var j = i + 1; j < erdNodes.length; j++) {
+              var a = erdNodes[i], b = erdNodes[j];
+              var dx = b.x - a.x, dy = b.y - a.y;
+              var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+              var force = 18000 / (dist * dist);
+              var fx = force * dx / dist, fy = force * dy / dist;
+              a.vx -= fx; a.vy -= fy;
+              b.vx += fx; b.vy += fy;
+            }
+          }
+
+          // Attraction along FK edges
+          erdRelations.forEach(function (rel) {
+            var a = nodeMap[rel.fromTable], b = nodeMap[rel.toTable];
+            if (!a || !b || a === b) return;
+            var dx = b.x - a.x, dy = b.y - a.y;
+            var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            var target = CARD_W + GAP_X * 2;
+            var force = (dist - target) * 0.08;
+            var fx = force * dx / dist, fy = force * dy / dist;
+            a.vx += fx; a.vy += fy;
+            b.vx -= fx; b.vy -= fy;
+          });
+
+          // Gravity to center
+          var cx = 0, cy = 0;
+          erdNodes.forEach(function (nd) { cx += nd.x; cy += nd.y; });
+          cx /= erdNodes.length; cy /= erdNodes.length;
+          erdNodes.forEach(function (nd) {
+            nd.vx += (cx - nd.x) * 0.008;
+            nd.vy += (cy - nd.y) * 0.008;
+          });
+
+          // Apply
+          erdNodes.forEach(function (nd) {
+            nd.x += nd.vx * alpha;
+            nd.y += nd.vy * alpha;
+            nd.vx *= 0.8; nd.vy *= 0.8;
+          });
+        }
+      }
+
+      function fitView() {
+        var wrap = document.getElementById('erd-canvas-wrap');
+        var W = wrap.clientWidth || 800, H = wrap.clientHeight || 600;
+        if (!erdNodes.length) return;
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        erdNodes.forEach(function (nd) {
+          minX = Math.min(minX, nd.x);
+          minY = Math.min(minY, nd.y);
+          maxX = Math.max(maxX, nd.x + nd.w);
+          maxY = Math.max(maxY, nd.y + nd.h);
+        });
+        var pad = 40;
+        var scaleX = (W - pad * 2) / (maxX - minX || 1);
+        var scaleY = (H - pad * 2) / (maxY - minY || 1);
+        erdPan.scale = Math.min(scaleX, scaleY, 1.5);
+        erdPan.x = pad - minX * erdPan.scale;
+        erdPan.y = pad - minY * erdPan.scale;
+        applyViewport();
+      }
+
+      function applyViewport() {
+        erdViewport.setAttribute('transform',
+          'translate(' + erdPan.x + ',' + erdPan.y + ') scale(' + erdPan.scale + ')');
+      }
+
+      // Render SVG
+      function renderERD() {
+        renderERDEdges();
+        renderERDNodes();
+      }
+
+      function renderERDEdges() {
+        var nodeMap = {};
+        erdNodes.forEach(function (nd) { nodeMap[nd.name] = nd; });
+
+        var html = '';
+        erdRelations.forEach(function (rel, idx) {
+          var a = nodeMap[rel.fromTable], b = nodeMap[rel.toTable];
+          if (!a || !b) return;
+          // Find column row indices
+          var fromIdx = a.columns.findIndex(function (c) { return c.name === rel.fromColumn; });
+          var toIdx   = b.columns.findIndex(function (c) { return c.name === rel.toColumn; });
+          var ay = a.y + HEADER_H + (fromIdx >= 0 ? fromIdx * ROW_H + ROW_H / 2 : ROW_H / 2);
+          var by = b.y + HEADER_H + (toIdx   >= 0 ? toIdx   * ROW_H + ROW_H / 2 : ROW_H / 2);
+          // Exit from right of a, enter left of b (swap if needed)
+          var ax, bx, cp1x, cp2x;
+          if (a.x + a.w / 2 <= b.x + b.w / 2) {
+            ax = a.x + a.w; bx = b.x;
+          } else {
+            ax = a.x; bx = b.x + b.w;
+          }
+          cp1x = ax + (bx - ax) * 0.5;
+          cp2x = ax + (bx - ax) * 0.5;
+          var d = 'M' + ax + ',' + ay + ' C' + cp1x + ',' + ay + ' ' + cp2x + ',' + by + ' ' + bx + ',' + by;
+          html += '<path class="erd-edge" data-eidx="' + idx + '" d="' + d + '" marker-end="url(#erd-arrow)"/>';
+        });
+        erdEdgesLayer.innerHTML = html;
+      }
+
+      function renderERDNodes() {
+        var html = '';
+        erdNodes.forEach(function (nd, idx) {
+          var h = nd.h;
+          var isView = nd.type === 'view';
+          var headerFill = isView ? '#1a0d2e' : '#0d1a2e';
+          var strokeColor = isView ? '#ff61d3' : '#b44fff';
+          var typeLabel = isView ? 'VIEW' : 'TABLE';
+          var typeLabelColor = isView ? '#ff61d3' : '#b44fff';
+
+          html += '<g class="erd-node-card" data-nidx="' + idx + '" transform="translate(' + nd.x + ',' + nd.y + ')">';
+          // Card background
+          html += '<rect class="erd-card-bg" width="' + CARD_W + '" height="' + h + '" rx="3"'
+            + ' fill="var(--vscode-editor-background)" stroke="' + strokeColor + '" stroke-width="1" stroke-opacity="0.5"/>';
+          // Header bg
+          html += '<rect width="' + CARD_W + '" height="' + HEADER_H + '" rx="3" fill="' + headerFill + '"/>';
+          html += '<rect y="' + (HEADER_H - 4) + '" width="' + CARD_W + '" height="4" fill="' + headerFill + '"/>';
+          // Table name
+          html += '<text x="' + CARD_PAD + '" y="18" font-family="var(--vscode-font-family)" font-size="12"'
+            + ' font-weight="700" fill="var(--vscode-foreground)">' + svgEsc(nd.name) + '</text>';
+          // Type badge
+          html += '<text x="' + (CARD_W - CARD_PAD) + '" y="18" text-anchor="end" font-family="var(--vscode-font-family)"'
+            + ' font-size="9" font-weight="700" fill="' + typeLabelColor + '">' + typeLabel + '</text>';
+          // Divider
+          html += '<line x1="0" y1="' + HEADER_H + '" x2="' + CARD_W + '" y2="' + HEADER_H + '"'
+            + ' stroke="' + strokeColor + '" stroke-width="1" opacity="0.3"/>';
+
+          // Columns
+          nd.columns.forEach(function (col, ci) {
+            var cy = HEADER_H + ci * ROW_H + ROW_H * 0.72;
+            var rowY = HEADER_H + ci * ROW_H;
+            // Zebra
+            if (ci % 2 === 1) {
+              html += '<rect x="0" y="' + rowY + '" width="' + CARD_W + '" height="' + ROW_H
+                + '" fill="rgba(255,255,255,0.02)"/>';
+            }
+            // Badges
+            var badgeX = CARD_PAD;
+            if (col.isPk) {
+              html += '<rect x="' + badgeX + '" y="' + (rowY + 4) + '" width="18" height="12" rx="2" fill="#cca700"/>';
+              html += '<text x="' + (badgeX + 9) + '" y="' + (rowY + 13) + '" text-anchor="middle"'
+                + ' font-family="var(--vscode-font-family)" font-size="8" font-weight="700" fill="#000">PK</text>';
+              badgeX += 22;
+            } else if (col.isFk) {
+              html += '<rect x="' + badgeX + '" y="' + (rowY + 4) + '" width="16" height="12" rx="2" fill="#007acc"/>';
+              html += '<text x="' + (badgeX + 8) + '" y="' + (rowY + 13) + '" text-anchor="middle"'
+                + ' font-family="var(--vscode-font-family)" font-size="8" font-weight="700" fill="#fff">FK</text>';
+              badgeX += 20;
+            }
+            // Column name
+            html += '<text x="' + badgeX + '" y="' + cy + '" font-family="var(--vscode-font-family)" font-size="11"'
+              + ' fill="var(--vscode-foreground)">' + svgEsc(col.name) + '</text>';
+            // Type (right-aligned, clipped)
+            var typeColor = col.isNullable ? 'var(--vscode-descriptionForeground)' : '#8888aa';
+            html += '<text x="' + (CARD_W - CARD_PAD) + '" y="' + cy + '" text-anchor="end"'
+              + ' font-family="var(--vscode-font-family)" font-size="10" fill="' + typeColor + '">'
+              + svgEsc(col.dataType) + '</text>';
+          });
+
+          html += '</g>';
+        });
+        erdNodesLayer.innerHTML = html;
+
+        // Attach drag listeners to node groups
+        erdNodesLayer.querySelectorAll('.erd-node-card').forEach(function (el) {
+          el.addEventListener('mousedown', onNodeMousedown);
+          el.addEventListener('click', onNodeClick);
+        });
+      }
+
+      // Node drag
+      function onNodeMousedown(e) {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        var idx = parseInt(e.currentTarget.dataset.nidx, 10);
+        var nd = erdNodes[idx];
+        var svgPt = svgPoint(e);
+        erdDrag = { nodeIdx: idx, startX: svgPt.x, startY: svgPt.y, origX: nd.x, origY: nd.y };
+        erdSvg.style.cursor = 'grabbing';
+        e.currentTarget.style.cursor = 'grabbing';
+      }
+
+      // Node click — highlight relations
+      function onNodeClick(e) {
+        e.stopPropagation();
+        var idx = parseInt(e.currentTarget.dataset.nidx, 10);
+        var nd = erdNodes[idx];
+        if (erdSelected === nd.name) {
+          erdSelected = null;
+        } else {
+          erdSelected = nd.name;
+        }
+        applyEdgeHighlight();
+        applyNodeHighlight();
+      }
+
+      function applyEdgeHighlight() {
+        erdEdgesLayer.querySelectorAll('.erd-edge').forEach(function (el) {
+          var idx = parseInt(el.dataset.eidx, 10);
+          var rel = erdRelations[idx];
+          if (!erdSelected) {
+            el.classList.remove('highlighted', 'dimmed');
+          } else if (rel && (rel.fromTable === erdSelected || rel.toTable === erdSelected)) {
+            el.classList.add('highlighted'); el.classList.remove('dimmed');
+          } else {
+            el.classList.add('dimmed'); el.classList.remove('highlighted');
+          }
+        });
+      }
+
+      function applyNodeHighlight() {
+        erdNodesLayer.querySelectorAll('.erd-node-card').forEach(function (el) {
+          var idx = parseInt(el.dataset.nidx, 10);
+          var nd = erdNodes[idx];
+          var related = erdSelected && erdRelations.some(function (r) {
+            return (r.fromTable === erdSelected && r.toTable === nd.name)
+                || (r.toTable === erdSelected && r.fromTable === nd.name);
+          });
+          el.classList.toggle('selected', nd.name === erdSelected || related === true);
+          el.style.opacity = (!erdSelected || nd.name === erdSelected || related) ? '1' : '0.4';
+        });
+      }
+
+      // SVG pan
+      erdSvg.addEventListener('mousedown', function (e) {
+        if (e.button !== 0) return;
+        erdPanning = { startX: e.clientX, startY: e.clientY, origPanX: erdPan.x, origPanY: erdPan.y };
+        erdSvg.style.cursor = 'grabbing';
+      });
+
+      // Click on canvas background — deselect
+      erdSvg.addEventListener('click', function () {
+        if (erdSelected) { erdSelected = null; applyEdgeHighlight(); applyNodeHighlight(); }
+      });
+
+      document.addEventListener('mousemove', function (e) {
+        if (erdDrag) {
+          var svgPt = svgPoint(e);
+          var dx = svgPt.x - erdDrag.startX, dy = svgPt.y - erdDrag.startY;
+          var nd = erdNodes[erdDrag.nodeIdx];
+          nd.x = erdDrag.origX + dx;
+          nd.y = erdDrag.origY + dy;
+          // Move the SVG group directly (fast, no full re-render)
+          var el = erdNodesLayer.querySelector('[data-nidx="' + erdDrag.nodeIdx + '"]');
+          if (el) el.setAttribute('transform', 'translate(' + nd.x + ',' + nd.y + ')');
+          renderERDEdges();
+        } else if (erdPanning) {
+          var dx2 = e.clientX - erdPanning.startX, dy2 = e.clientY - erdPanning.startY;
+          erdPan.x = erdPanning.origPanX + dx2;
+          erdPan.y = erdPanning.origPanY + dy2;
+          applyViewport();
+        }
+      });
+
+      document.addEventListener('mouseup', function () {
+        erdDrag = null;
+        erdPanning = null;
+        erdSvg.style.cursor = 'grab';
+      });
+
+      // Zoom on scroll
+      erdSvg.addEventListener('wheel', function (e) {
+        e.preventDefault();
+        var factor = e.deltaY < 0 ? 1.1 : 0.9;
+        var rect = erdSvg.getBoundingClientRect();
+        var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        erdPan.x = mx - (mx - erdPan.x) * factor;
+        erdPan.y = my - (my - erdPan.y) * factor;
+        erdPan.scale = Math.max(0.2, Math.min(3, erdPan.scale * factor));
+        applyViewport();
+      }, { passive: false });
+
+      // Convert client coords to SVG unscaled coords
+      function svgPoint(e) {
+        var rect = erdSvg.getBoundingClientRect();
+        return {
+          x: (e.clientX - rect.left - erdPan.x) / erdPan.scale,
+          y: (e.clientY - rect.top  - erdPan.y) / erdPan.scale,
+        };
+      }
+
+      document.getElementById('btn-erd-fit').addEventListener('click', fitView);
+
+      document.getElementById('btn-erd-export-svg').addEventListener('click', function () {
+        var svgEl = document.getElementById('erd-svg');
+        var clone = svgEl.cloneNode(true);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        var serializer = new XMLSerializer();
+        var svgStr = serializer.serializeToString(clone);
+        var blob = new Blob([svgStr], { type: 'image/svg+xml' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'erd.svg';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      document.getElementById('btn-erd-export-png').addEventListener('click', function () {
+        var svgEl = document.getElementById('erd-svg');
+        var clone = svgEl.cloneNode(true);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        var serializer = new XMLSerializer();
+        var svgStr = serializer.serializeToString(clone);
+        var img = new Image();
+        var svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+        var url = URL.createObjectURL(svgBlob);
+        img.onload = function () {
+          var canvas = document.createElement('canvas');
+          canvas.width = svgEl.clientWidth * 2;
+          canvas.height = svgEl.clientHeight * 2;
+          var ctx = canvas.getContext('2d');
+          ctx.scale(2, 2);
+          ctx.fillStyle = '#0d0f1a';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(url);
+          var a = document.createElement('a');
+          a.download = 'erd.png';
+          a.href = canvas.toDataURL('image/png');
+          a.click();
+        };
+        img.src = url;
+      });
+
+      // Expose hooks for IPC message handler and tab activation
+      window.__erdOnConnections = function () { renderERDConnSelect(); };
+      window.__erdOnSchemas = function (connId, list) {
+        if (erdConnSelect.value === connId) populateERDSchemas(list);
+      };
+      window.__erdOnData = function (d) { buildERD(d); };
+      window.__erdOnTabActivated = function () { renderERDConnSelect(); };
+    }());
 
     // ── Init ───────────────────────────────────────────────────────────────
     switchMainTab(persisted.tab || 'query');

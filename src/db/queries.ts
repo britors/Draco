@@ -454,6 +454,103 @@ export async function getTableDetail(
   };
 }
 
+export interface ERDColumn {
+  name: string;
+  dataType: string;
+  isPk: boolean;
+  isFk: boolean;
+  isNullable: boolean;
+}
+
+export interface ERDTable {
+  name: string;
+  type: 'table' | 'view';
+  columns: ERDColumn[];
+}
+
+export interface ERDRelation {
+  fromTable: string;
+  fromColumn: string;
+  toTable: string;
+  toColumn: string;
+  constraintName: string;
+}
+
+export async function getERDData(
+  driver: PgDriver,
+  schema: string
+): Promise<{ tables: ERDTable[]; relations: ERDRelation[] }> {
+  const [tableRows, colRows, pkRows, fkRows] = await Promise.all([
+    driver.query<{ table_name: string; table_type: string }>(
+      `SELECT table_name, table_type
+       FROM information_schema.tables
+       WHERE table_schema = $1 AND table_type IN ('BASE TABLE','VIEW')
+       ORDER BY table_name`,
+      [schema]
+    ),
+    driver.query<{ table_name: string; column_name: string; data_type: string; udt_name: string; is_nullable: string }>(
+      `SELECT table_name, column_name, data_type, udt_name, is_nullable
+       FROM information_schema.columns
+       WHERE table_schema = $1
+       ORDER BY table_name, ordinal_position`,
+      [schema]
+    ),
+    driver.query<{ table_name: string; column_name: string }>(
+      `SELECT tc.table_name, kcu.column_name
+       FROM information_schema.table_constraints tc
+       JOIN information_schema.key_column_usage kcu
+         USING (constraint_name, table_schema, table_name)
+       WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = $1`,
+      [schema]
+    ),
+    driver.query<{ from_table: string; from_column: string; to_table: string; to_column: string; constraint_name: string }>(
+      `SELECT kcu.table_name AS from_table, kcu.column_name AS from_column,
+              ccu.table_name AS to_table, ccu.column_name AS to_column,
+              tc.constraint_name
+       FROM information_schema.table_constraints tc
+       JOIN information_schema.key_column_usage kcu
+         USING (constraint_name, table_schema, table_name)
+       JOIN information_schema.constraint_column_usage ccu
+         ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
+       WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1
+       ORDER BY kcu.table_name, tc.constraint_name, kcu.ordinal_position`,
+      [schema]
+    ),
+  ]);
+
+  const pkSet = new Set(pkRows.map(r => r.table_name + '.' + r.column_name));
+  const fkSet = new Set(fkRows.map(r => r.from_table + '.' + r.from_column));
+
+  const colsByTable = new Map<string, ERDColumn[]>();
+  for (const r of colRows) {
+    if (!colsByTable.has(r.table_name)) colsByTable.set(r.table_name, []);
+    const typeLabel = r.data_type === 'USER-DEFINED' ? r.udt_name : r.data_type;
+    colsByTable.get(r.table_name)!.push({
+      name: r.column_name,
+      dataType: typeLabel,
+      isPk: pkSet.has(r.table_name + '.' + r.column_name),
+      isFk: fkSet.has(r.table_name + '.' + r.column_name),
+      isNullable: r.is_nullable === 'YES',
+    });
+  }
+
+  const tables: ERDTable[] = tableRows.map(r => ({
+    name: r.table_name,
+    type: r.table_type === 'VIEW' ? 'view' : 'table',
+    columns: colsByTable.get(r.table_name) ?? [],
+  }));
+
+  const relations: ERDRelation[] = fkRows.map(r => ({
+    fromTable: r.from_table,
+    fromColumn: r.from_column,
+    toTable: r.to_table,
+    toColumn: r.to_column,
+    constraintName: r.constraint_name,
+  }));
+
+  return { tables, relations };
+}
+
 export async function checkMigrationsTable(driver: PgDriver, schema = 'public'): Promise<boolean> {
   const rows = await driver.query<{ exists: boolean }>(
     `SELECT EXISTS (
