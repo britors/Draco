@@ -289,6 +289,48 @@
 
     .placeholder { display: flex; align-items: center; justify-content: center; flex: 1; color: var(--vscode-descriptionForeground); font-style: italic; padding: 24px; }
 
+    /* ── Table detail panel ── */
+    .tdetail-wrap { flex: 1; overflow-y: auto; padding: 0; }
+    .tdetail-toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editorGroupHeader-tabsBackground); flex-shrink: 0; }
+    .tdetail-title { font-size: 13px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tdetail-meta { font-size: 11px; color: var(--vscode-descriptionForeground); flex-shrink: 0; }
+    .tdetail-section { border-bottom: 1px solid var(--vscode-panel-border); }
+    .tdetail-section-hdr {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-descriptionForeground));
+      background: var(--vscode-sideBarSectionHeader-background);
+      border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+      cursor: pointer; user-select: none;
+    }
+    .tdetail-section-hdr:hover { background: var(--vscode-list-hoverBackground); }
+    .tdetail-section-body { padding: 0; }
+    .tdetail-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .tdetail-table th {
+      position: sticky; top: 0; z-index: 1;
+      background: var(--vscode-editorGroupHeader-tabsBackground);
+      padding: 4px 10px; text-align: left; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.4px;
+      color: var(--vscode-descriptionForeground);
+      border-bottom: 2px solid var(--vscode-panel-border);
+      white-space: nowrap;
+    }
+    .tdetail-table td { padding: 3px 10px; border-bottom: 1px solid rgba(128,128,128,0.08); white-space: nowrap; vertical-align: middle; }
+    .tdetail-table tr:hover td { background: var(--vscode-list-hoverBackground); }
+    .tdetail-badge { display: inline-flex; align-items: center; font-size: 9px; font-weight: 700; border-radius: 2px; padding: 1px 4px; margin-left: 4px; line-height: 14px; }
+    .tdetail-badge.pk { background: #cca700; color: #000; }
+    .tdetail-badge.fk { background: #007acc; color: #fff; }
+    .tdetail-badge.uq { background: #5a2d82; color: #fff; }
+    .tdetail-badge.ck { background: #3a6b35; color: #fff; }
+    .tdetail-badge.idx { background: #1e2040; color: var(--vscode-foreground); border: 1px solid var(--vscode-panel-border); }
+    .tdetail-null { color: var(--vscode-descriptionForeground); font-style: italic; }
+    .tdetail-default { color: var(--vscode-textPreformat-foreground); font-family: var(--vscode-editor-font-family, monospace); font-size: 11px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+    .tdetail-fk-link { color: var(--vscode-textLink-foreground); cursor: pointer; text-decoration: underline; }
+    .tdetail-fk-link:hover { opacity: 0.8; }
+    .tdetail-loading { display: flex; align-items: center; gap: 10px; padding: 32px; color: var(--vscode-descriptionForeground); }
+    .tdetail-error { padding: 24px; color: var(--vscode-errorForeground); font-size: 12px; }
+
     /* Error toast */
     .toast { position: fixed; bottom: 16px; right: 16px; background: var(--vscode-errorForeground); color: #fff; padding: 8px 14px; border-radius: 3px; font-size: 12px; max-width: 360px; z-index: 200; opacity: 1; transition: opacity 0.3s; }
     .toast.fade { opacity: 0; }
@@ -373,11 +415,12 @@
   <!-- ── Right area: tabbed panels ── -->
   <div class="main-area" id="main-area">
 
-    <!-- Tab bar (Query / History / Prisma) -->
-    <div class="tab-bar">
+    <!-- Tab bar (Query / History / Prisma + dynamic table tabs) -->
+    <div class="tab-bar" id="main-tab-bar">
       <button class="tab" data-tab="query"><i class="codicon codicon-file-code"></i>Query</button>
       <button class="tab" data-tab="history"><i class="codicon codicon-history"></i>History</button>
       <button class="tab" data-tab="prisma" id="tab-btn-prisma"><i class="codicon codicon-symbol-class"></i>Prisma</button>
+      <div id="table-tab-list" style="display:flex;overflow-x:auto;"></div>
     </div>
 
     <!-- Query panel -->
@@ -457,6 +500,18 @@
       </div>
     </div>
 
+    <!-- Table detail panel (shared; content re-rendered per active table tab) -->
+    <div class="panel hidden" id="panel-table">
+      <div id="table-detail-toolbar" class="tdetail-toolbar">
+        <span class="tdetail-title" id="table-detail-title"></span>
+        <span class="tdetail-meta" id="table-detail-meta"></span>
+        <button class="btn btn-secondary" id="btn-run-select" style="flex-shrink:0">
+          <i class="codicon codicon-play"></i>Run SELECT
+        </button>
+      </div>
+      <div class="tdetail-wrap" id="table-detail-content"></div>
+    </div>
+
   </div><!-- /.main-area -->
 
   <!-- Preview overlay (inline) -->
@@ -503,6 +558,11 @@
       ? persisted.tabs
       : [{ id: 'qtab-1', name: 'Query 1', sql: '-- Write your query here\nSELECT 1;', connId: null, result: null }];
     var activeQTabId = persisted.activeTabId || tabs[0].id;
+
+    // table detail tabs: { id, connId, schema, tableName, loading, data, error }
+    var tableTabs = [];
+    var nextTableTabId = 1;
+    var activeTableTabId = null;
 
     var monacoReady = false;
     var monacoEditor = null;
@@ -812,7 +872,8 @@
       var isExp = !!expanded[nid];
       var colList = cols[connId + ':' + schemaName + ':' + t.name];
       var prismaModel = findPrismaModel(t.name);
-      var acts = btnIcon('preview', { connId: connId, schema: schemaName, table: t.name }, 'codicon-open-preview', 'Preview')
+      var acts = btnIcon('open-table-detail', { connId: connId, schema: schemaName, table: t.name }, 'codicon-table', 'Open Details')
+               + btnIcon('preview', { connId: connId, schema: schemaName, table: t.name }, 'codicon-open-preview', 'Preview')
                + btnIcon('open-ddl', { connId: connId, schema: schemaName, table: t.name }, 'codicon-symbol-structure', 'View DDL')
                + btnIcon('copy-name', { name: t.name }, 'codicon-copy', 'Copy name');
       var prismaPin = prismaModel ? '<i class="codicon codicon-symbol-class" title="Prisma model: ' + esc(prismaModel.name) + '" style="font-size:11px;color:var(--vscode-descriptionForeground);margin-right:2px"></i>' : '';
@@ -943,6 +1004,8 @@
         }
         case 'delete-conn':
           api.send('deleteConnection', { id: d.connId }); break;
+        case 'open-table-detail':
+          openTableTab(d.connId, d.schema, d.table); break;
         case 'preview':
           api.send('previewTable', { connId: d.connId, schema: d.schema, table: d.table }); break;
         case 'open-ddl':
@@ -962,18 +1025,215 @@
     // ── Tab switching ──────────────────────────────────────────────────────
     function switchMainTab(tab) {
       if (tab === 'explorer') tab = 'query'; // explorer is always visible now
+      var isTableTab = tab.indexOf('tdetail-') === 0;
       persisted.tab = tab;
       saveState();
-      document.querySelectorAll('.tab').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === tab); });
-      document.querySelectorAll('#main-area .panel').forEach(function (p) { p.classList.toggle('hidden', p.id !== 'panel-' + tab); });
+      // highlight static tabs
+      document.querySelectorAll('.tab[data-tab]').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === tab); });
+      // highlight table tabs
+      document.querySelectorAll('.table-tab-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.ttab === tab); });
+      // show correct panel
+      document.querySelectorAll('#main-area .panel').forEach(function (p) {
+        var show = isTableTab ? p.id === 'panel-table' : p.id === 'panel-' + tab;
+        p.classList.toggle('hidden', !show);
+      });
       if (tab === 'query') { setTimeout(ensureMonacoReady, 30); renderQueryTabs(); renderConnSelect(); if (window.__initQuerySplit) window.__initQuerySplit(); }
       if (tab === 'history') { if (!historyEntries.length) api.send('loadHistory'); renderHistory(); }
       if (tab === 'prisma') { renderPrismaConnSelect(); renderPrismaSchemaInfo(); renderPrismaModels(); }
+      if (isTableTab) { activeTableTabId = tab; renderActiveTableDetail(); }
     }
 
-    document.querySelectorAll('.tab').forEach(function (btn) {
+    document.querySelectorAll('.tab[data-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () { switchMainTab(btn.dataset.tab); });
     });
+
+    // ── Table detail tabs ──────────────────────────────────────────────────
+
+    function openTableTab(connId, schema, tableName) {
+      // reuse existing tab for the same table
+      var existing = tableTabs.find(function (t) {
+        return t.connId === connId && t.schema === schema && t.tableName === tableName;
+      });
+      if (existing) { switchMainTab(existing.id); return; }
+
+      var id = 'tdetail-' + (nextTableTabId++);
+      var tab = { id: id, connId: connId, schema: schema, tableName: tableName, loading: true, data: null, error: null };
+      tableTabs.push(tab);
+      renderTableTabs();
+      switchMainTab(id);
+      api.send('loadTableDetail', { connId: connId, schema: schema, tableName: tableName });
+    }
+
+    function closeTableTab(id) {
+      var idx = tableTabs.findIndex(function (t) { return t.id === id; });
+      if (idx < 0) return;
+      tableTabs.splice(idx, 1);
+      renderTableTabs();
+      if (activeTableTabId === id) {
+        // switch to adjacent tab or fallback to query
+        var next = tableTabs[Math.min(idx, tableTabs.length - 1)];
+        switchMainTab(next ? next.id : 'query');
+      }
+    }
+
+    function renderTableTabs() {
+      var container = document.getElementById('table-tab-list');
+      if (!container) return;
+      var html = tableTabs.map(function (t) {
+        var isAct = t.id === activeTableTabId;
+        return '<div class="query-tab table-tab-btn' + (isAct ? ' active' : '') + '" data-ttab="' + esc(t.id) + '" style="min-width:100px;max-width:160px;">'
+          + treeIcon(t.tableName.toLowerCase().includes('view') ? 'view' : 'table')
+          + '<span class="query-tab-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;">' + esc(t.schema + '.' + t.tableName) + '</span>'
+          + '<button class="query-tab-close" data-close-ttab="' + esc(t.id) + '" title="Close"><i class="codicon codicon-close"></i></button>'
+          + '</div>';
+      }).join('');
+      container.innerHTML = html;
+
+      container.querySelectorAll('.table-tab-btn').forEach(function (el) {
+        el.addEventListener('click', function (e) {
+          if (e.target.closest('[data-close-ttab]')) return;
+          switchMainTab(el.dataset.ttab);
+        });
+      });
+      container.querySelectorAll('[data-close-ttab]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          closeTableTab(btn.dataset.closeTtab);
+        });
+      });
+    }
+
+    function renderActiveTableDetail() {
+      var tab = tableTabs.find(function (t) { return t.id === activeTableTabId; });
+      if (!tab) return;
+      var titleEl = document.getElementById('table-detail-title');
+      var metaEl  = document.getElementById('table-detail-meta');
+      var content = document.getElementById('table-detail-content');
+      if (titleEl) titleEl.textContent = tab.schema + '.' + tab.tableName;
+      if (tab.loading) {
+        if (metaEl) metaEl.textContent = '';
+        if (content) content.innerHTML = '<div class="tdetail-loading"><i class="codicon codicon-loading codicon-modifier-spin"></i>Loading table details…</div>';
+        return;
+      }
+      if (tab.error) {
+        if (metaEl) metaEl.textContent = '';
+        if (content) content.innerHTML = '<div class="tdetail-error"><i class="codicon codicon-warning"></i> ' + esc(tab.error) + '</div>';
+        return;
+      }
+      var d = tab.data;
+      var est = d.rowEstimate >= 1000 ? (d.rowEstimate / 1000).toFixed(0) + 'k rows (est.)' : d.rowEstimate + ' rows (est.)';
+      if (metaEl) metaEl.textContent = est;
+
+      // update Run SELECT button
+      var runSelBtn = document.getElementById('btn-run-select');
+      if (runSelBtn) {
+        runSelBtn.onclick = function () {
+          var q = 'SELECT *\nFROM "' + tab.schema.replace(/"/g,'""') + '"."' + tab.tableName.replace(/"/g,'""') + '"\nLIMIT 100;';
+          switchMainTab('query');
+          setTimeout(function () {
+            if (monacoEditor) monacoEditor.setValue(q);
+            // set connection if available
+            var connTab = tabs.find(function (t) { return t.id === activeQTabId; });
+            if (connTab && !connTab.connId) { connTab.connId = tab.connId; renderConnSelect(); }
+          }, 60);
+        };
+      }
+
+      var html = '';
+
+      // ── Columns ──
+      html += '<div class="tdetail-section">'
+        + '<div class="tdetail-section-hdr"><i class="codicon codicon-list-flat"></i>Columns <span style="margin-left:4px;font-weight:400;opacity:0.6">(' + d.columns.length + ')</span></div>'
+        + '<div class="tdetail-section-body"><table class="tdetail-table"><thead><tr>'
+        + '<th>#</th><th>Column</th><th>Type</th><th>Nullable</th><th>Default</th>'
+        + '</tr></thead><tbody>';
+      d.columns.forEach(function (c) {
+        var badges = '';
+        if (c.isPrimaryKey) badges += '<span class="tdetail-badge pk">PK</span>';
+        if (c.isForeignKey) badges += '<span class="tdetail-badge fk">FK</span>';
+        html += '<tr>'
+          + '<td style="color:var(--vscode-descriptionForeground);font-size:10px">' + c.ordinalPosition + '</td>'
+          + '<td><strong>' + esc(c.name) + '</strong>' + badges + '</td>'
+          + '<td style="font-family:var(--vscode-editor-font-family,monospace);font-size:11px">' + esc(c.fullType) + '</td>'
+          + '<td>' + (c.isNullable ? '<span class="tdetail-null">NULL</span>' : 'NOT NULL') + '</td>'
+          + '<td class="tdetail-default">' + (c.columnDefault !== null ? esc(c.columnDefault) : '<span class="tdetail-null">—</span>') + '</td>'
+          + '</tr>';
+      });
+      html += '</tbody></table></div></div>';
+
+      // ── Constraints ──
+      if (d.constraints.length) {
+        html += '<div class="tdetail-section">'
+          + '<div class="tdetail-section-hdr"><i class="codicon codicon-symbol-key"></i>Constraints <span style="margin-left:4px;font-weight:400;opacity:0.6">(' + d.constraints.length + ')</span></div>'
+          + '<div class="tdetail-section-body"><table class="tdetail-table"><thead><tr>'
+          + '<th>Type</th><th>Name</th><th>Definition</th>'
+          + '</tr></thead><tbody>';
+        d.constraints.forEach(function (c) {
+          var typeMap = { 'PRIMARY KEY': 'pk', 'FOREIGN KEY': 'fk', 'UNIQUE': 'uq', 'CHECK': 'ck' };
+          var cls = typeMap[c.type] || '';
+          html += '<tr>'
+            + '<td><span class="tdetail-badge ' + cls + '">' + esc(c.type.replace('PRIMARY KEY','PK').replace('FOREIGN KEY','FK').replace('UNIQUE','UQ').replace('CHECK','CK')) + '</span></td>'
+            + '<td style="font-family:var(--vscode-editor-font-family,monospace);font-size:11px">' + esc(c.name) + '</td>'
+            + '<td style="font-family:var(--vscode-editor-font-family,monospace);font-size:11px;color:var(--vscode-textPreformat-foreground)">' + esc(c.definition) + '</td>'
+            + '</tr>';
+        });
+        html += '</tbody></table></div></div>';
+      }
+
+      // ── Indexes ──
+      if (d.indexes.length) {
+        html += '<div class="tdetail-section">'
+          + '<div class="tdetail-section-hdr"><i class="codicon codicon-server-process"></i>Indexes <span style="margin-left:4px;font-weight:400;opacity:0.6">(' + d.indexes.length + ')</span></div>'
+          + '<div class="tdetail-section-body"><table class="tdetail-table"><thead><tr>'
+          + '<th>Name</th><th>Size</th><th>Flags</th><th>Definition</th>'
+          + '</tr></thead><tbody>';
+        d.indexes.forEach(function (ix) {
+          var flags = '';
+          if (ix.isPrimary) flags += '<span class="tdetail-badge pk">PK</span>';
+          else if (ix.isUnique) flags += '<span class="tdetail-badge uq">UNIQUE</span>';
+          else flags += '<span class="tdetail-badge idx">IDX</span>';
+          html += '<tr>'
+            + '<td style="font-family:var(--vscode-editor-font-family,monospace);font-size:11px">' + esc(ix.name) + '</td>'
+            + '<td style="color:var(--vscode-descriptionForeground)">' + esc(ix.size) + '</td>'
+            + '<td>' + flags + '</td>'
+            + '<td style="font-family:var(--vscode-editor-font-family,monospace);font-size:11px;color:var(--vscode-textPreformat-foreground);max-width:400px;overflow:hidden;text-overflow:ellipsis">' + esc(ix.definition) + '</td>'
+            + '</tr>';
+        });
+        html += '</tbody></table></div></div>';
+      }
+
+      // ── FK Map ──
+      if (d.fkMap.length) {
+        html += '<div class="tdetail-section">'
+          + '<div class="tdetail-section-hdr"><i class="codicon codicon-references"></i>Foreign Keys <span style="margin-left:4px;font-weight:400;opacity:0.6">(' + d.fkMap.length + ')</span></div>'
+          + '<div class="tdetail-section-body"><table class="tdetail-table"><thead><tr>'
+          + '<th>Direction</th><th>Column</th><th>References</th><th>Constraint</th>'
+          + '</tr></thead><tbody>';
+        d.fkMap.forEach(function (fk) {
+          var ref = fk.foreignSchema + '.' + fk.foreignTable + '.' + fk.foreignColumn;
+          html += '<tr>'
+            + '<td><span class="tdetail-badge ' + (fk.direction === 'outgoing' ? 'fk' : 'uq') + '">' + (fk.direction === 'outgoing' ? '→ out' : '← in') + '</span></td>'
+            + '<td style="font-family:var(--vscode-editor-font-family,monospace);font-size:11px">' + esc(fk.column) + '</td>'
+            + '<td><span class="tdetail-fk-link" data-action="navigate-fk" data-schema="' + esc(fk.foreignSchema) + '" data-table="' + esc(fk.foreignTable) + '" data-conn-id="' + esc(tab.connId) + '">' + esc(ref) + '</span></td>'
+            + '<td style="font-family:var(--vscode-editor-font-family,monospace);font-size:11px;color:var(--vscode-descriptionForeground)">' + esc(fk.constraintName) + '</td>'
+            + '</tr>';
+        });
+        html += '</tbody></table></div></div>';
+      }
+
+      if (content) {
+        content.innerHTML = html;
+        // FK navigation links
+        content.querySelectorAll('[data-action="navigate-fk"]').forEach(function (el) {
+          el.addEventListener('click', function () {
+            var connId2 = el.dataset.connId;
+            var fkSchema = el.dataset.schema;
+            var fkTable = el.dataset.table;
+            openTableTab(connId2, fkSchema, fkTable);
+          });
+        });
+      }
+    }
 
     // ── Sidebar resize ─────────────────────────────────────────────────────
     (function () {
@@ -1739,6 +1999,18 @@
           showPreview(d); break;
         case 'driftResult':
           showDrift(d); break;
+        case 'tableDetailLoaded': {
+          var td = tableTabs.find(function(t) {
+            return t.connId === d.connId && t.schema === d.schema && t.tableName === d.tableName;
+          });
+          if (!td) break;
+          td.loading = false;
+          if (d.error) { td.error = d.error; }
+          else { td.data = d.detail; }
+          renderTableTabs();
+          if (activeTableTabId === td.id) renderActiveTableDetail();
+          break;
+        }
       }
     });
 

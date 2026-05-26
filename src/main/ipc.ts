@@ -10,6 +10,7 @@ import {
   getSchemas, getTables, getColumns, getFunctions, getFunctionParams,
   previewTable, getCompletionData, getTableDDL, getIndexes, getConstraints,
   getFKMap, checkMigrationsTable, getMigrations, getTableEstimates,
+  getTableDetail,
 } from '../db/queries';
 import { validateConnection, PgConnection } from '../types/PgConnection';
 import { parsePrismaSchema, ParsedPrismaSchema } from '../prisma/PrismaParser';
@@ -331,6 +332,21 @@ export function registerIpc(win: BrowserWindow): void {
           });
         } catch (err) {
           send('formError', `Failed to load DDL: ${String(err)}`);
+        }
+        break;
+      }
+
+      // ── Table detail tab ─────────────────────────────────────────────────
+
+      case 'loadTableDetail': {
+        const { connId, schema, tableName } = data as { connId: string; schema: string; tableName: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('tableDetailLoaded', { connId, schema, tableName, error: 'Not connected.' }); return; }
+        try {
+          const detail = await getTableDetail(driver, schema, tableName);
+          send('tableDetailLoaded', { connId, schema, tableName, detail });
+        } catch (err) {
+          send('tableDetailLoaded', { connId, schema, tableName, error: String(err) });
         }
         break;
       }

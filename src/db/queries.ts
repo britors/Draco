@@ -51,6 +51,25 @@ export interface ColumnInfo {
   isForeignKey: boolean;
 }
 
+export interface TableDetailColumn {
+  name: string;
+  dataType: string;       // e.g. "character varying", "integer"
+  fullType: string;       // formatted with size, e.g. "varchar(255)", "numeric(10,2)"
+  isNullable: boolean;
+  columnDefault: string | null;
+  isPrimaryKey: boolean;
+  isForeignKey: boolean;
+  ordinalPosition: number;
+}
+
+export interface TableDetail {
+  columns: TableDetailColumn[];
+  constraints: ConstraintInfo[];
+  indexes: IndexInfo[];
+  fkMap: FKMapEntry[];
+  rowEstimate: number;
+}
+
 export interface FunctionInfo {
   name: string;
   type: 'FUNCTION' | 'PROCEDURE';
@@ -375,6 +394,89 @@ export async function getFKMap(driver: PgDriver, schema: string, table: string):
       foreignColumn: r.referencing_column,
     })),
   ];
+}
+
+export async function getTableDetail(
+  driver: PgDriver,
+  schema: string,
+  table: string
+): Promise<TableDetail> {
+  const [rawCols, constraints, indexes, fkMap, estRows] = await Promise.all([
+    driver.query<{
+      column_name: string;
+      data_type: string;
+      udt_name: string;
+      character_maximum_length: number | null;
+      numeric_precision: number | null;
+      numeric_scale: number | null;
+      is_nullable: string;
+      column_default: string | null;
+      ordinal_position: number;
+      is_pk: boolean;
+      is_fk: boolean;
+    }>(
+      `SELECT
+         c.column_name, c.data_type, c.udt_name,
+         c.character_maximum_length, c.numeric_precision, c.numeric_scale,
+         c.is_nullable, c.column_default, c.ordinal_position,
+         COALESCE(pk.is_pk, false) AS is_pk,
+         COALESCE(fk.is_fk, false) AS is_fk
+       FROM information_schema.columns c
+       LEFT JOIN (
+         SELECT kcu.column_name, true AS is_pk
+         FROM information_schema.table_constraints tc
+         JOIN information_schema.key_column_usage kcu
+           ON tc.constraint_name = kcu.constraint_name
+           AND tc.table_schema = kcu.table_schema AND tc.table_name = kcu.table_name
+         WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = $1 AND tc.table_name = $2
+       ) pk ON c.column_name = pk.column_name
+       LEFT JOIN (
+         SELECT kcu.column_name, true AS is_fk
+         FROM information_schema.table_constraints tc
+         JOIN information_schema.key_column_usage kcu
+           ON tc.constraint_name = kcu.constraint_name
+           AND tc.table_schema = kcu.table_schema AND tc.table_name = kcu.table_name
+         WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1 AND tc.table_name = $2
+       ) fk ON c.column_name = fk.column_name
+       WHERE c.table_schema = $1 AND c.table_name = $2
+       ORDER BY c.ordinal_position`,
+      [schema, table]
+    ),
+    getConstraints(driver, schema, table),
+    getIndexes(driver, schema, table),
+    getFKMap(driver, schema, table),
+    driver.query<{ estimate: number }>(
+      `SELECT reltuples::bigint AS estimate
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = $1 AND c.relname = $2`,
+      [schema, table]
+    ),
+  ]);
+
+  const columns: TableDetailColumn[] = rawCols.map(r => {
+    let fullType = r.udt_name;
+    if (r.character_maximum_length !== null) fullType += `(${r.character_maximum_length})`;
+    else if (r.numeric_precision !== null && r.numeric_scale !== null) fullType += `(${r.numeric_precision},${r.numeric_scale})`;
+    else if (r.numeric_precision !== null) fullType += `(${r.numeric_precision})`;
+    return {
+      name: r.column_name,
+      dataType: r.data_type,
+      fullType,
+      isNullable: r.is_nullable === 'YES',
+      columnDefault: r.column_default,
+      isPrimaryKey: Boolean(r.is_pk),
+      isForeignKey: Boolean(r.is_fk),
+      ordinalPosition: r.ordinal_position,
+    };
+  });
+
+  return {
+    columns,
+    constraints,
+    indexes,
+    fkMap,
+    rowEstimate: Number(estRows[0]?.estimate ?? 0),
+  };
 }
 
 export async function checkMigrationsTable(driver: PgDriver, schema = 'public'): Promise<boolean> {
