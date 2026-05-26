@@ -34,10 +34,12 @@
       "out/**/*"
     ],
     "linux": {
-      "target": ["deb", "rpm"]
+      "target": ["deb", "rpm"],
+      "icon": "logo.svg"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "logo.svg"
     }
   },
   "devDependencies": {

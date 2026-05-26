@@ -6,3 +6,20 @@ node_modules/
 build-flatpak/
 flatpak/.flatpak-builder/
 .claude/
+
+# artefatos de build do makepkg
+aur/pkg/
+aur/src/
+aur/*.pkg.tar.zst
+aur/*.pkg.tar.xz
+
+# binários e assets compilados
+*.so
+*.so.*
+*.pak
+*.bin
+*.asar
+*.deb
+*.rpm
+*.exe
+*.AppImage
