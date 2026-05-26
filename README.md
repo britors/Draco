@@ -14,28 +14,29 @@
   </a>
 </p>
 
-**Prisma4Postgres** is a standalone Electron desktop app for exploring PostgreSQL databases — all without leaving a dedicated workspace. No VS Code required, no CLI wrappers, no config files: just connect and explore.
+**Prisma4Postgres** is a standalone Electron desktop app for exploring and managing PostgreSQL databases. No VS Code required, no CLI wrappers, no config files — just connect and explore.
 
 ---
 
 ## Layout
 
 ```
-┌──────────────────┬──────────────────────────────────────────────┐
-│                  │  [Query] [History] [Activity]                │
-│  Explorer        ├──────────────────────────────────────────────┤
-│  (left sidebar)  │  Monaco SQL editor                           │
-│                  ├╌╌╌ drag to resize ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
-│  connections     │  Result grid / EXPLAIN plan                  │
-│  └ schemas       └──────────────────────────────────────────────┘
-│    └ tables
+┌──────────────────┬──────────────────────────────────────────────────────┐
+│                  │  [Query] [History] [Activity]  [users] [orders] …    │
+│  Explorer        ├──────────────────────────────────────────────────────┤
+│  (left sidebar)  │  sql> ______________________________  ← line editor  │
+│                  │  Monaco SQL editor                                   │
+│  + connections   ├╌╌╌ drag to resize ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│  └ schemas       │  Result grid / EXPLAIN plan  │  Row detail           │
+│    └ tables      └──────────────────────────────────────────────────────┘
 │      └ columns
 └──────────────────
 ```
 
-- **Left sidebar** always visible, drag handle to resize (160 – 600 px, persisted)
+- **Left sidebar** always visible, drag handle to resize (160–600 px, persisted)
 - **Right area** holds Query, History, Activity tabs + dynamic table detail tabs
 - **Query/Results split** resizable (default 50/50, persisted per session)
+- **Row detail panel** slides in on the right when you click a result row
 
 ---
 
@@ -45,24 +46,36 @@
 - Tree view of all schemas, tables, views, and functions
 - Folder icons matching **OpenBase.Icons** style — open/closed per node state
 - Column details with PK / FK badges and data types
-- Filter / search nodes in real time
+- Estimated row count badges (optional, configurable)
+- Real-time filter/search across tables and columns
 - Drag handle to resize the sidebar
-- Double-click a table to open its detail tab
+- **Double-click a connection** to connect to the database
+- **Double-click a table** to open its detail tab
+- **Create Table icon** on each connected connection — opens the visual table creator pre-wired to that database
 
 ### SQL Query Editor
 - Monaco editor with SQL syntax highlighting and live autocomplete
 - Multi-tab queries — each tab shows an SQL file icon + name
 - **`Ctrl+Enter`** or **`F8`** to run (runs selection if text is selected)
-- **`Ctrl+T`** to open a new query tab
+- **`Ctrl+T`** to open a new query tab from anywhere in the app
 - **`Shift+Alt+F`** to format SQL (keywords uppercase, clause newlines)
 - Connection selector per tab
-- Resizable split between editor and results (drag the divider)
-- Result grid with NULL highlighting and clickable row detail panel
-- Copy results as **CSV**, **JSON**, or **Markdown** to clipboard
-- Export results as **CSV** or **JSON** via save dialog
-- Query history (last 50 runs, searchable, click to restore)
+- Resizable split between editor and results (drag handle)
 - Cancel button stops a running query via `pg_cancel_backend`
 - Auto-reconnect on connection drop (retries once silently)
+
+### SQL Command Bar (line editor)
+- Compact `sql>` input bar — toggle with the `⌘` button in the toolbar
+- **Enter** executes immediately against the active connection
+- **↑ / ↓** navigates a 20-entry command history
+- **Escape** clears the field
+- Visibility persisted across sessions
+
+### Results
+- Result grid with NULL highlighting
+- Click any row to open a **key:value detail panel** on the right
+- Copy results as **CSV**, **JSON**, or **Markdown** to clipboard (no dialog)
+- Export results as **CSV** or **JSON** via save dialog
 
 ### EXPLAIN Plan Viewer
 - One-click `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` via **Explain** button
@@ -76,17 +89,28 @@
 - FK Map — outgoing and incoming foreign keys, click to navigate tree
 
 ### Table Detail Tab
-- Open per-table detail tabs from the Explorer (click icon or double-click row)
-- Columns with type, nullable, default, PK/FK badges
-- Constraints, indexes, and FK map sections
-- **Run SELECT** button opens the table in the query editor
-- **Copy model** generates a Prisma `model {}` block for the table
+- Per-table tabs opened from the Explorer (icon or double-click)
+- Columns with full type, nullable, default, PK / FK badges
+- Constraints, indexes with size, and FK map sections
+- **Run SELECT** — opens a pre-filled query in the editor
+- **Copy model** — generates a Prisma `model {}` block for the table and copies to clipboard
+
+### Visual Table Creator
+- GUI form to define a new table — no SQL required
+- Column editor: name, type (20 PostgreSQL types), length, nullable, default, PK
+- Live `CREATE TABLE` SQL preview as you type
+- **Copy SQL** copies the DDL to clipboard
+- **Execute** runs against the selected database and refreshes the Explorer on success
+- Accessible from the Create Table icon on any connected connection
 
 ### Activity Viewer
 - **Activity** tab shows live `pg_stat_activity` for the selected connection
-- Auto-refreshes every 5 seconds (toggle)
-- Highlights long-running queries (> 5s amber, > 30s red)
-- Cancel individual queries per row
+- Auto-refreshes every 5 seconds (toggle checkbox)
+- Long-running queries highlighted (> 5s amber, > 30s red)
+- Cancel individual queries per row via `pg_cancel_backend`
+
+### Query History
+- Last 50 queries, searchable, click to restore in editor
 
 ---
 
@@ -112,9 +136,9 @@
 
 ### Connect and explore
 
-- Click the **plug icon** next to a connection to connect
+- **Double-click** a connection to connect, or click the plug icon
 - Expand the tree: schema → Tables & Views → columns
-- Double-click a table to open its detail tab
+- **Double-click** a table to open its detail tab
 
 ### Run a query
 
@@ -122,12 +146,24 @@
 2. Select your connection from the dropdown
 3. Write SQL and press `F8` (or `Ctrl+Enter`)
 4. Results appear in the bottom pane; drag the divider to resize
-5. Click a row to see its full key:value breakdown on the right
-6. Click **Export** to save as CSV or JSON, or use the clipboard copy buttons
+5. Click any row to see its full key:value breakdown on the right
+6. Use the clipboard copy buttons (CSV / JSON / MD) or **Export** to save to file
+
+### Quick queries — line editor
+
+Toggle the `sql>` bar with the `⌘` button in the query toolbar. Type a statement, press **Enter** to run. Use **↑ / ↓** to browse history.
+
+### Create a table visually
+
+Click the table icon (`⊞`) on any connected connection in the Explorer. Fill in the column form, check the live SQL preview, and click **Execute**.
 
 ### View EXPLAIN
 
 With a SELECT query in the editor, click **Explain** to see the full query plan tree with cost and timing for each node.
+
+### Monitor active queries
+
+Switch to the **Activity** tab, select a connection, and click **Refresh** (or enable auto-refresh). Long-running queries are highlighted; click **Cancel** to stop them.
 
 ---
 
