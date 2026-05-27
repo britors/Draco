@@ -288,4 +288,4 @@ Found a bug or have a feature request? [Open an issue](https://github.com/britor
 
 ## License
 
-[MIT](LICENSE) © Rodrigo Brito
+[GPL-3.0-or-later](LICENSE) © Rodrigo Brito

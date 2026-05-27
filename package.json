@@ -2,12 +2,12 @@
   "name": "prisma4postgres",
   "productName": "Prisma4Postgres",
   "description": "PostgreSQL database explorer and query runner",
-  "version": "10.5.1",
+  "version": "10.6.0",
   "author": {
     "name": "britors",
     "email": "rodrigo@w3ti.com.br"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "https://github.com/britors/Prisma4Postgres.git"
@@ -39,7 +39,7 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "logo.svg"
+      "icon": "logo.ico"
     }
   },
   "devDependencies": {
@@ -47,7 +47,7 @@
     "@types/pg": "^8.11.0",
     "@vscode/codicons": "^0.0.36",
     "electron": "^29.4.6",
-    "electron-builder": "^24.13.3",
+    "electron-builder": "^25.1.8",
     "esbuild": "^0.20.0",
     "tsx": "^4.22.3",
     "typescript": "^5.3.0"
