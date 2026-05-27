@@ -257,6 +257,27 @@
     .activity-warn { color: #e8a838; }
     .activity-danger { color: #f44747; }
     .activity-btn { padding: 1px 5px; font-size: 10px; cursor: pointer; border: 1px solid var(--vscode-panel-border); border-radius: 2px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+    .activity-subtabs { display: flex; gap: 2px; }
+    .activity-subtab { padding: 2px 10px; font-size: 11px; cursor: pointer; border: 1px solid var(--vscode-panel-border); border-radius: 3px; background: transparent; color: var(--vscode-foreground); opacity: 0.6; }
+    .activity-subtab.active { background: var(--vscode-button-secondaryBackground); opacity: 1; font-weight: 600; }
+    .lock-blocked { background: rgba(244,71,71,0.08); }
+    .lock-blocked td { color: var(--vscode-errorForeground); }
+    .kpi-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .kpi-card { flex: 1; min-width: 120px; padding: 10px 14px; border: 1px solid var(--vscode-panel-border); border-radius: 4px; background: var(--vscode-editor-background); }
+    .kpi-card .kpi-label { font-size: 10px; color: var(--vscode-descriptionForeground); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+    .kpi-card .kpi-value { font-size: 20px; font-weight: 700; color: var(--vscode-foreground); }
+    .kpi-card .kpi-value.warn { color: #e8a838; }
+    .kpi-card .kpi-value.danger { color: var(--vscode-errorForeground); }
+    .stats-section-title { font-size: 11px; font-weight: 600; color: var(--vscode-descriptionForeground); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .stats-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .stats-table th { text-align: left; padding: 3px 8px; font-weight: 600; border-bottom: 2px solid var(--vscode-panel-border); background: var(--vscode-editorGroupHeader-tabsBackground); position: sticky; top: 0; z-index: 1; }
+    .stats-table td { padding: 2px 8px; border-bottom: 1px solid rgba(128,128,128,0.1); }
+    .stats-table tr:hover td { background: var(--vscode-list-hoverBackground); }
+    .roles-modal { position: absolute; inset: 0; background: rgba(0,0,0,.45); z-index: 300; display: flex; align-items: center; justify-content: center; }
+    .roles-modal-box { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px; padding: 20px; min-width: 320px; max-width: 420px; width: 90%; }
+    .vacuum-menu { position: absolute; top: 100%; right: 0; z-index: 200; background: var(--vscode-editorWidget-background, var(--vscode-editor-background)); border: 1px solid var(--vscode-panel-border); border-radius: 3px; box-shadow: 0 2px 8px rgba(0,0,0,.3); min-width: 150px; padding: 2px 0; }
+    .vacuum-menu button { display: block; width: 100%; text-align: left; padding: 5px 12px; font-size: 12px; background: none; border: none; color: var(--vscode-foreground); cursor: pointer; }
+    .vacuum-menu button:hover { background: var(--vscode-list-hoverBackground); }
 
 
     .placeholder { display: flex; align-items: center; justify-content: center; flex: 1; color: var(--vscode-descriptionForeground); font-style: italic; padding: 24px; }
@@ -471,6 +492,8 @@
       <button class="tab" data-tab="history"><i class="codicon codicon-history"></i>History</button>
       <button class="tab" data-tab="snippets"><i class="codicon codicon-bookmark"></i>Snippets</button>
       <button class="tab" data-tab="activity"><i class="codicon codicon-pulse"></i>Activity</button>
+      <button class="tab" data-tab="stats"><i class="codicon codicon-graph"></i>Stats</button>
+      <button class="tab" data-tab="roles"><i class="codicon codicon-person"></i>Roles</button>
       <button class="tab" data-tab="erd"><i class="codicon codicon-type-hierarchy"></i>ERD</button>
       <div id="table-tab-list" style="display:flex;overflow-x:auto;"></div>
     </div>
@@ -545,7 +568,10 @@
     <!-- Activity panel -->
     <div class="panel hidden" id="panel-activity">
       <div class="query-toolbar" style="gap:8px">
-        <span style="font-weight:600;font-size:12px">pg_stat_activity</span>
+        <div class="activity-subtabs">
+          <button class="activity-subtab active" data-subtab="sessions">Sessions</button>
+          <button class="activity-subtab" data-subtab="locks">Locks</button>
+        </div>
         <select class="conn-select" id="activity-conn-select" style="max-width:200px"><option value="">Select connection…</option></select>
         <button class="btn btn-secondary" id="btn-activity-refresh"><i class="codicon codicon-refresh"></i>Refresh</button>
         <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
@@ -554,7 +580,10 @@
         <span style="flex:1"></span>
         <span id="activity-status" style="font-size:11px;color:var(--vscode-descriptionForeground)"></span>
       </div>
-      <div class="results-section" id="activity-results" style="overflow:auto">
+      <div class="results-section" id="activity-results-sessions" style="overflow:auto">
+        <div class="results-placeholder">Select a connection and click Refresh</div>
+      </div>
+      <div class="results-section hidden" id="activity-results-locks" style="overflow:auto">
         <div class="results-placeholder">Select a connection and click Refresh</div>
       </div>
     </div>
@@ -587,6 +616,56 @@
       </div>
     </div>
 
+    <!-- Roles panel (#80) -->
+    <div class="panel hidden" id="panel-roles">
+      <div class="query-toolbar" style="gap:8px">
+        <span style="font-weight:600;font-size:12px">Roles &amp; Users</span>
+        <select class="conn-select" id="roles-conn-select" style="max-width:200px"><option value="">Select connection…</option></select>
+        <button class="btn btn-secondary" id="btn-roles-refresh"><i class="codicon codicon-refresh"></i>Refresh</button>
+        <button class="btn btn-primary" id="btn-roles-new"><i class="codicon codicon-add"></i>New Role</button>
+        <span style="flex:1"></span>
+        <span id="roles-status" style="font-size:11px;color:var(--vscode-descriptionForeground)"></span>
+      </div>
+      <div style="flex:1;overflow:auto" id="roles-content">
+        <div class="results-placeholder">Select a connection and click Refresh</div>
+      </div>
+      <!-- New Role modal -->
+      <div class="roles-modal hidden" id="roles-modal">
+        <div class="roles-modal-box">
+          <div style="font-weight:600;font-size:13px;margin-bottom:12px">New Role</div>
+          <label>Name<input class="conn-input" id="role-name" placeholder="role_name" style="width:100%;margin:4px 0 8px"></label>
+          <label>Password<input class="conn-input" id="role-password" type="password" placeholder="(leave blank for no login)" style="width:100%;margin:4px 0 8px"></label>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;font-size:12px">
+            <label><input type="checkbox" id="role-login"> LOGIN</label>
+            <label><input type="checkbox" id="role-createdb"> CREATEDB</label>
+            <label><input type="checkbox" id="role-createrole"> CREATEROLE</label>
+            <label><input type="checkbox" id="role-superuser"> SUPERUSER</label>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn-secondary" id="btn-role-cancel">Cancel</button>
+            <button class="btn btn-primary" id="btn-role-create">Create</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats dashboard panel (#86) -->
+    <div class="panel hidden" id="panel-stats">
+      <div class="query-toolbar" style="gap:8px">
+        <span style="font-weight:600;font-size:12px">Database Stats</span>
+        <select class="conn-select" id="stats-conn-select" style="max-width:200px"><option value="">Select connection…</option></select>
+        <button class="btn btn-secondary" id="btn-stats-refresh"><i class="codicon codicon-refresh"></i>Refresh</button>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+          <input type="checkbox" id="stats-auto-refresh" style="cursor:pointer"> Auto (30s)
+        </label>
+        <span style="flex:1"></span>
+        <span id="stats-status" style="font-size:11px;color:var(--vscode-descriptionForeground)"></span>
+      </div>
+      <div style="flex:1;overflow:auto;padding:8px 12px;display:flex;flex-direction:column;gap:12px" id="stats-content">
+        <div class="results-placeholder">Select a connection and click Refresh</div>
+      </div>
+    </div>
+
     <!-- Create Table panel -->
     <div class="panel hidden" id="panel-create-table">
       <div class="create-table-wrap" id="create-table-wrap">
@@ -605,6 +684,17 @@
 <button class="btn btn-secondary" id="btn-import-data" style="flex-shrink:0" title="Import CSV/JSON into table">
           <i class="codicon codicon-cloud-upload"></i>Import
         </button>
+        <div style="position:relative;flex-shrink:0">
+          <button class="btn btn-secondary" id="btn-vacuum" title="Run maintenance operation" style="flex-shrink:0">
+            <i class="codicon codicon-wrench"></i>Maintain<i class="codicon codicon-chevron-down" style="margin-left:2px;font-size:9px"></i>
+          </button>
+          <div class="vacuum-menu hidden" id="vacuum-menu">
+            <button data-op="ANALYZE">ANALYZE</button>
+            <button data-op="VACUUM">VACUUM</button>
+            <button data-op="VACUUM ANALYZE">VACUUM ANALYZE</button>
+            <button data-op="VACUUM FULL">VACUUM FULL</button>
+          </div>
+        </div>
       </div>
       <div class="tdetail-wrap" id="table-detail-content"></div>
     </div>
@@ -689,6 +779,8 @@
     var cols         = {};
     var funcs        = {};
     var funcParams   = {};
+    var seqs         = {};
+    var exts         = {};   // connId → { installed: [], available: [] }
     var expanded     = {};
     var loadingNodes = {};
     var filter       = '';
@@ -853,6 +945,16 @@
         + '<circle cx="4.5" cy="8" r="1.5" stroke="#007acc" stroke-width="1.2"/>'
         + '<circle cx="11.5" cy="8" r="1.5" stroke="#007acc" stroke-width="1.2"/>'
         + '</svg>',
+      sequence:
+        '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<rect x="1.5" y="3.5" width="13" height="9" rx="1" stroke="#e8a838" stroke-width="1.2"/>'
+        + '<path d="M4 8h2.5M6.5 8l-1-1.5M6.5 8l-1 1.5M10 6.5l1.5 1.5-1.5 1.5" stroke="#e8a838" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>'
+        + '</svg>',
+      extension:
+        '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        + '<rect x="2" y="5" width="7" height="7" rx="1" stroke="#4ec9b0" stroke-width="1.2"/>'
+        + '<rect x="7" y="2" width="7" height="7" rx="1" stroke="#4ec9b0" stroke-width="1.2" opacity="0.6"/>'
+        + '</svg>',
     };
 
     function treeIcon(name) {
@@ -936,6 +1038,7 @@
         if (loadingNodes[nid]) { html += loadingRow(1); }
         else if (sl.length === 0) { html += infoRow(1, 'No schemas'); }
         else { sl.forEach(function (s) { html += renderSchema(conn.id, s.name, f); }); }
+        html += renderExtGroup(conn.id);
       }
       return html;
     }
@@ -952,6 +1055,7 @@
       if (isExp) {
         html += renderTablesGroup(connId, schemaName, f);
         html += renderFuncsGroup(connId, schemaName, f);
+        html += renderSeqsGroup(connId, schemaName, f);
       }
       return html;
     }
@@ -1000,6 +1104,83 @@
         }
       }
       return html;
+    }
+
+    function renderSeqsGroup(connId, schemaName, f) {
+      var nid = 'sg:' + connId + ':' + schemaName;
+      var isExp = !!expanded[nid];
+      var sList = seqs[connId + ':' + schemaName];
+      var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
+        + '<span class="indent" style="width:32px"></span>'
+        + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
+        + treeIcon('sequence')
+        + '<span class="tree-label">Sequences</span>'
+        + (sList ? '<span class="tree-badge">' + sList.length + '</span>' : '')
+        + '<div class="tree-actions"></div></div>';
+      if (isExp) {
+        if (loadingNodes[nid]) { html += loadingRow(3); }
+        else if (!sList) { html += infoRow(3, 'Loading…'); }
+        else if (!sList.length) { html += infoRow(3, 'No sequences'); }
+        else {
+          var filtered = f ? sList.filter(function (s) { return s.name.toLowerCase().indexOf(f) >= 0; }) : sList;
+          filtered.forEach(function (sq) { html += renderSeqNode(connId, schemaName, sq); });
+        }
+      }
+      return html;
+    }
+
+    function renderExtGroup(connId) {
+      var nid = 'eg:' + connId;
+      var isExp = !!expanded[nid];
+      var eData = exts[connId];
+      var installed = eData ? eData.installed : null;
+      var badge = installed ? '<span class="tree-badge">' + installed.length + '</span>' : '';
+      var html = '<div class="tree-row" data-node="' + esc(nid) + '">'
+        + '<span class="indent" style="width:16px"></span>'
+        + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
+        + treeIcon('extension')
+        + '<span class="tree-label">Extensions</span>' + badge
+        + '<div class="tree-actions"></div></div>';
+      if (isExp) {
+        if (loadingNodes[nid]) { html += loadingRow(2); }
+        else if (!eData) { html += infoRow(2, 'Loading…'); }
+        else {
+          if (!eData.installed.length) { html += infoRow(2, 'No extensions installed'); }
+          else { eData.installed.forEach(function (e) { html += renderExtNode(connId, e, true); }); }
+          html += '<div class="tree-row" style="padding:2px 0 2px 32px">'
+            + '<span style="font-size:10px;color:var(--vscode-descriptionForeground);text-transform:uppercase;letter-spacing:.06em">Available</span></div>';
+          var avail = eData.available.filter(function (a) { return !eData.installed.some(function (i) { return i.name === a.name; }); });
+          if (!avail.length) { html += infoRow(2, 'All extensions installed'); }
+          else { avail.slice(0, 20).forEach(function (e) { html += renderExtNode(connId, e, false); }); }
+        }
+      }
+      return html;
+    }
+
+    function renderExtNode(connId, e, installed) {
+      var acts = installed
+        ? btnIcon('ext-drop', { connId: connId, name: e.name }, 'codicon-trash', 'Drop extension')
+        : btnIcon('ext-install', { connId: connId, name: e.name }, 'codicon-cloud-download', 'Install extension');
+      return '<div class="tree-row">'
+        + '<span class="indent" style="width:32px"></span>'
+        + '<span class="toggle" style="width:16px;display:inline-block"></span>'
+        + treeIcon(installed ? 'extension' : 'func')
+        + '<span class="tree-label">' + esc(e.name) + '</span>'
+        + (e.installed_version ? '<span class="col-type">' + esc(e.installed_version) + '</span>' : (e.default_version ? '<span class="col-type" style="opacity:0.5">' + esc(e.default_version) + '</span>' : ''))
+        + '<div class="tree-actions">' + acts + '</div></div>';
+    }
+
+    function renderSeqNode(connId, schemaName, sq) {
+      var nid = 'sq:' + connId + ':' + schemaName + ':' + sq.name;
+      var acts = btnIcon('seq-next', { connId: connId, schema: schemaName, name: sq.name }, 'codicon-play', 'Next value')
+               + btnIcon('seq-reset', { connId: connId, schema: schemaName, name: sq.name }, 'codicon-refresh', 'Reset value');
+      return '<div class="tree-row" data-node="' + esc(nid) + '">'
+        + '<span class="indent" style="width:48px"></span>'
+        + '<span class="toggle" style="width:16px;display:inline-block"></span>'
+        + treeIcon('func')
+        + '<span class="tree-label">' + esc(sq.name) + '</span>'
+        + '<span class="col-type">+' + esc(String(sq.increment_by || 1)) + '</span>'
+        + '<div class="tree-actions">' + acts + '</div></div>';
     }
 
     function renderTableNode(connId, schemaName, t, f) {
@@ -1085,7 +1266,7 @@
             loadingNodes[nid] = true;
             api.send('loadSchemas', { connId: rest });
           }
-        } else if (type === 'tg' || type === 'fg') {
+        } else if (type === 'tg' || type === 'fg' || type === 'sg') {
           var p = rest.indexOf(':'); var cId = rest.slice(0, p); var sc = rest.slice(p + 1);
           var key = cId + ':' + sc;
           if (type === 'tg' && !tables[key] && !loadingNodes[nid]) {
@@ -1097,6 +1278,14 @@
           } else if (type === 'fg' && !funcs[key] && !loadingNodes[nid]) {
             loadingNodes[nid] = true;
             api.send('loadFunctions', { connId: cId, schema: sc });
+          } else if (type === 'sg' && !seqs[key] && !loadingNodes[nid]) {
+            loadingNodes[nid] = true;
+            api.send('loadSequences', { connId: cId, schema: sc });
+          }
+        } else if (type === 'eg') {
+          if (!exts[rest] && !loadingNodes[nid]) {
+            loadingNodes[nid] = true;
+            api.send('loadExtensions', { connId: rest });
           }
         } else if (type === 't' || type === 'v') {
           var parts = rest.split(':'); var cId2 = parts[0]; var sc2 = parts[1]; var tbl = parts[2];
@@ -1177,6 +1366,20 @@
           api.send('openDDL', { connId: d.connId, schema: d.schema, table: d.table }); break;
         case 'copy-name':
           navigator.clipboard.writeText(d.name).catch(function () {}); break;
+        case 'ext-install':
+          if (confirm('Install extension "' + d.name + '"?')) api.send('extInstall', { connId: d.connId, name: d.name }); break;
+        case 'ext-drop':
+          if (confirm('Drop extension "' + d.name + '"?')) api.send('extDrop', { connId: d.connId, name: d.name }); break;
+        case 'seq-next':
+          api.send('seqNextVal', { connId: d.connId, schema: d.schema, name: d.name }); break;
+        case 'seq-reset': {
+          var newVal = prompt('Set new value for sequence "' + d.schema + '"."' + d.name + '":');
+          if (newVal !== null && newVal.trim() !== '') {
+            var parsed = parseInt(newVal.trim(), 10);
+            if (!isNaN(parsed)) api.send('seqSetVal', { connId: d.connId, schema: d.schema, name: d.name, value: parsed });
+          }
+          break;
+        }
       }
     }
 
@@ -1208,6 +1411,8 @@
       if (tab === 'history') { if (!historyEntries.length) api.send('loadHistory'); renderHistory(); }
       if (tab === 'snippets') { api.send('loadSnippets'); }
       if (tab === 'activity') { renderActivityConnSelect(); }
+      if (tab === 'stats') { renderStatsConnSelect(); }
+      if (tab === 'roles') { renderRolesConnSelect(); }
       if (tab === 'erd') { if (window.__erdOnTabActivated) window.__erdOnTabActivated(); }
 if (tab === 'create-table') { renderCreateTable(); }
       if (tab.indexOf('tdetail-') === 0) { activeTableTabId = tab; renderActiveTableDetail(); }
@@ -1441,6 +1646,20 @@ if (tab === 'create-table') { renderCreateTable(); }
         if (importBtn) importBtn.onclick = function () {
           api.send('openImportDialog', { connId: tab.connId, schema: tab.schema, tableName: tab.tableName });
         };
+        // Vacuum/Maintain dropdown (#82)
+        var vacBtn = document.getElementById('btn-vacuum');
+        var vacMenu = document.getElementById('vacuum-menu');
+        if (vacBtn && vacMenu) {
+          vacBtn.onclick = function (e) { e.stopPropagation(); vacMenu.classList.toggle('hidden'); };
+          document.addEventListener('click', function () { vacMenu.classList.add('hidden'); }, { once: false });
+          vacMenu.querySelectorAll('button[data-op]').forEach(function (opBtn) {
+            opBtn.addEventListener('click', function () {
+              vacMenu.classList.add('hidden');
+              var op = this.dataset.op;
+              api.send('runVacuum', { connId: tab.connId, schema: tab.schema, tableName: tab.tableName, op: op });
+            });
+          });
+        }
       }
     }
 
@@ -2360,6 +2579,37 @@ if (tab === 'create-table') { renderCreateTable(); }
         case 'tablesLoaded':  tables[d.connId + ':' + d.schema] = d.tables; delete loadingNodes['tg:' + d.connId + ':' + d.schema]; renderTree(); break;
         case 'columnsLoaded': cols[d.connId + ':' + d.schema + ':' + d.table] = d.columns; delete loadingNodes[(d.isView ? 'v:' : 't:') + d.connId + ':' + d.schema + ':' + d.table]; renderTree(); break;
         case 'functionsLoaded': funcs[d.connId + ':' + d.schema] = d.functions; delete loadingNodes['fg:' + d.connId + ':' + d.schema]; renderTree(); break;
+        case 'seqsLoaded': seqs[d.connId + ':' + d.schema] = d.sequences; delete loadingNodes['sg:' + d.connId + ':' + d.schema]; renderTree(); break;
+        case 'extsLoaded': exts[d.connId] = { installed: d.installed, available: d.available }; delete loadingNodes['eg:' + d.connId]; renderTree(); break;
+        case 'seqNextValResult': showToast(d.error ? 'Error: ' + d.error : 'Next value: ' + d.value); break;
+        case 'vacuumResult': showToast(d.error ? 'Error: ' + d.error : d.op + ' completed in ' + d.durationMs + 'ms'); break;
+        case 'rolesLoaded': {
+          var rolesStatus = document.getElementById('roles-status');
+          var rolesContent = document.getElementById('roles-content');
+          if (!rolesContent) break;
+          if (d.error) { if (rolesStatus) rolesStatus.textContent = 'Error'; rolesContent.innerHTML = '<div class="results-placeholder">' + esc(d.error) + '</div>'; break; }
+          if (rolesStatus) rolesStatus.textContent = d.roles.length + ' roles';
+          if (!d.roles.length) { rolesContent.innerHTML = '<div class="results-placeholder">No roles found</div>'; break; }
+          var rCols = ['rolname','rolsuper','rolcreatedb','rolcreaterole','rolcanlogin','rolconnlimit','rolvaliduntil'];
+          var rhtml = '<table class="stats-table"><thead><tr>' + rCols.map(function(c){ return '<th>' + c + '</th>'; }).join('') + '<th></th></tr></thead><tbody>';
+          d.roles.forEach(function (r) {
+            rhtml += '<tr>';
+            rCols.forEach(function (c) { rhtml += '<td>' + esc(String(r[c] === null || r[c] === undefined ? '—' : r[c])) + '</td>'; });
+            rhtml += '<td><button class="activity-btn" style="color:var(--vscode-errorForeground)" data-drop-role="' + esc(String(r.rolname)) + '" data-conn-id="' + esc(d.connId) + '">Drop</button></td>';
+            rhtml += '</tr>';
+          });
+          rhtml += '</tbody></table>';
+          rolesContent.innerHTML = rhtml;
+          rolesContent.querySelectorAll('[data-drop-role]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              if (confirm('Drop role "' + btn.dataset.dropRole + '"?')) {
+                api.send('dropRole', { connId: btn.dataset.connId, name: btn.dataset.dropRole });
+              }
+            });
+          });
+          break;
+        }
+        case 'roleChanged': loadRoles(); break;
         case 'funcParamsLoaded': funcParams[d.connId + ':' + d.schema + ':' + d.specificName] = d.params; delete loadingNodes['f:' + d.connId + ':' + d.schema + ':' + d.specificName]; renderTree(); break;
         case 'testResult': {
           var ts = document.getElementById('test-status');
@@ -2493,7 +2743,7 @@ if (tab === 'create-table') { renderCreateTable(); }
           renderTree(); break;
         case 'activityLoaded': {
           var statusEl2 = document.getElementById('activity-status');
-          var resultsEl = document.getElementById('activity-results');
+          var resultsEl = document.getElementById('activity-results-sessions');
           if (!resultsEl) break;
           if (d.error) {
             if (statusEl2) statusEl2.textContent = 'Error';
@@ -2523,6 +2773,112 @@ if (tab === 'create-table') { renderCreateTable(); }
               api.send('cancelActivity', { connId: btn.dataset.connId, pid: parseInt(btn.dataset.pid, 10) });
             });
           });
+          break;
+        }
+        case 'locksLoaded': {
+          var statusEl3 = document.getElementById('activity-status');
+          var locksEl = document.getElementById('activity-results-locks');
+          if (!locksEl) break;
+          if (d.error) {
+            if (statusEl3) statusEl3.textContent = 'Error';
+            locksEl.innerHTML = '<div class="results-placeholder">' + esc(d.error) + '</div>';
+            break;
+          }
+          if (statusEl3) statusEl3.textContent = d.rows.length + ' lock(s) · ' + new Date().toLocaleTimeString();
+          if (!d.rows.length) { locksEl.innerHTML = '<div class="results-placeholder">No blocked sessions — all clear</div>'; break; }
+          var lockCols = ['blocked_pid','blocked_user','blocked_query','blocking_pid','blocking_user','blocking_query','locktype','wait_sec'];
+          var lhtml = '<table class="activity-table"><thead><tr>' + lockCols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '<th></th></tr></thead><tbody>';
+          d.rows.forEach(function (row) {
+            lhtml += '<tr class="lock-blocked">';
+            lockCols.forEach(function (c) {
+              var v = row[c];
+              var s = v === null || v === undefined ? '' : String(v);
+              lhtml += '<td title="' + esc(s) + '">' + esc(s.length > 40 ? s.slice(0, 40) + '…' : s) + '</td>';
+            });
+            lhtml += '<td><button class="activity-btn" data-pid="' + esc(String(row.blocked_pid)) + '" data-conn-id="' + esc(d.connId) + '">Cancel</button></td>';
+            lhtml += '</tr>';
+          });
+          lhtml += '</tbody></table>';
+          locksEl.innerHTML = lhtml;
+          locksEl.querySelectorAll('.activity-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              api.send('cancelActivity', { connId: btn.dataset.connId, pid: parseInt(btn.dataset.pid, 10) });
+            });
+          });
+          break;
+        }
+        case 'dbStatsLoaded': {
+          var statsStatus = document.getElementById('stats-status');
+          var statsContent = document.getElementById('stats-content');
+          if (!statsContent) break;
+          if (d.error) {
+            if (statsStatus) statsStatus.textContent = 'Error';
+            statsContent.innerHTML = '<div class="results-placeholder">' + esc(d.error) + '</div>';
+            break;
+          }
+          if (statsStatus) statsStatus.textContent = new Date().toLocaleTimeString();
+          var db = d.db || {};
+          var cacheHit = parseFloat(db.cache_hit_pct) || 0;
+          var deadlocks = parseInt(db.deadlocks) || 0;
+          var tempFiles = parseInt(db.temp_files) || 0;
+          var html = '<div class="kpi-row">'
+            + '<div class="kpi-card"><div class="kpi-label">Cache Hit</div><div class="kpi-value' + (cacheHit < 90 ? ' warn' : '') + '">' + cacheHit.toFixed(1) + '%</div></div>'
+            + '<div class="kpi-card"><div class="kpi-label">Commits</div><div class="kpi-value">' + esc(String(db.xact_commit || 0)) + '</div></div>'
+            + '<div class="kpi-card"><div class="kpi-label">Rollbacks</div><div class="kpi-value">' + esc(String(db.xact_rollback || 0)) + '</div></div>'
+            + '<div class="kpi-card"><div class="kpi-label">Deadlocks</div><div class="kpi-value' + (deadlocks > 0 ? ' danger' : '') + '">' + deadlocks + '</div></div>'
+            + '<div class="kpi-card"><div class="kpi-label">Temp Files</div><div class="kpi-value' + (tempFiles > 0 ? ' warn' : '') + '">' + tempFiles + '</div></div>'
+            + '<div class="kpi-card"><div class="kpi-label">DB Size</div><div class="kpi-value">' + esc(String(db.size || '—')) + '</div></div>'
+            + '</div>';
+          if (d.tables && d.tables.length) {
+            html += '<div class="stats-section-title">Top tables by size</div>';
+            html += '<table class="stats-table"><thead><tr><th>Schema</th><th>Table</th><th>Total size</th><th>Table size</th><th>Indexes</th><th>Live rows</th><th>Dead rows</th></tr></thead><tbody>';
+            d.tables.forEach(function (r) {
+              html += '<tr><td>' + esc(String(r.schema || '')) + '</td><td>' + esc(String(r.table || '')) + '</td>'
+                + '<td>' + esc(String(r.total_size || '')) + '</td>'
+                + '<td>' + esc(String(r.table_size || '')) + '</td>'
+                + '<td>' + esc(String(r.index_size || '')) + '</td>'
+                + '<td>' + esc(String(r.n_live_tup || '')) + '</td>'
+                + '<td>' + esc(String(r.n_dead_tup || '')) + '</td></tr>';
+            });
+            html += '</tbody></table>';
+          }
+          if (d.unusedIdx && d.unusedIdx.length) {
+            html += '<div class="stats-section-title" style="margin-top:8px">Index health — unused indexes (idx_scan = 0)</div>';
+            html += '<table class="stats-table"><thead><tr><th>Schema</th><th>Table</th><th>Index</th><th>Size</th></tr></thead><tbody>';
+            d.unusedIdx.forEach(function (r) {
+              html += '<tr><td>' + esc(String(r.schema || '')) + '</td><td>' + esc(String(r.table || '')) + '</td>'
+                + '<td>' + esc(String(r.index || '')) + '</td>'
+                + '<td>' + esc(String(r.size || '')) + '</td></tr>';
+            });
+            html += '</tbody></table>';
+          }
+          if (d.seqScans && d.seqScans.length) {
+            html += '<div class="stats-section-title" style="margin-top:8px">Index health — high sequential scan candidates</div>';
+            html += '<table class="stats-table"><thead><tr><th>Schema</th><th>Table</th><th>Seq scans</th><th>Live rows</th><th>Size</th></tr></thead><tbody>';
+            d.seqScans.forEach(function (r) {
+              html += '<tr><td>' + esc(String(r.schema || '')) + '</td><td>' + esc(String(r.table || '')) + '</td>'
+                + '<td style="color:#e8a838">' + esc(String(r.seq_scan || '')) + '</td>'
+                + '<td>' + esc(String(r.n_live_tup || '')) + '</td>'
+                + '<td>' + esc(String(r.size || '')) + '</td></tr>';
+            });
+            html += '</tbody></table>';
+          }
+          if (d.bloat && d.bloat.length) {
+            html += '<div class="stats-section-title" style="margin-top:8px">Bloat — dead tuples (&gt; 0%)</div>';
+            html += '<table class="stats-table"><thead><tr><th>Schema</th><th>Table</th><th>Live</th><th>Dead</th><th>Bloat %</th><th>Last autovacuum</th><th>Last vacuum</th></tr></thead><tbody>';
+            d.bloat.forEach(function (r) {
+              var pct = parseFloat(r.bloat_pct) || 0;
+              var cls = pct >= 20 ? ' style="color:var(--vscode-errorForeground)"' : pct >= 10 ? ' style="color:#e8a838"' : '';
+              html += '<tr><td>' + esc(String(r.schema || '')) + '</td><td>' + esc(String(r.table || '')) + '</td>'
+                + '<td>' + esc(String(r.n_live_tup || '')) + '</td>'
+                + '<td>' + esc(String(r.n_dead_tup || '')) + '</td>'
+                + '<td' + cls + '>' + pct + '%</td>'
+                + '<td>' + esc(String(r.last_autovacuum || '—')) + '</td>'
+                + '<td>' + esc(String(r.last_vacuum || '—')) + '</td></tr>';
+            });
+            html += '</tbody></table>';
+          }
+          statsContent.innerHTML = html;
           break;
         }
         case 'erdDataLoaded':
@@ -2633,8 +2989,9 @@ if (tab === 'create-table') { renderCreateTable(); }
       activeQTab().sql = out;
     }
 
-    // ── Activity panel (#53) ───────────────────────────────────────────────
+    // ── Activity panel (#53) + Lock viewer (#79) ──────────────────────────
     var activityTimer = null;
+    var activitySubtab = 'sessions';
 
     function renderActivityConnSelect() {
       var sel = document.getElementById('activity-conn-select');
@@ -2650,8 +3007,23 @@ if (tab === 'create-table') { renderCreateTable(); }
       var sel = document.getElementById('activity-conn-select');
       if (!sel || !sel.value) return;
       document.getElementById('activity-status').textContent = 'Loading…';
-      api.send('loadActivity', { connId: sel.value });
+      if (activitySubtab === 'locks') {
+        api.send('loadLocks', { connId: sel.value });
+      } else {
+        api.send('loadActivity', { connId: sel.value });
+      }
     }
+
+    document.querySelectorAll('.activity-subtab').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        activitySubtab = this.dataset.subtab;
+        document.querySelectorAll('.activity-subtab').forEach(function (b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        document.getElementById('activity-results-sessions').classList.toggle('hidden', activitySubtab !== 'sessions');
+        document.getElementById('activity-results-locks').classList.toggle('hidden', activitySubtab !== 'locks');
+        loadActivity();
+      });
+    });
 
     document.getElementById('btn-activity-refresh').addEventListener('click', loadActivity);
 
@@ -2662,6 +3034,84 @@ if (tab === 'create-table') { renderCreateTable(); }
     document.getElementById('activity-auto-refresh').addEventListener('change', function () {
       clearInterval(activityTimer);
       if (this.checked) activityTimer = setInterval(loadActivity, 5000);
+    });
+
+    // ── Database stats dashboard (#86) ───────────────────────────────────
+    var statsTimer = null;
+
+    function renderStatsConnSelect() {
+      var sel = document.getElementById('stats-conn-select');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">Select connection…</option>'
+        + connections.map(function (c) {
+            var s = statuses[c.id] || 'disconnected';
+            return '<option value="' + esc(c.id) + '">' + esc(c.label) + (s === 'connected' ? ' ●' : ' ○') + '</option>';
+          }).join('');
+    }
+
+    function loadStats() {
+      var sel = document.getElementById('stats-conn-select');
+      if (!sel || !sel.value) return;
+      document.getElementById('stats-status').textContent = 'Loading…';
+      api.send('loadDbStats', { connId: sel.value });
+    }
+
+    document.getElementById('btn-stats-refresh').addEventListener('click', loadStats);
+    document.getElementById('stats-conn-select').addEventListener('change', function () { if (this.value) loadStats(); });
+    document.getElementById('stats-auto-refresh').addEventListener('change', function () {
+      clearInterval(statsTimer);
+      if (this.checked) statsTimer = setInterval(loadStats, 30000);
+    });
+
+    // ── Roles & Users (#80) ───────────────────────────────────────────────
+
+    function renderRolesConnSelect() {
+      var sel = document.getElementById('roles-conn-select');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">Select connection…</option>'
+        + connections.map(function (c) {
+            var s = statuses[c.id] || 'disconnected';
+            return '<option value="' + esc(c.id) + '">' + esc(c.label) + (s === 'connected' ? ' ●' : ' ○') + '</option>';
+          }).join('');
+    }
+
+    function loadRoles() {
+      var sel = document.getElementById('roles-conn-select');
+      if (!sel || !sel.value) return;
+      document.getElementById('roles-status').textContent = 'Loading…';
+      api.send('loadRoles', { connId: sel.value });
+    }
+
+    document.getElementById('btn-roles-refresh').addEventListener('click', loadRoles);
+    document.getElementById('roles-conn-select').addEventListener('change', function () { if (this.value) loadRoles(); });
+
+    document.getElementById('btn-roles-new').addEventListener('click', function () {
+      document.getElementById('roles-modal').classList.remove('hidden');
+      document.getElementById('role-name').value = '';
+      document.getElementById('role-password').value = '';
+      document.getElementById('role-login').checked = true;
+      document.getElementById('role-createdb').checked = false;
+      document.getElementById('role-createrole').checked = false;
+      document.getElementById('role-superuser').checked = false;
+    });
+
+    document.getElementById('btn-role-cancel').addEventListener('click', function () {
+      document.getElementById('roles-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-role-create').addEventListener('click', function () {
+      var sel = document.getElementById('roles-conn-select');
+      var name = document.getElementById('role-name').value.trim();
+      if (!name || !sel.value) return;
+      api.send('createRole', {
+        connId: sel.value, name: name,
+        password: document.getElementById('role-password').value,
+        login: document.getElementById('role-login').checked,
+        createdb: document.getElementById('role-createdb').checked,
+        createrole: document.getElementById('role-createrole').checked,
+        superuser: document.getElementById('role-superuser').checked,
+      });
+      document.getElementById('roles-modal').classList.add('hidden');
     });
 
     // ── Visual table creator (#58) ────────────────────────────────────────

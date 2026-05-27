@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Notification, shell } from 'electron';
+import { BrowserWindow, ipcMain, dialog, Notification, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -45,13 +45,6 @@ function pushConnections(): void {
   send('updateStatuses', connManager.getStatuses());
 }
 
-function buildDatabaseUrl(conn: PgConnection, password: string): string {
-  const user = encodeURIComponent(conn.user);
-  const pass = encodeURIComponent(password);
-  const db   = encodeURIComponent(conn.database);
-  const ssl  = conn.ssl ? '?sslmode=require' : '';
-  return `postgresql://${user}:${pass}@${conn.host}:${conn.port}/${db}${ssl}`;
-}
 
 // ── IPC registration ─────────────────────────────────────────────────────────
 
@@ -545,6 +538,323 @@ export function registerIpc(win: BrowserWindow): void {
         const driver = connManager.getDriver(connId);
         if (!driver) break;
         try { await driver.query('SELECT pg_cancel_backend($1)', [pid]); } catch { /* best-effort */ }
+        break;
+      }
+
+      // ── Lock viewer (#79) ─────────────────────────────────────────────────
+
+      case 'loadLocks': {
+        const { connId } = data as { connId: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('locksLoaded', { connId, error: 'Not connected.' }); break; }
+        try {
+          const rows = await driver.query<Record<string, unknown>>(`
+            SELECT
+              blocked.pid AS blocked_pid,
+              blocked_act.usename AS blocked_user,
+              LEFT(blocked_act.query, 120) AS blocked_query,
+              blocking.pid AS blocking_pid,
+              blocking_act.usename AS blocking_user,
+              LEFT(blocking_act.query, 120) AS blocking_query,
+              blocked.locktype,
+              EXTRACT(EPOCH FROM (now() - blocked_act.query_start))::numeric(10,1) AS wait_sec
+            FROM pg_locks blocked
+            JOIN pg_stat_activity blocked_act  ON blocked_act.pid  = blocked.pid
+            JOIN pg_locks blocking             ON blocking.transactionid = blocked.transactionid
+                                              AND blocking.pid != blocked.pid
+                                              AND blocking.granted
+            JOIN pg_stat_activity blocking_act ON blocking_act.pid = blocking.pid
+            WHERE NOT blocked.granted
+            ORDER BY wait_sec DESC NULLS LAST
+          `);
+          send('locksLoaded', { connId, rows });
+        } catch (err) {
+          send('locksLoaded', { connId, error: String(err) });
+        }
+        break;
+      }
+
+      // ── Sequence viewer (#85) ─────────────────────────────────────────────
+
+      case 'loadSequences': {
+        const { connId, schema } = data as { connId: string; schema: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('seqsLoaded', { connId, schema, sequences: [] }); break; }
+        try {
+          const sequences = await driver.query<Record<string, unknown>>(`
+            SELECT sequence_name AS name,
+              start_value, increment_by, min_value, max_value,
+              cycle, cache_size,
+              pg_get_serial_sequence(quote_ident(table_schema) || '.' || quote_ident(table_name), column_name) IS NOT NULL AS owned
+            FROM information_schema.sequences
+            LEFT JOIN information_schema.columns
+              ON column_default LIKE 'nextval(%' || quote_ident(sequence_name) || '%'
+            WHERE sequence_schema = $1
+            ORDER BY sequence_name
+          `, [schema]);
+          send('seqsLoaded', { connId, schema, sequences });
+        } catch {
+          // fallback: simpler query
+          try {
+            const sequences = await driver.query<Record<string, unknown>>(`
+              SELECT relname AS name, 0 AS increment_by
+              FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE c.relkind = 'S' AND n.nspname = $1 ORDER BY relname
+            `, [schema]);
+            send('seqsLoaded', { connId, schema, sequences });
+          } catch (err2) {
+            send('seqsLoaded', { connId, schema, sequences: [], error: String(err2) });
+          }
+        }
+        break;
+      }
+
+      case 'seqNextVal': {
+        const { connId, schema, name } = data as { connId: string; schema: string; name: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          const rows = await driver.query<{ nextval: unknown }>(`SELECT nextval($1)`, [`"${schema}"."${name}"`]);
+          send('seqNextValResult', { value: String(rows[0]?.nextval ?? '') });
+        } catch (err) {
+          send('seqNextValResult', { error: String(err) });
+        }
+        break;
+      }
+
+      case 'seqSetVal': {
+        const { connId, schema, name, value } = data as { connId: string; schema: string; name: string; value: number };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          await driver.query(`SELECT setval($1, $2)`, [`"${schema}"."${name}"`, value]);
+          send('seqNextValResult', { value: 'Reset to ' + value });
+          // refresh the list
+          const sequences = await driver.query<Record<string, unknown>>(`
+            SELECT relname AS name, 0 AS increment_by
+            FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind = 'S' AND n.nspname = $1 ORDER BY relname
+          `, [schema]);
+          send('seqsLoaded', { connId, schema, sequences });
+        } catch (err) {
+          send('seqNextValResult', { error: String(err) });
+        }
+        break;
+      }
+
+      // ── User & Role manager (#80) ─────────────────────────────────────────
+
+      case 'loadRoles': {
+        const { connId } = data as { connId: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('rolesLoaded', { connId, error: 'Not connected.' }); break; }
+        try {
+          const roles = await driver.query<Record<string, unknown>>(`
+            SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolcanlogin,
+              rolconnlimit,
+              to_char(rolvaliduntil, 'YYYY-MM-DD') AS rolvaliduntil
+            FROM pg_roles
+            ORDER BY rolname
+          `);
+          send('rolesLoaded', { connId, roles });
+        } catch (err) {
+          send('rolesLoaded', { connId, error: String(err) });
+        }
+        break;
+      }
+
+      case 'createRole': {
+        const { connId, name, password, login, createdb, createrole, superuser } =
+          data as { connId: string; name: string; password: string; login: boolean; createdb: boolean; createrole: boolean; superuser: boolean };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        const safeName = name.replace(/"/g, '""');
+        const parts: string[] = [];
+        if (login)      parts.push('LOGIN');
+        if (password)   parts.push(`PASSWORD '${password.replace(/'/g, "''")}'`);
+        if (createdb)   parts.push('CREATEDB');
+        if (createrole) parts.push('CREATEROLE');
+        if (superuser)  parts.push('SUPERUSER');
+        try {
+          await driver.query(`CREATE ROLE "${safeName}" ${parts.join(' ')}`);
+          send('roleChanged', { connId });
+        } catch (err) {
+          send('showError', { message: String(err) });
+        }
+        break;
+      }
+
+      case 'dropRole': {
+        const { connId, name } = data as { connId: string; name: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        const safeName = name.replace(/"/g, '""');
+        try {
+          await driver.query(`DROP ROLE IF EXISTS "${safeName}"`);
+          send('roleChanged', { connId });
+        } catch (err) {
+          send('showError', { message: String(err) });
+        }
+        break;
+      }
+
+      // ── VACUUM / ANALYZE runner (#82) ────────────────────────────────────
+
+      case 'runVacuum': {
+        const { connId, schema, tableName, op } = data as { connId: string; schema: string; tableName: string; op: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        const allowedOps = ['VACUUM', 'ANALYZE', 'VACUUM ANALYZE', 'VACUUM FULL'];
+        if (!allowedOps.includes(op)) break;
+        const start = Date.now();
+        try {
+          await driver.query(`${op} "${schema}"."${tableName}"`);
+          send('vacuumResult', { op, durationMs: Date.now() - start });
+        } catch (err) {
+          send('vacuumResult', { op, error: String(err), durationMs: Date.now() - start });
+        }
+        break;
+      }
+
+      // ── Extension manager (#84) ───────────────────────────────────────────
+
+      case 'loadExtensions': {
+        const { connId } = data as { connId: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('extsLoaded', { connId, installed: [], available: [] }); break; }
+        try {
+          const [installed, available] = await Promise.all([
+            driver.query<Record<string, unknown>>(`
+              SELECT name, default_version, installed_version, comment
+              FROM pg_available_extensions
+              WHERE installed_version IS NOT NULL
+              ORDER BY name
+            `),
+            driver.query<Record<string, unknown>>(`
+              SELECT name, default_version, comment
+              FROM pg_available_extensions
+              ORDER BY name
+              LIMIT 200
+            `),
+          ]);
+          send('extsLoaded', { connId, installed, available });
+        } catch (err) {
+          send('extsLoaded', { connId, installed: [], available: [], error: String(err) });
+        }
+        break;
+      }
+
+      case 'extInstall': {
+        const { connId, name } = data as { connId: string; name: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          await driver.query(`CREATE EXTENSION IF NOT EXISTS "${name}"`);
+          // reload list
+          const installed = await driver.query<Record<string, unknown>>(`
+            SELECT name, default_version, installed_version, comment
+            FROM pg_available_extensions WHERE installed_version IS NOT NULL ORDER BY name
+          `);
+          const available = await driver.query<Record<string, unknown>>(`
+            SELECT name, default_version, comment FROM pg_available_extensions ORDER BY name LIMIT 200
+          `);
+          send('extsLoaded', { connId, installed, available });
+        } catch (err) {
+          send('showError', { message: String(err) });
+        }
+        break;
+      }
+
+      case 'extDrop': {
+        const { connId, name } = data as { connId: string; name: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          await driver.query(`DROP EXTENSION IF EXISTS "${name}"`);
+          const installed = await driver.query<Record<string, unknown>>(`
+            SELECT name, default_version, installed_version, comment
+            FROM pg_available_extensions WHERE installed_version IS NOT NULL ORDER BY name
+          `);
+          const available = await driver.query<Record<string, unknown>>(`
+            SELECT name, default_version, comment FROM pg_available_extensions ORDER BY name LIMIT 200
+          `);
+          send('extsLoaded', { connId, installed, available });
+        } catch (err) {
+          send('showError', { message: String(err) });
+        }
+        break;
+      }
+
+      // ── Database stats dashboard (#86) ───────────────────────────────────
+
+      case 'loadDbStats': {
+        const { connId } = data as { connId: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('dbStatsLoaded', { connId, error: 'Not connected.' }); break; }
+        try {
+          const [dbRows, tableRows, bloatRows, unusedIdxRows, seqScanRows] = await Promise.all([
+            driver.query<Record<string, unknown>>(`
+              SELECT
+                xact_commit, xact_rollback, deadlocks, temp_files,
+                blks_hit, blks_read,
+                CASE WHEN blks_hit + blks_read = 0 THEN 100
+                     ELSE round(blks_hit::numeric / (blks_hit + blks_read) * 100, 2)
+                END AS cache_hit_pct,
+                pg_size_pretty(pg_database_size(current_database())) AS size
+              FROM pg_stat_database
+              WHERE datname = current_database()
+            `),
+            driver.query<Record<string, unknown>>(`
+              SELECT
+                n.nspname AS schema,
+                c.relname AS table,
+                pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size,
+                pg_size_pretty(pg_relation_size(c.oid))       AS table_size,
+                pg_size_pretty(pg_indexes_size(c.oid))        AS index_size,
+                s.n_live_tup, s.n_dead_tup
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
+              WHERE c.relkind = 'r' AND n.nspname NOT IN ('pg_catalog','information_schema')
+              ORDER BY pg_total_relation_size(c.oid) DESC
+              LIMIT 30
+            `),
+            driver.query<Record<string, unknown>>(`
+              SELECT
+                schemaname AS schema, relname AS table,
+                n_live_tup, n_dead_tup,
+                CASE WHEN n_live_tup + n_dead_tup = 0 THEN 0
+                     ELSE round(n_dead_tup::numeric / (n_live_tup + n_dead_tup) * 100, 1)
+                END AS bloat_pct,
+                to_char(last_autovacuum, 'YYYY-MM-DD HH24:MI')  AS last_autovacuum,
+                to_char(last_vacuum,     'YYYY-MM-DD HH24:MI')  AS last_vacuum
+              FROM pg_stat_user_tables
+              WHERE n_dead_tup > 0
+              ORDER BY bloat_pct DESC NULLS LAST
+              LIMIT 30
+            `),
+            driver.query<Record<string, unknown>>(`
+              SELECT schemaname AS schema, tablename AS table, indexname AS index,
+                pg_size_pretty(pg_relation_size(indexrelid)) AS size, idx_scan
+              FROM pg_stat_user_indexes
+              WHERE idx_scan = 0
+              ORDER BY pg_relation_size(indexrelid) DESC
+              LIMIT 30
+            `),
+            driver.query<Record<string, unknown>>(`
+              SELECT schemaname AS schema, relname AS table,
+                seq_scan, n_live_tup,
+                pg_size_pretty(pg_relation_size(relid)) AS size
+              FROM pg_stat_user_tables
+              WHERE seq_scan > 50 AND n_live_tup > 1000
+              ORDER BY seq_scan DESC
+              LIMIT 20
+            `),
+          ]);
+          send('dbStatsLoaded', { connId, db: dbRows[0] ?? {}, tables: tableRows, bloat: bloatRows, unusedIdx: unusedIdxRows, seqScans: seqScanRows });
+        } catch (err) {
+          send('dbStatsLoaded', { connId, error: String(err) });
+        }
         break;
       }
 
