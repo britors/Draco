@@ -1190,7 +1190,8 @@
       var colList = cols[connId + ':' + schemaName + ':' + t.name];
       var acts = btnIcon('open-table-detail', { connId: connId, schema: schemaName, table: t.name }, 'codicon-table', 'Open Details')
                + btnIcon('open-ddl', { connId: connId, schema: schemaName, table: t.name }, 'codicon-symbol-structure', 'View DDL')
-               + btnIcon('copy-name', { name: t.name }, 'codicon-copy', 'Copy name');
+               + btnIcon('copy-name', { name: t.name }, 'codicon-copy', 'Copy name')
+               + btnIcon('drop-table', { connId: connId, schema: schemaName, table: t.name }, 'codicon-trash', 'Drop table');
       var prismaPin = '';
       var estKey = connId + ':' + schemaName;
       var estVal = settings.showRowCount && estimates[estKey] !== undefined ? estimates[estKey][t.name] : undefined;
@@ -1366,6 +1367,8 @@
           api.send('openDDL', { connId: d.connId, schema: d.schema, table: d.table }); break;
         case 'copy-name':
           navigator.clipboard.writeText(d.name).catch(function () {}); break;
+        case 'drop-table':
+          if (confirm('Drop ' + (d.table) + '?\n\nThis is irreversible.')) api.send('dropTable', { connId: d.connId, schema: d.schema, table: d.table }); break;
         case 'ext-install':
           if (confirm('Install extension "' + d.name + '"?')) api.send('extInstall', { connId: d.connId, name: d.name }); break;
         case 'ext-drop':
@@ -2583,6 +2586,15 @@ if (tab === 'create-table') { renderCreateTable(); }
         case 'extsLoaded': exts[d.connId] = { installed: d.installed, available: d.available }; delete loadingNodes['eg:' + d.connId]; renderTree(); break;
         case 'seqNextValResult': showToast(d.error ? 'Error: ' + d.error : 'Next value: ' + d.value); break;
         case 'vacuumResult': showToast(d.error ? 'Error: ' + d.error : d.op + ' completed in ' + d.durationMs + 'ms'); break;
+        case 'dropTableResult':
+          if (d.error) { showToast('Error: ' + d.error); }
+          else {
+            showToast('Table ' + d.table + ' dropped');
+            delete tables[d.connId + ':' + d.schema];
+            delete cols[d.connId + ':' + d.schema + ':' + d.table];
+            renderTree();
+          }
+          break;
         case 'rolesLoaded': {
           var rolesStatus = document.getElementById('roles-status');
           var rolesContent = document.getElementById('roles-content');

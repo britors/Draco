@@ -698,6 +698,21 @@ export function registerIpc(win: BrowserWindow): void {
         break;
       }
 
+      // ── Drop table ────────────────────────────────────────────────────────
+
+      case 'dropTable': {
+        const { connId, schema, table } = data as { connId: string; schema: string; table: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          await driver.query(`DROP TABLE "${schema.replace(/"/g, '""')}"."${table.replace(/"/g, '""')}"`);
+          send('dropTableResult', { connId, schema, table });
+        } catch (err) {
+          send('dropTableResult', { connId, schema, table, error: String(err) });
+        }
+        break;
+      }
+
       // ── VACUUM / ANALYZE runner (#82) ────────────────────────────────────
 
       case 'runVacuum': {
@@ -834,7 +849,7 @@ export function registerIpc(win: BrowserWindow): void {
               LIMIT 30
             `),
             driver.query<Record<string, unknown>>(`
-              SELECT schemaname AS schema, tablename AS table, indexname AS index,
+              SELECT schemaname AS schema, relname AS table, indexrelname AS index,
                 pg_size_pretty(pg_relation_size(indexrelid)) AS size, idx_scan
               FROM pg_stat_user_indexes
               WHERE idx_scan = 0
