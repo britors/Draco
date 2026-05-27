@@ -276,7 +276,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           const durationMs = Date.now() - start;
           const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
           this._out.appendLine(`[query] ${conn?.label ?? connId} — ${rows.length} rows in ${durationMs}ms`);
-          this.postMessage('queryResult', { tabId, columns, rows, durationMs });
+          this.postMessage('queryResult', { tabId, columns, rows, rowCount: rows.length, durationMs });
           await this._history.add({
             sql, connId, connLabel: conn?.label ?? connId,
             timestamp: Date.now(), durationMs, rowCount: rows.length,

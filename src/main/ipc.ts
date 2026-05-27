@@ -286,7 +286,7 @@ export function registerIpc(win: BrowserWindow): void {
           const rows = await runQuery();
           const durationMs = Date.now() - start;
           const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
-          send('queryResult', { tabId, columns, rows, durationMs });
+          send('queryResult', { tabId, columns, rows, rowCount: rows.length, durationMs });
           addHistory({
             sql, connId, connLabel: conn?.label ?? connId,
             timestamp: Date.now(), durationMs, rowCount: rows.length,
@@ -312,7 +312,7 @@ export function registerIpc(win: BrowserWindow): void {
               const rows = await runQuery();
               const durationMs = Date.now() - start;
               const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
-              send('queryResult', { tabId, columns, rows, durationMs });
+              send('queryResult', { tabId, columns, rows, rowCount: rows.length, durationMs });
               addHistory({ sql, connId, connLabel: conn?.label ?? connId, timestamp: Date.now(), durationMs, rowCount: rows.length });
               if (durationMs >= 5_000 && Notification.isSupported()) {
                 new Notification({ title: 'Query finished', body: `Completed in ${(durationMs / 1000).toFixed(1)}s — ${rows.length} rows` }).show();
