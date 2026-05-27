@@ -304,6 +304,14 @@
     .job-status-run  { color: #e8a838; font-size: 10px; }
     .jobs-no-cron { padding: 24px; display: flex; flex-direction: column; gap: 12px; max-width: 560px; }
     .jobs-no-cron code { font-family: var(--vscode-editor-font-family, monospace); background: var(--vscode-textBlockQuote-background); padding: 2px 5px; border-radius: 3px; font-size: 11px; }
+    #panel-func-editor { display: flex; flex-direction: column; }
+    .func-editor-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    #func-monaco-container { flex: 1; min-height: 0; }
+    .func-result { border-top: 1px solid var(--vscode-panel-border); padding: 8px 12px; font-size: 12px; max-height: 200px; overflow: auto; }
+    .func-result-ok   { color: var(--vscode-testing-iconPassed, #73c991); font-weight: 600; margin-bottom: 4px; }
+    .func-result-err  { color: var(--vscode-errorForeground); font-weight: 600; margin-bottom: 4px; }
+    .func-result pre  { margin: 0; font-family: var(--vscode-editor-font-family, monospace); font-size: 11px; white-space: pre-wrap; word-break: break-all; }
+    #job-cmd-container { height: 180px; border: 1px solid var(--vscode-input-border); border-radius: 3px; overflow: hidden; }
     .dash-refresh { position: absolute; top: 10px; right: 14px; }
     .roles-modal { position: absolute; inset: 0; background: rgba(0,0,0,.45); z-index: 300; display: flex; align-items: center; justify-content: center; }
     .roles-modal-box { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px; padding: 20px; min-width: 320px; max-width: 420px; width: 90%; }
@@ -725,7 +733,7 @@
               <span style="font-size:10px;color:var(--vscode-descriptionForeground)">min hour dom month dow — ex: "0 * * * *" = every hour, "0 2 * * *" = daily at 2 AM</span>
             </label>
             <label style="font-size:12px">Command (SQL)<br>
-              <textarea class="conn-input" id="job-command" rows="4" style="width:100%;margin-top:4px;font-family:var(--vscode-editor-font-family,monospace);resize:vertical" placeholder="DELETE FROM logs WHERE created_at \x3c now() - interval '30 days'"></textarea>
+              <div id="job-cmd-container" style="margin-top:4px"></div>
             </label>
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
@@ -741,6 +749,36 @@
           <div id="job-runs-content" style="max-height:420px;overflow-y:auto"></div>
           <div style="display:flex;justify-content:flex-end;margin-top:12px">
             <button class="btn btn-secondary" id="btn-runs-close">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Function editor panel -->
+    <div class="panel hidden" id="panel-func-editor">
+      <div class="query-toolbar" style="gap:8px">
+        <span style="font-weight:600;font-size:12px" id="func-editor-title">Function Editor</span>
+        <span style="font-size:11px;color:var(--vscode-descriptionForeground)" id="func-editor-conn-label"></span>
+        <button class="btn btn-primary" id="btn-func-save"><i class="codicon codicon-save"></i>Save</button>
+        <button class="btn btn-secondary" id="btn-func-validate"><i class="codicon codicon-check"></i>Validate</button>
+        <button class="btn btn-secondary" id="btn-func-test"><i class="codicon codicon-play"></i>Test…</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-secondary" id="btn-func-close"><i class="codicon codicon-close"></i>Back</button>
+      </div>
+      <div class="func-editor-wrap">
+        <div id="func-monaco-container"></div>
+        <div class="func-result hidden" id="func-result"></div>
+      </div>
+      <!-- Test call modal -->
+      <div class="roles-modal hidden" id="func-test-modal">
+        <div class="roles-modal-box" style="width:480px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:10px">Test Function</div>
+          <label style="font-size:12px">SQL call expression<br>
+            <input class="conn-input" id="func-test-expr" placeholder="SELECT my_schema.my_func(arg1, arg2)" style="width:100%;margin-top:4px;font-family:var(--vscode-editor-font-family,monospace)">
+          </label>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+            <button class="btn btn-secondary" id="btn-func-test-cancel">Cancel</button>
+            <button class="btn btn-primary" id="btn-func-test-run">Run</button>
           </div>
         </div>
       </div>
@@ -1174,7 +1212,7 @@
         + treeIcon(isExp ? 'folderFuncsOpen' : 'folderFuncsClosed')
         + '<span class="tree-label">Functions</span>'
         + (fList ? '<span class="tree-badge">' + fList.length + '</span>' : '')
-        + '<div class="tree-actions"></div></div>';
+        + '<div class="tree-actions">' + btnIcon('new-func', { connId: connId, schema: schemaName }, 'codicon-add', 'New Function') + '</div></div>';
       if (isExp) {
         if (loadingNodes[nid]) { html += loadingRow(3); }
         else if (!fList) { html += infoRow(3, 'Loading…'); }
@@ -1317,7 +1355,10 @@
         + treeIcon(fn.type === 'FUNCTION' ? 'func' : 'procedure')
         + '<span class="tree-label">' + hl(fn.name, f) + '</span>'
         + (fn.returnType ? '<span class="col-type">→ ' + esc(fn.returnType) + '</span>' : '')
-        + '<div class="tree-actions">' + btnIcon('copy-name', { name: fn.name }, 'codicon-copy', 'Copy name') + '</div></div>';
+        + '<div class="tree-actions">'
+        + btnIcon('edit-func', { connId: connId, schema: schemaName, name: fn.name }, 'codicon-edit', 'Edit function')
+        + btnIcon('copy-name', { name: fn.name }, 'codicon-copy', 'Copy name')
+        + '</div></div>';
       if (isExp) {
         if (loadingNodes[nid]) { html += loadingRow(4); }
         else if (!pList) { html += infoRow(4, 'Loading…'); }
@@ -1459,6 +1500,10 @@
           if (confirm('Install extension "' + d.name + '"?')) api.send('extInstall', { connId: d.connId, name: d.name }); break;
         case 'ext-drop':
           if (confirm('Drop extension "' + d.name + '"?')) api.send('extDrop', { connId: d.connId, name: d.name }); break;
+        case 'new-func':
+          openFuncEditor(d.connId, d.schema, null, null); break;
+        case 'edit-func':
+          openFuncEditor(d.connId, d.schema, d.name, null); break;
         case 'seq-next':
           api.send('seqNextVal', { connId: d.connId, schema: d.schema, name: d.name }); break;
         case 'seq-reset': {
@@ -1504,6 +1549,7 @@
       if (tab === 'stats') { renderStatsConnSelect(); }
       if (tab === 'roles') { renderRolesConnSelect(); }
       if (tab === 'jobs') { renderJobsConnSelect(); }
+      if (tab === 'func-editor') { ensureFuncMonaco(null); }
       if (tab === 'erd') { if (window.__erdOnTabActivated) window.__erdOnTabActivated(); }
       if (tab === 'create-table') { renderCreateTable(); }
       if (isDynTab) { activeTableTabId = tab; renderActiveTableDetail(); }
@@ -2295,9 +2341,14 @@
       if (connId) api.send('loadCompletions', { connId: connId });
     });
 
-    // ── Monaco ─────────────────────────────────────────────────────────────
-    function ensureMonacoReady() {
-      if (monacoReady) { if (monacoEditor) monacoEditor.layout(); return; }
+    // ── Monaco loader ──────────────────────────────────────────────────────
+    var _monacoLoaded = false;
+    var _monacoQueue = [];
+
+    function withMonaco(fn) {
+      if (_monacoLoaded) { fn(); return; }
+      _monacoQueue.push(fn);
+      if (_monacoQueue.length > 1) return;
       window.MonacoEnvironment = {
         getWorkerUrl: function () {
           var code = 'self.MonacoEnvironment={baseUrl:"' + MONACO_CDN + '/"};importScripts("' + MONACO_CDN + '/base/worker/workerMain.js");';
@@ -2306,13 +2357,25 @@
       };
       require.config({ paths: { vs: MONACO_CDN } });
       require(['vs/editor/editor.main'], function () {
+        _monacoLoaded = true;
+        _monacoQueue.forEach(function (f) { try { f(); } catch (e) { console.error(e); } });
+        _monacoQueue = [];
+      });
+    }
+
+    function monacoTheme() {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'vs-dark' : 'vs';
+    }
+
+    function ensureMonacoReady() {
+      withMonaco(function () {
+        if (monacoReady) { if (monacoEditor) monacoEditor.layout(); return; }
         monacoReady = true;
-        var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         var tab = activeQTab();
         monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
           value: tab.sql || '',
           language: 'sql',
-          theme: isDark ? 'vs-dark' : 'vs',
+          theme: monacoTheme(),
           minimap: { enabled: false },
           lineNumbers: 'on',
           fontSize: 13,
@@ -2327,6 +2390,55 @@
         monacoEditor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, formatSQL);
         monacoEditor.onDidChangeModelContent(function () { activeQTab().sql = monacoEditor.getValue(); });
         if (tab.connId) api.send('loadCompletions', { connId: tab.connId });
+      });
+    }
+
+    // ── Function editor Monaco ─────────────────────────────────────────────
+    var funcMonaco = null;
+    var jobCmdMonaco = null;
+    var funcEditorState = { connId: null, schema: null, funcName: null, isNew: false };
+
+    function ensureFuncMonaco(cb) {
+      withMonaco(function () {
+        if (!funcMonaco) {
+          funcMonaco = monaco.editor.create(document.getElementById('func-monaco-container'), {
+            language: 'sql',
+            theme: monacoTheme(),
+            minimap: { enabled: false },
+            lineNumbers: 'on',
+            fontSize: 13,
+            wordWrap: 'on',
+            automaticLayout: true,
+            scrollBeyondLastLine: false,
+            tabSize: 2,
+            renderLineHighlight: 'all',
+          });
+          funcMonaco.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function () {
+            document.getElementById('btn-func-save').click();
+          });
+        }
+        if (cb) cb();
+      });
+    }
+
+    function ensureJobCmdMonaco(initialValue, cb) {
+      withMonaco(function () {
+        if (!jobCmdMonaco) {
+          jobCmdMonaco = monaco.editor.create(document.getElementById('job-cmd-container'), {
+            language: 'sql',
+            theme: monacoTheme(),
+            minimap: { enabled: false },
+            lineNumbers: 'off',
+            fontSize: 12,
+            wordWrap: 'on',
+            automaticLayout: false,
+            scrollBeyondLastLine: false,
+            tabSize: 2,
+          });
+        }
+        jobCmdMonaco.setValue(initialValue || '');
+        setTimeout(function () { if (jobCmdMonaco) jobCmdMonaco.layout(); }, 60);
+        if (cb) cb();
       });
     }
 
@@ -2952,6 +3064,67 @@
           break;
         }
         case 'funcParamsLoaded': funcParams[d.connId + ':' + d.schema + ':' + d.specificName] = d.params; delete loadingNodes['f:' + d.connId + ':' + d.schema + ':' + d.specificName]; renderTree(); break;
+        case 'functionDDLLoaded': {
+          if (d.error) { if (funcMonaco) funcMonaco.setValue('-- Error: ' + d.error); break; }
+          if (!d.overloads || !d.overloads.length) { if (funcMonaco) funcMonaco.setValue('-- No DDL found for ' + d.funcName); break; }
+          if (funcMonaco) funcMonaco.setValue(d.overloads[0].ddl || '');
+          break;
+        }
+        case 'functionSaved': {
+          var saveBtn = document.getElementById('btn-func-save');
+          if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '\x3ci class="codicon codicon-save"\x3e\x3c/i\x3eSave'; }
+          if (d.error) {
+            var res = document.getElementById('func-result');
+            if (res) { res.classList.remove('hidden'); res.innerHTML = '<div class="func-result-err">✘ ' + esc(d.error) + '</div>'; }
+          } else {
+            showToast('Function saved');
+            var res2 = document.getElementById('func-result');
+            if (res2) { res2.classList.remove('hidden'); res2.innerHTML = '<div class="func-result-ok">✔ Saved successfully</div>'; }
+            if (funcEditorState.schema) {
+              var fkey = funcEditorState.connId + ':' + funcEditorState.schema;
+              delete funcs[fkey];
+              renderTree();
+            }
+          }
+          break;
+        }
+        case 'functionValidated': {
+          var valBtn = document.getElementById('btn-func-validate');
+          if (valBtn) { valBtn.disabled = false; valBtn.innerHTML = '\x3ci class="codicon codicon-check"\x3e\x3c/i\x3eValidate'; }
+          var vres = document.getElementById('func-result');
+          if (vres) {
+            vres.classList.remove('hidden');
+            if (d.valid) {
+              vres.innerHTML = '<div class="func-result-ok">✔ Valid — no syntax errors detected</div>';
+            } else {
+              vres.innerHTML = '<div class="func-result-err">✘ ' + esc(d.error || 'Validation failed') + '</div>';
+            }
+          }
+          break;
+        }
+        case 'funcTestResult': {
+          var tres = document.getElementById('func-result');
+          if (!tres) break;
+          tres.classList.remove('hidden');
+          if (d.error) {
+            tres.innerHTML = '<div class="func-result-err">✘ ' + esc(d.error) + '</div>';
+          } else if (!d.rows || !d.columns || !d.columns.length) {
+            tres.innerHTML = '<div class="func-result-ok">✔ Executed — no rows returned</div>';
+          } else {
+            var thtml = '<div class="func-result-ok">✔ ' + d.rows.length + ' row' + (d.rows.length !== 1 ? 's' : '') + '</div>'
+              + '<table class="stats-table" style="margin-top:6px"><thead><tr>'
+              + d.columns.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>';
+            d.rows.forEach(function (r) {
+              thtml += '<tr>' + d.columns.map(function (c) {
+                var v = r[c];
+                return '<td>' + esc(v === null || v === undefined ? 'NULL' : String(v)) + '</td>';
+              }).join('') + '</tr>';
+            });
+            thtml += '</tbody></table>';
+            tres.innerHTML = thtml;
+          }
+          break;
+        }
         case 'testResult': {
           var ts = document.getElementById('test-status');
           if (d.success) { ts.textContent = 'Connected successfully!'; ts.className = 'test-status success'; }
@@ -3558,8 +3731,8 @@
               document.getElementById('jobs-modal-title').textContent = 'Edit Job';
               document.getElementById('job-name').value = btn.dataset.jname || '';
               document.getElementById('job-schedule').value = btn.dataset.jsched || '';
-              document.getElementById('job-command').value = btn.dataset.jcmd || '';
               document.getElementById('jobs-modal').classList.remove('hidden');
+              ensureJobCmdMonaco(btn.dataset.jcmd || '', null);
               break;
             case 'toggle':
               api.send('toggleJob', { connId: connId, jobId: jid, active: btn.dataset.jactive === '1' });
@@ -3588,8 +3761,8 @@
       document.getElementById('jobs-modal-title').textContent = 'New Job';
       document.getElementById('job-name').value = '';
       document.getElementById('job-schedule').value = '';
-      document.getElementById('job-command').value = '';
       document.getElementById('jobs-modal').classList.remove('hidden');
+      ensureJobCmdMonaco('', null);
     });
 
     document.getElementById('btn-job-cancel').addEventListener('click', function () {
@@ -3599,7 +3772,7 @@
     document.getElementById('btn-job-save').addEventListener('click', function () {
       var sel = document.getElementById('jobs-conn-select');
       var schedule = document.getElementById('job-schedule').value.trim();
-      var command = document.getElementById('job-command').value.trim();
+      var command = jobCmdMonaco ? jobCmdMonaco.getValue().trim() : '';
       if (!sel.value || !schedule || !command) return;
       if (jobsEditingId !== null) {
         api.send('updateJob', { connId: sel.value, jobId: jobsEditingId, schedule: schedule, command: command });
@@ -3611,6 +3784,103 @@
 
     document.getElementById('btn-runs-close').addEventListener('click', function () {
       document.getElementById('job-runs-modal').classList.add('hidden');
+    });
+
+    // ── Function editor ───────────────────────────────────────────────────
+
+    var funcEditorPrevTab = 'query';
+
+    function funcNewTemplate(schema) {
+      var s = schema || 'public';
+      return 'CREATE OR REPLACE FUNCTION ' + s + '.new_function(\n'
+        + '  -- p_param1 integer,\n'
+        + '  -- p_param2 text DEFAULT NULL\n'
+        + ')\n'
+        + 'RETURNS void\n'
+        + 'LANGUAGE plpgsql\n'
+        + 'VOLATILE\n'
+        + 'AS $$\n'
+        + 'BEGIN\n'
+        + '  -- TODO: implement function body\n'
+        + '  RAISE NOTICE \'new_function called\';\n'
+        + 'END;\n'
+        + '$$;\n';
+    }
+
+    function openFuncEditor(connId, schema, funcName, ddl) {
+      funcEditorState.connId = connId;
+      funcEditorState.schema = schema;
+      funcEditorState.funcName = funcName;
+      funcEditorState.isNew = !funcName;
+      var conn = connections.find(function (c) { return c.id === connId; });
+      document.getElementById('func-editor-conn-label').textContent = ((conn && conn.label) || connId) + ' \xb7 ' + (schema || '');
+      document.getElementById('func-editor-title').textContent = funcName ? 'Edit: ' + schema + '.' + funcName : 'New Function';
+      var res = document.getElementById('func-result');
+      if (res) { res.classList.add('hidden'); res.innerHTML = ''; }
+      var saveBtn = document.getElementById('btn-func-save');
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="codicon codicon-save"></i>Save'; }
+      var valBtn = document.getElementById('btn-func-validate');
+      if (valBtn) { valBtn.disabled = false; valBtn.innerHTML = '<i class="codicon codicon-check"></i>Validate'; }
+      funcEditorPrevTab = persisted.tab || 'query';
+      switchMainTab('func-editor');
+      ensureFuncMonaco(function () {
+        if (ddl) {
+          funcMonaco.setValue(ddl);
+        } else if (funcName) {
+          funcMonaco.setValue('-- Loading DDL\x2026');
+          api.send('getFunctionDDL', { connId: connId, schema: schema, funcName: funcName });
+        } else {
+          funcMonaco.setValue(funcNewTemplate(schema));
+        }
+      });
+    }
+
+    document.getElementById('btn-func-save').addEventListener('click', function () {
+      if (!funcEditorState.connId || !funcMonaco) return;
+      var ddl = funcMonaco.getValue().trim();
+      if (!ddl) return;
+      this.disabled = true;
+      this.innerHTML = '<i class="codicon codicon-loading codicon-modifier-spin"></i>Saving\x2026';
+      api.send('saveFunction', { connId: funcEditorState.connId, ddl: ddl });
+    });
+
+    document.getElementById('btn-func-validate').addEventListener('click', function () {
+      if (!funcEditorState.connId || !funcMonaco) return;
+      var ddl = funcMonaco.getValue().trim();
+      if (!ddl) return;
+      this.disabled = true;
+      this.innerHTML = '<i class="codicon codicon-loading codicon-modifier-spin"></i>Validating\x2026';
+      var res = document.getElementById('func-result');
+      if (res) { res.classList.add('hidden'); }
+      api.send('validateFunction', { connId: funcEditorState.connId, ddl: ddl });
+    });
+
+    document.getElementById('btn-func-test').addEventListener('click', function () {
+      var expr = document.getElementById('func-test-expr');
+      if (funcEditorState.funcName && funcEditorState.schema) {
+        expr.value = 'SELECT ' + funcEditorState.schema + '.' + funcEditorState.funcName + '()';
+      } else {
+        expr.value = 'SELECT ';
+      }
+      document.getElementById('func-test-modal').classList.remove('hidden');
+      setTimeout(function () { expr.focus(); expr.setSelectionRange(expr.value.length, expr.value.length); }, 50);
+    });
+
+    document.getElementById('btn-func-test-cancel').addEventListener('click', function () {
+      document.getElementById('func-test-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-func-test-run').addEventListener('click', function () {
+      var sql = document.getElementById('func-test-expr').value.trim();
+      if (!sql || !funcEditorState.connId) return;
+      document.getElementById('func-test-modal').classList.add('hidden');
+      var res = document.getElementById('func-result');
+      if (res) { res.classList.remove('hidden'); res.innerHTML = '<div style="color:var(--vscode-descriptionForeground)"><i class="codicon codicon-loading codicon-modifier-spin"></i> Running\x2026</div>'; }
+      api.send('callFunction', { connId: funcEditorState.connId, sql: sql });
+    });
+
+    document.getElementById('btn-func-close').addEventListener('click', function () {
+      switchMainTab(funcEditorPrevTab || 'query');
     });
 
     // ── Visual table creator (#58) ────────────────────────────────────────

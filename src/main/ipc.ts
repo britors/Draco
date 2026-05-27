@@ -949,6 +949,72 @@ export function registerIpc(win: BrowserWindow): void {
         break;
       }
 
+      // ── Function editor ───────────────────────────────────────────────────
+
+      case 'getFunctionDDL': {
+        const { connId, schema, funcName } = data as { connId: string; schema: string; funcName: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('functionDDLLoaded', { connId, error: 'Not connected.' }); break; }
+        try {
+          const rows = await driver.query<{ ddl: string; args: string; oid: string }>(`
+            SELECT pg_get_functiondef(p.oid) AS ddl,
+                   pg_get_function_identity_arguments(p.oid) AS args,
+                   p.oid::text AS oid
+            FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = $1 AND p.proname = $2
+            ORDER BY p.oid
+          `, [schema, funcName]);
+          send('functionDDLLoaded', { connId, schema, funcName, overloads: rows });
+        } catch (err) {
+          send('functionDDLLoaded', { connId, error: String(err) });
+        }
+        break;
+      }
+
+      case 'saveFunction': {
+        const { connId, ddl } = data as { connId: string; ddl: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          await driver.query(ddl);
+          send('functionSaved', { connId });
+        } catch (err) {
+          send('functionSaved', { connId, error: String(err) });
+        }
+        break;
+      }
+
+      case 'validateFunction': {
+        const { connId, ddl } = data as { connId: string; ddl: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          await driver.query('BEGIN');
+          await driver.query(ddl);
+          await driver.query('ROLLBACK');
+          send('functionValidated', { connId, valid: true });
+        } catch (err) {
+          try { await driver.query('ROLLBACK'); } catch (_) { /* ignore */ }
+          send('functionValidated', { connId, valid: false, error: String(err) });
+        }
+        break;
+      }
+
+      case 'callFunction': {
+        const { connId, sql } = data as { connId: string; sql: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          const rows = await driver.query<Record<string, unknown>>(sql);
+          const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+          send('funcTestResult', { connId, rows, columns });
+        } catch (err) {
+          send('funcTestResult', { connId, error: String(err) });
+        }
+        break;
+      }
+
       // ── pg_cron Job manager ───────────────────────────────────────────────
 
       case 'loadJobs': {
