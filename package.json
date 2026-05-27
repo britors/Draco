@@ -2,7 +2,7 @@
   "name": "prisma4postgres",
   "productName": "Prisma4Postgres",
   "description": "PostgreSQL database explorer and query runner",
-  "version": "10.6.2",
+  "version": "10.6.3",
   "author": {
     "name": "britors",
     "email": "rodrigo@w3ti.com.br"
@@ -46,15 +46,16 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^25.9.1",
     "@types/pg": "^8.11.0",
-    "@vscode/codicons": "^0.0.36",
-    "electron": "^29.4.6",
-    "electron-builder": "^25.1.8",
-    "esbuild": "^0.20.0",
+    "@types/ssh2": "^1.15.5",
+    "@vscode/codicons": "^0.0.45",
+    "electron": "^42.3.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.28.0",
     "playwright-core": "^1.60.0",
     "tsx": "^4.22.3",
-    "typescript": "^5.3.0"
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "pg": "^8.11.0",

@@ -74,7 +74,7 @@ export function createMainWindow(): BrowserWindow {
 export function createAboutWindow(): void {
   const win = new BrowserWindow({
     width: 400,
-    height: 320,
+    height: 360,
     resizable: false,
     minimizable: false,
     maximizable: false,

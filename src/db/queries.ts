@@ -597,7 +597,7 @@ export async function updateTableRow(
 
 // ── Column statistics (#67) ──────────────────────────────────────────────────
 
-export interface ColumnStat {
+export interface ColumnStat extends Record<string, unknown> {
   column: string;
   nullFrac: number;
   nDistinct: number;
