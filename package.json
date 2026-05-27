@@ -33,6 +33,7 @@
     "files": [
       "out/**/*"
     ],
+    "npmRebuild": false,
     "linux": {
       "target": [
         "deb",
