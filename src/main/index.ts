@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import { createMainWindow } from './window';
 import { registerIpc } from './ipc';
+import { createMenu } from './menu';
 
 const gotLock = app.requestSingleInstanceLock();
 
@@ -19,6 +20,7 @@ if (!gotLock) {
   app.whenReady().then(() => {
     const win = createMainWindow();
     registerIpc(win);
+    createMenu(win);
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

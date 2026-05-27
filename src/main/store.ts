@@ -137,6 +137,37 @@ export function clearHistory(): void {
   writeJson('history.json', []);
 }
 
+// ── Snippets ─────────────────────────────────────────────────────────────────
+
+export interface Snippet {
+  id: string;
+  name: string;
+  sql: string;
+  createdAt: number;
+}
+
+export function listSnippets(): Snippet[] {
+  return readJson<Snippet[]>('snippets.json', []);
+}
+
+export function saveSnippet(snippet: Omit<Snippet, 'id' | 'createdAt'>): Snippet {
+  const snippets = listSnippets();
+  const s: Snippet = { ...snippet, id: randomUUID(), createdAt: Date.now() };
+  snippets.unshift(s);
+  writeJson('snippets.json', snippets);
+  return s;
+}
+
+export function deleteSnippet(id: string): void {
+  writeJson('snippets.json', listSnippets().filter(s => s.id !== id));
+}
+
+export function renameSnippet(id: string, name: string): void {
+  const snippets = listSnippets();
+  const s = snippets.find(s => s.id === id);
+  if (s) { s.name = name; writeJson('snippets.json', snippets); }
+}
+
 // ── Settings ─────────────────────────────────────────────────────────────────
 
 export function getSettings(): AppSettings {

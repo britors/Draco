@@ -11,6 +11,7 @@ export interface PgConnection {
   sshPort?: number;
   sshUser?: string;
   sshKeyPath?: string;
+  favorite?: boolean;
 }
 
 export function validateConnection(conn: Partial<PgConnection>): string[] {

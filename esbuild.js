@@ -25,6 +25,11 @@ function copyAssets() {
     fs.copyFileSync('src/renderer/ddl.html', 'out/renderer/ddl.html');
   }
 
+  // About HTML
+  if (fs.existsSync('src/renderer/about.html')) {
+    fs.copyFileSync('src/renderer/about.html', 'out/renderer/about.html');
+  }
+
   // Codicons (local copy so no CDN dependency)
   const codiDir = path.join('node_modules', '@vscode', 'codicons', 'dist');
   if (fs.existsSync(codiDir)) {

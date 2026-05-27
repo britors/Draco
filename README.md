@@ -42,6 +42,14 @@
 
 ## Features
 
+### Application Menu
+
+- **File**: New Query Tab, Save as Snippet, Export Results, New Connection, Quit
+- **Edit**: standard text operations (undo, redo, cut, copy, paste, select all)
+- **View**: switch to Query / History / Snippets / Activity / ERD tabs, toggle sidebar, Global Search
+- **Connection**: New Connection, Create Table
+- **Help**: GitHub, Report Issue, About
+
 ### Explorer (left sidebar)
 - Tree view of all schemas, tables, views, and functions
 - Folder icons matching **OpenBase.Icons** style — open/closed per node state
@@ -52,6 +60,13 @@
 - **Double-click a connection** to connect to the database
 - **Double-click a table** to open its detail tab
 - **Create Table icon** on each connected connection — opens the visual table creator pre-wired to that database
+- **Star (☆)** icon on each connection to mark it as a favourite — favourites appear at the top of the list
+
+### Global Search
+
+- **`Ctrl+P`** (or View → Global Search) opens a quick-search overlay
+- Searches tables, views, columns, and functions across connected databases
+- Results navigate to the matching object in the Explorer
 
 ### SQL Query Editor
 - Monaco editor with SQL syntax highlighting and live autocomplete
@@ -102,6 +117,13 @@
 - **Copy SQL** copies the DDL to clipboard
 - **Execute** runs against the selected database and refreshes the Explorer on success
 - Accessible from the Create Table icon on any connected connection
+- **New Schema** button — create a PostgreSQL schema directly from the table creator without leaving the form
+
+### Snippets
+
+- Save any query as a named snippet with the bookmark (🔖) button or **`Ctrl+Shift+S`**
+- Snippets tab lists all saved queries, searchable by name or content
+- Click a snippet to load it into the editor; delete with the trash icon
 
 ### Activity Viewer
 - **Activity** tab shows live `pg_stat_activity` for the selected connection
@@ -121,6 +143,15 @@
 | `Ctrl+Enter` | Run query (or selection) |
 | `F8` | Run query (or selection) |
 | `Ctrl+T` | New query tab |
+| `Ctrl+Shift+S` | Save current query as snippet |
+| `Ctrl+Shift+E` | Export results to CSV |
+| `Ctrl+P` | Global search (tables, columns, functions) |
+| `Ctrl+1` | Switch to Query tab |
+| `Ctrl+2` | Switch to History tab |
+| `Ctrl+3` | Switch to Snippets tab |
+| `Ctrl+4` | Switch to Activity tab |
+| `Ctrl+5` | Switch to ERD tab |
+| `Ctrl+B` | Toggle sidebar |
 | `Shift+Alt+F` | Format SQL |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / Redo in editor |
 

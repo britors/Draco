@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>About Prisma4Postgres</title>
+  <style>
+    :root {
+      --fg:       #e2e2f0;
+      --fg-muted: #8888aa;
+      --bg:       #0d0f1a;
+      --bg-card:  #131629;
+      --border:   #1e2040;
+      --accent:   #b44fff;
+      --link:     #6ea6ff;
+      --teal:     #00d4aa;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 400px; height: 320px;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      overflow: hidden;
+      user-select: none;
+    }
+    .wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 6px;
+      padding: 24px;
+      text-align: center;
+    }
+    svg.logo { width: 64px; height: 64px; margin-bottom: 4px; }
+    h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.2px; }
+    h1 span { color: #4a9fd8; }
+    .version {
+      font-size: 11px;
+      font-family: 'Cascadia Code', monospace;
+      color: var(--teal);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1px 10px;
+    }
+    .desc { font-size: 11px; color: var(--fg-muted); margin-top: 2px; }
+    .divider { width: 200px; height: 1px; background: var(--border); margin: 8px 0; }
+    .author { font-size: 12px; color: var(--fg-muted); }
+    .author strong { color: var(--fg); }
+    .links { display: flex; gap: 16px; margin-top: 2px; }
+    .links a {
+      font-size: 12px; color: var(--link);
+      text-decoration: none; cursor: pointer;
+    }
+    .links a:hover { text-decoration: underline; }
+    .env { font-size: 10px; color: var(--fg-muted); font-family: monospace; margin-top: 6px; }
+    .close-btn {
+      margin-top: 10px;
+      padding: 4px 28px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 3px;
+      font-size: 13px; font-family: inherit; cursor: pointer;
+    }
+    .close-btn:hover { background: #c868ff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+      <defs>
+        <radialGradient id="bg" cx="50%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#182035"/>
+          <stop offset="100%" stop-color="#080d1a"/>
+        </radialGradient>
+        <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="14" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <clipPath id="pc"><polygon points="250,62 52,370 448,370"/></clipPath>
+      </defs>
+      <rect width="500" height="500" fill="url(#bg)" rx="30"/>
+      <polygon points="250,62 52,370 448,370" fill="#2255a0" opacity="0.30" filter="url(#glow)"/>
+      <polygon points="250,62 151,216 349,216" fill="#64b3f4"/>
+      <polygon points="151,216 250,370 349,216" fill="#3d8fd9"/>
+      <polygon points="52,370 151,216 250,370"  fill="#2265a8"/>
+      <polygon points="448,370 349,216 250,370" fill="#174f8c"/>
+      <g clip-path="url(#pc)" opacity="0.10">
+        <line x1="0" y1="190" x2="500" y2="190" stroke="#9dd4fa" stroke-width="2"/>
+        <line x1="0" y1="255" x2="500" y2="255" stroke="#9dd4fa" stroke-width="2"/>
+        <line x1="0" y1="320" x2="500" y2="320" stroke="#9dd4fa" stroke-width="2"/>
+      </g>
+      <g fill="none" stroke="#05090f" stroke-width="2" stroke-linejoin="round">
+        <polygon points="250,62 52,370 448,370"/>
+        <line x1="151" y1="216" x2="349" y2="216"/>
+        <line x1="151" y1="216" x2="250" y2="370"/>
+        <line x1="349" y1="216" x2="250" y2="370"/>
+      </g>
+      <line x1="250" y1="62" x2="151" y2="216" stroke="#9dd4fa" stroke-width="2.5" stroke-linecap="round" opacity="0.80"/>
+      <line x1="250" y1="62" x2="349" y2="216" stroke="#6ab9f5" stroke-width="2.0" stroke-linecap="round" opacity="0.50"/>
+      <circle cx="250" cy="62" r="4" fill="#b8e2ff" opacity="0.90"/>
+    </svg>
+
+    <h1>Prisma<span>4</span>Postgres</h1>
+    <div class="version" id="ver">v—</div>
+    <div class="desc">PostgreSQL explorer with Prisma ORM integration</div>
+
+    <div class="divider"></div>
+
+    <div class="author">Created by <strong>Rodrigo Brito</strong></div>
+
+    <div class="links">
+      <a id="a-github">GitHub</a>
+      <a id="a-license">MIT License</a>
+    </div>
+
+    <div class="env" id="env"></div>
+
+    <button class="close-btn" id="btn-close">Close</button>
+  </div>
+
+  <script>
+    var api = window.api;
+
+    api.invoke('get-about-info').then(function (info) {
+      document.getElementById('ver').textContent = 'v' + info.version;
+      document.getElementById('env').textContent =
+        'Electron ' + info.electron + '  ·  Node ' + info.node;
+    }).catch(function () {});
+
+    document.getElementById('btn-close').addEventListener('click', function () { window.close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') window.close(); });
+
+    document.getElementById('a-github').addEventListener('click', function () {
+      api.send('open-external', 'https://github.com/britors/Prisma4Postgres');
+    });
+    document.getElementById('a-license').addEventListener('click', function () {
+      api.send('open-external', 'https://github.com/britors/Prisma4Postgres/blob/main/LICENSE');
+    });
+  </script>
+</body>
+</html>

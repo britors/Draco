@@ -2,7 +2,7 @@
   "name": "prisma4postgres",
   "productName": "Prisma4Postgres",
   "description": "PostgreSQL explorer and Prisma ORM integration",
-  "version": "10.4.0",
+  "version": "10.5.0",
   "author": {
     "name": "britors",
     "email": "rodrigo@w3ti.com.br"

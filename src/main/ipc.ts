@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, dialog, Notification } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Notification, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -11,12 +11,14 @@ import {
   getFKMap, getTableEstimates,
   getTableDetail, getERDData,
   browseTableData, updateTableRow, getColumnStats, importTableRows,
+  globalSearch, createSchema,
 } from '../db/queries';
 import { validateConnection, PgConnection } from '../types/PgConnection';
 import {
   listConnections, getConnection, saveConnection, deleteConnection, getPassword,
   listHistory, addHistory, clearHistory, getSettings, patchSettings,
   getSshPassword, storeSshPassword,
+  listSnippets, saveSnippet, deleteSnippet, renameSnippet,
 } from './store';
 import { createPanelWindow } from './window';
 
@@ -181,6 +183,21 @@ export function registerIpc(win: BrowserWindow): void {
           send('schemasLoaded', { connId, schemas: await getSchemas(driver) });
         } catch (err) {
           console.error('[loadSchemas]', err);
+        }
+        break;
+      }
+
+      case 'createSchema': {
+        const { connId, schemaName } = data as { connId: string; schemaName: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('createSchemaResult', { ok: false, error: 'Not connected.' }); break; }
+        try {
+          await createSchema(driver, schemaName);
+          const schemas = await getSchemas(driver);
+          send('schemasLoaded', { connId, schemas });
+          send('createSchemaResult', { ok: true, schemaName });
+        } catch (err: unknown) {
+          send('createSchemaResult', { ok: false, error: (err as Error).message });
         }
         break;
       }
@@ -567,6 +584,69 @@ export function registerIpc(win: BrowserWindow): void {
         break;
       }
 
+      // ── Global search (#74) ──────────────────────────────────────────────
+
+      case 'globalSearch': {
+        const { connId, term } = data as { connId: string; term: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('searchResults', { results: [] }); break; }
+        try {
+          const results = await globalSearch(driver, term);
+          send('searchResults', { results });
+        } catch {
+          send('searchResults', { results: [] });
+        }
+        break;
+      }
+
+      // ── Snippets (#65) ────────────────────────────────────────────────────
+
+      case 'loadSnippets':
+        send('snippetsLoaded', listSnippets());
+        break;
+
+      case 'saveSnippet': {
+        const { name, sql } = data as { name: string; sql: string };
+        const s = saveSnippet({ name, sql });
+        send('snippetsLoaded', listSnippets());
+        send('snippetSaved', s);
+        break;
+      }
+
+      case 'deleteSnippet': {
+        const { id } = data as { id: string };
+        deleteSnippet(id);
+        send('snippetsLoaded', listSnippets());
+        break;
+      }
+
+      case 'renameSnippet': {
+        const { id, name } = data as { id: string; name: string };
+        renameSnippet(id, name);
+        send('snippetsLoaded', listSnippets());
+        break;
+      }
+
+      // ── Favorites (#69) ───────────────────────────────────────────────────
+
+      case 'toggleFavorite': {
+        const { id } = data as { id: string };
+        const conn = getConnection(id);
+        if (!conn) break;
+        const password = getPassword(id);
+        saveConnection({ ...conn, favorite: !conn.favorite }, password);
+        pushConnections();
+        break;
+      }
+
+      case 'open-external': {
+        const url = data as string;
+        if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+          shell.openExternal(url);
+        }
+        break;
+      }
+
       case 'saveSettings': {
         patchSettings(data as Record<string, unknown>);
         break;
@@ -596,6 +676,17 @@ export function registerIpc(win: BrowserWindow): void {
         const payload = panelStore.get(key);
         panelStore.delete(key);
         return payload ?? null;
+      }
+
+      case 'get-about-info': {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const pkg = require('../../package.json') as { version: string };
+        return {
+          version:  pkg.version,
+          electron: process.versions.electron,
+          node:     process.versions.node,
+          chrome:   process.versions.chrome,
+        };
       }
 
       default:

@@ -469,6 +469,7 @@
     <div class="tab-bar" id="main-tab-bar">
       <button class="tab" data-tab="query"><i class="codicon codicon-file-code"></i>Query</button>
       <button class="tab" data-tab="history"><i class="codicon codicon-history"></i>History</button>
+      <button class="tab" data-tab="snippets"><i class="codicon codicon-bookmark"></i>Snippets</button>
       <button class="tab" data-tab="activity"><i class="codicon codicon-pulse"></i>Activity</button>
       <button class="tab" data-tab="erd"><i class="codicon codicon-type-hierarchy"></i>ERD</button>
       <div id="table-tab-list" style="display:flex;overflow-x:auto;"></div>
@@ -485,6 +486,7 @@
         <button class="btn btn-primary" id="btn-run"><i class="codicon codicon-play"></i>Run</button>
         <button class="btn btn-secondary hidden" id="btn-cancel"><i class="codicon codicon-stop-circle"></i>Cancel</button>
         <button class="btn btn-secondary" id="btn-explain"><i class="codicon codicon-graph"></i>Explain</button>
+        <button class="btn-icon" id="btn-save-snippet" title="Save as snippet"><i class="codicon codicon-bookmark"></i></button>
         <div style="flex:1"></div>
         <div style="display:flex;align-items:center;gap:4px;padding:2px 6px;border-radius:3px;background:var(--vscode-badge-background);font-size:10px;color:var(--vscode-badge-foreground);opacity:0.6;user-select:none">F8 / Ctrl+Enter</div>
       </div>
@@ -525,6 +527,18 @@
       </div>
       <div class="history-list" id="history-list">
         <div class="empty-state"><span>No history yet.</span></div>
+      </div>
+    </div>
+
+    <!-- Snippets panel (#65) -->
+    <div class="panel hidden" id="panel-snippets">
+      <div class="search-bar">
+        <i class="search-icon codicon codicon-search"></i>
+        <input class="search-input" id="snippets-search" type="text" placeholder="Filter snippets…">
+        <button class="search-clear hidden" id="snippets-search-clear" title="Clear"><i class="codicon codicon-close"></i></button>
+      </div>
+      <div class="history-list" id="snippets-list">
+        <div class="empty-state"><span>No snippets yet. Save a query with the bookmark button.</span></div>
       </div>
     </div>
 
@@ -611,6 +625,51 @@
 
 
   </div><!-- /.main-area -->
+
+  <!-- Create schema modal -->
+  <div id="create-schema-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;display:flex;align-items:center;justify-content:center">
+    <div style="background:var(--vscode-editor-background);border:1px solid var(--vscode-focusBorder);border-radius:6px;width:360px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--vscode-foreground)">Create Schema</div>
+      <input id="create-schema-input" type="text" placeholder="schema_name" autocomplete="off"
+        style="width:100%;box-sizing:border-box;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:3px;padding:5px 8px;font-size:13px;font-family:var(--vscode-font-family);outline:none">
+      <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:5px">Letters, numbers and underscores only.</div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button id="create-schema-cancel" style="background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:none;border-radius:3px;padding:4px 14px;font-size:12px;font-family:var(--vscode-font-family);cursor:pointer">Cancel</button>
+        <button id="create-schema-ok" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:3px;padding:4px 14px;font-size:12px;font-family:var(--vscode-font-family);cursor:pointer">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save snippet modal -->
+  <div id="snippet-name-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;display:flex;align-items:center;justify-content:center">
+    <div style="background:var(--vscode-editor-background);border:1px solid var(--vscode-focusBorder);border-radius:6px;width:380px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--vscode-foreground)">Save Snippet</div>
+      <input id="snippet-name-input" type="text" placeholder="Snippet name…" autocomplete="off"
+        style="width:100%;box-sizing:border-box;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:3px;padding:5px 8px;font-size:13px;font-family:var(--vscode-font-family);outline:none">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button id="snippet-name-cancel" style="background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:none;border-radius:3px;padding:4px 14px;font-size:12px;font-family:var(--vscode-font-family);cursor:pointer">Cancel</button>
+        <button id="snippet-name-ok" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:3px;padding:4px 14px;font-size:12px;font-family:var(--vscode-font-family);cursor:pointer">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global search modal (#74) -->
+  <div id="global-search-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;display:flex;align-items:flex-start;justify-content:center;padding-top:80px">
+    <div id="global-search-box" style="background:var(--vscode-editor-background);border:1px solid var(--vscode-focusBorder);border-radius:6px;width:560px;max-width:90vw;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border)">
+        <i class="codicon codicon-search" style="color:var(--vscode-descriptionForeground)"></i>
+        <input id="global-search-input" type="text" placeholder="Search tables, columns, functions…" autocomplete="off"
+          style="flex:1;background:transparent;border:none;outline:none;color:var(--vscode-foreground);font-size:14px;font-family:var(--vscode-font-family)">
+        <select id="global-search-conn" style="background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border,transparent);padding:2px 4px;font-size:12px;font-family:var(--vscode-font-family);outline:none;max-width:140px">
+          <option value="">All connections</option>
+        </select>
+        <kbd style="font-size:10px;color:var(--vscode-descriptionForeground);background:var(--vscode-button-secondaryBackground);padding:1px 5px;border-radius:3px">Esc</kbd>
+      </div>
+      <div id="global-search-results" style="max-height:360px;overflow-y:auto;padding:4px 0">
+        <div style="padding:24px;text-align:center;color:var(--vscode-descriptionForeground);font-size:12px">Type to search…</div>
+      </div>
+    </div>
+  </div>
 
 
 
@@ -839,7 +898,10 @@
       var scroll = treeEl.scrollTop;
       var f = filter.trim().toLowerCase();
       var html = '';
-      connections.forEach(function (conn) { html += renderConn(conn, f); });
+      var sorted = connections.slice().sort(function(a, b) {
+        return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0);
+      });
+      sorted.forEach(function (conn) { html += renderConn(conn, f); });
       treeEl.innerHTML = html;
       treeEl.scrollTop = scroll;
     }
@@ -857,6 +919,7 @@
         acts += btnIcon('disconnect', { connId: conn.id }, 'codicon-debug-disconnect', 'Disconnect');
         acts += btnIcon('create-table-for-conn', { connId: conn.id }, 'codicon-table', 'Create Table');
       }
+      acts += btnIcon('toggle-favorite', { connId: conn.id }, conn.favorite ? 'codicon-star-full' : 'codicon-star-empty', conn.favorite ? 'Unstar' : 'Star');
       acts += btnIcon('edit-conn', { connId: conn.id }, 'codicon-edit', 'Edit');
       acts += btnIcon('delete-conn', { connId: conn.id }, 'codicon-trash', 'Delete', true);
 
@@ -1104,6 +1167,8 @@
         }
         case 'delete-conn':
           api.send('deleteConnection', { id: d.connId }); break;
+        case 'toggle-favorite':
+          api.send('toggleFavorite', { id: d.connId }); break;
         case 'open-table-detail':
           openTableTab(d.connId, d.schema, d.table); break;
         case 'create-table-for-conn':
@@ -1141,6 +1206,7 @@
       });
       if (tab === 'query') { setTimeout(ensureMonacoReady, 30); renderQueryTabs(); renderConnSelect(); if (window.__initQuerySplit) window.__initQuerySplit(); }
       if (tab === 'history') { if (!historyEntries.length) api.send('loadHistory'); renderHistory(); }
+      if (tab === 'snippets') { api.send('loadSnippets'); }
       if (tab === 'activity') { renderActivityConnSelect(); }
       if (tab === 'erd') { if (window.__erdOnTabActivated) window.__erdOnTabActivated(); }
 if (tab === 'create-table') { renderCreateTable(); }
@@ -2035,6 +2101,214 @@ if (tab === 'create-table') { renderCreateTable(); }
       saveState(); switchMainTab('query');
     });
 
+    // ── Snippets (#65) ────────────────────────────────────────────────────
+    var snippets = [];
+    var snippetsFilter = '';
+
+    function renderSnippets() {
+      var list = document.getElementById('snippets-list');
+      if (!list) return;
+      var q = snippetsFilter.toLowerCase();
+      var filtered = q ? snippets.filter(function (s) { return s.name.toLowerCase().indexOf(q) >= 0 || s.sql.toLowerCase().indexOf(q) >= 0; }) : snippets;
+      if (!filtered.length) {
+        list.innerHTML = '<div class="empty-state"><span>' + (q ? 'No matches.' : 'No snippets yet. Save a query with the <i class="codicon codicon-bookmark" style="font-size:12px"></i> button.') + '</span></div>';
+        return;
+      }
+      list.innerHTML = filtered.map(function (s) {
+        return '<div class="history-item" data-snippet-id="' + esc(s.id) + '" style="display:flex;align-items:flex-start;gap:6px">'
+          + '<div style="flex:1;min-width:0">'
+          + '<div class="history-sql" style="font-weight:600;font-family:var(--vscode-font-family)">' + esc(s.name) + '</div>'
+          + '<div class="history-sql" style="opacity:0.6">' + esc(s.sql.replace(/\s+/g, ' ').slice(0, 80)) + '</div>'
+          + '</div>'
+          + '<button class="btn-icon btn-danger" data-delete-snippet="' + esc(s.id) + '" title="Delete snippet" style="flex-shrink:0;margin-top:2px"><i class="codicon codicon-trash"></i></button>'
+          + '</div>';
+      }).join('');
+    }
+
+    var snippetsSearch = document.getElementById('snippets-search');
+    var snippetsSearchClear = document.getElementById('snippets-search-clear');
+    snippetsSearch.addEventListener('input', function () {
+      snippetsFilter = snippetsSearch.value;
+      snippetsSearchClear.classList.toggle('hidden', !snippetsFilter);
+      renderSnippets();
+    });
+    snippetsSearch.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { snippetsSearch.value = ''; snippetsFilter = ''; snippetsSearchClear.classList.add('hidden'); renderSnippets(); }
+    });
+    snippetsSearchClear.addEventListener('click', function () {
+      snippetsSearch.value = ''; snippetsFilter = ''; snippetsSearchClear.classList.add('hidden'); renderSnippets();
+    });
+
+    document.getElementById('snippets-list').addEventListener('click', function (e) {
+      var delBtn = e.target.closest('[data-delete-snippet]');
+      if (delBtn) {
+        e.stopPropagation();
+        api.send('deleteSnippet', { id: delBtn.dataset.deleteSnippet });
+        return;
+      }
+      var item = e.target.closest('[data-snippet-id]');
+      if (!item) return;
+      var s = snippets.find(function (x) { return x.id === item.dataset.snippetId; });
+      if (!s) return;
+      activeQTab().sql = s.sql;
+      if (monacoEditor) monacoEditor.setValue(s.sql);
+      saveState(); switchMainTab('query');
+    });
+
+    var snOverlay = document.getElementById('snippet-name-overlay');
+    var snInput   = document.getElementById('snippet-name-input');
+    var snOk      = document.getElementById('snippet-name-ok');
+    var snCancel  = document.getElementById('snippet-name-cancel');
+    var snPending = null;
+
+    function openSnippetNameModal(sql) {
+      snPending = sql;
+      snInput.value = '';
+      snOverlay.classList.remove('hidden');
+      setTimeout(function () { snInput.focus(); }, 30);
+    }
+
+    function closeSnippetNameModal() {
+      snOverlay.classList.add('hidden');
+      snPending = null;
+    }
+
+    function confirmSnippetName() {
+      var name = snInput.value.trim();
+      if (!name) { snInput.focus(); return; }
+      if (snPending) api.send('saveSnippet', { name: name, sql: snPending });
+      closeSnippetNameModal();
+    }
+
+    snOk.addEventListener('click', confirmSnippetName);
+    snCancel.addEventListener('click', closeSnippetNameModal);
+    snInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') confirmSnippetName();
+      if (e.key === 'Escape') closeSnippetNameModal();
+    });
+
+    document.getElementById('btn-save-snippet').addEventListener('click', function () {
+      var sql = monacoEditor ? monacoEditor.getValue().trim() : activeQTab().sql.trim();
+      if (!sql) { showToast('Editor is empty.'); return; }
+      openSnippetNameModal(sql);
+    });
+
+    // ── Global search (#74) ───────────────────────────────────────────────
+    var gsOverlay   = document.getElementById('global-search-overlay');
+    var gsInput     = document.getElementById('global-search-input');
+    var gsResults   = document.getElementById('global-search-results');
+    var gsConnSel   = document.getElementById('global-search-conn');
+    var gsDebounce  = null;
+    var gsLastTerm  = '';
+
+    function openGlobalSearch() {
+      // populate connection dropdown
+      gsConnSel.innerHTML = '<option value="">All connections</option>'
+        + connections.filter(function (c) { return (statuses[c.id] || 'disconnected') === 'connected'; })
+            .map(function (c) { return '<option value="' + esc(c.id) + '">' + esc(c.label) + '</option>'; }).join('');
+      gsOverlay.classList.remove('hidden');
+      setTimeout(function () { gsInput.focus(); gsInput.select(); }, 30);
+    }
+
+    function closeGlobalSearch() {
+      gsOverlay.classList.add('hidden');
+      gsInput.value = '';
+      gsLastTerm = '';
+      gsResults.innerHTML = '<div style="padding:24px;text-align:center;color:var(--vscode-descriptionForeground);font-size:12px">Type to search…</div>';
+    }
+
+    function renderSearchResults(results) {
+      if (!results.length) {
+        gsResults.innerHTML = '<div style="padding:16px;text-align:center;color:var(--vscode-descriptionForeground);font-size:12px">No results.</div>';
+        return;
+      }
+      var kindIcon = { table: 'codicon-table', view: 'codicon-layout', column: 'codicon-symbol-field', 'function': 'codicon-symbol-function' };
+      var kindColor = { table: '#00d4aa', view: '#ff61d3', column: '#8888aa', 'function': '#00d4aa' };
+      gsResults.innerHTML = results.map(function (r, i) {
+        var icon = kindIcon[r.kind] || 'codicon-circle-outline';
+        var color = kindColor[r.kind] || 'var(--vscode-foreground)';
+        var label = r.kind === 'column' ? r.schema + '.' + r.table + ' › ' + r.name : r.schema + '.' + r.name;
+        var detail = r.detail ? '<span style="font-size:10px;color:var(--vscode-descriptionForeground);margin-left:6px">' + esc(r.detail) + '</span>' : '';
+        var badge = '<span style="font-size:9px;font-weight:700;border-radius:2px;padding:1px 4px;margin-right:6px;background:var(--vscode-button-secondaryBackground);color:var(--vscode-descriptionForeground)">' + r.kind + '</span>';
+        return '<div class="history-item" data-gs-idx="' + i + '" style="display:flex;align-items:center;gap:8px;padding:5px 12px">'
+          + '<i class="codicon ' + icon + '" style="color:' + color + ';flex-shrink:0;font-size:14px"></i>'
+          + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + badge + esc(label) + detail + '</span>'
+          + '</div>';
+      }).join('');
+    }
+
+    function doGlobalSearch(term) {
+      var connId = gsConnSel.value;
+      var connIds = connId
+        ? [connId]
+        : connections.filter(function (c) { return (statuses[c.id] || 'disconnected') === 'connected'; }).map(function (c) { return c.id; });
+      if (!connIds.length) { gsResults.innerHTML = '<div style="padding:16px;text-align:center;color:var(--vscode-descriptionForeground);font-size:12px">No connected databases.</div>'; return; }
+      gsResults.innerHTML = '<div style="padding:16px;text-align:center;color:var(--vscode-descriptionForeground);font-size:12px"><i class="codicon codicon-loading codicon-modifier-spin"></i> Searching…</div>';
+      api.send('globalSearch', { connId: connIds[0], term: term });
+    }
+
+    gsInput.addEventListener('input', function () {
+      var term = gsInput.value.trim();
+      clearTimeout(gsDebounce);
+      if (!term || term.length < 2) {
+        gsResults.innerHTML = '<div style="padding:24px;text-align:center;color:var(--vscode-descriptionForeground);font-size:12px">Type at least 2 characters…</div>';
+        return;
+      }
+      gsLastTerm = term;
+      gsDebounce = setTimeout(function () { doGlobalSearch(term); }, 300);
+    });
+
+    gsInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { closeGlobalSearch(); }
+      if (e.key === 'ArrowDown') {
+        var first = gsResults.querySelector('[data-gs-idx]');
+        if (first) { first.focus(); e.preventDefault(); }
+      }
+    });
+
+    gsResults.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { closeGlobalSearch(); gsInput.focus(); }
+      var cur = e.target.closest('[data-gs-idx]');
+      if (!cur) return;
+      if (e.key === 'ArrowDown') { var nx = cur.nextElementSibling; if (nx) { nx.focus(); e.preventDefault(); } }
+      if (e.key === 'ArrowUp')   { var pv = cur.previousElementSibling; if (pv) { pv.focus(); e.preventDefault(); } else { gsInput.focus(); e.preventDefault(); } }
+    });
+
+    gsConnSel.addEventListener('change', function () {
+      var term = gsInput.value.trim();
+      if (term.length >= 2) doGlobalSearch(term);
+    });
+
+    gsOverlay.addEventListener('mousedown', function (e) {
+      if (e.target === gsOverlay) closeGlobalSearch();
+    });
+
+    var gsCurrentResults = [];
+
+    gsResults.addEventListener('click', function (e) {
+      var item = e.target.closest('[data-gs-idx]');
+      if (!item) return;
+      var idx = parseInt(item.dataset.gsIdx, 10);
+      var r = gsCurrentResults[idx];
+      if (!r) { closeGlobalSearch(); return; }
+      var connId = gsConnSel.value
+        || (connections.find(function (c) { return (statuses[c.id] || '') === 'connected'; }) || {}).id;
+      closeGlobalSearch();
+      if (!connId) return;
+      // For table/view: open table detail tab
+      if (r.kind === 'table' || r.kind === 'view') {
+        openTableTab(connId, r.schema, r.name);
+      } else if (r.kind === 'column') {
+        openTableTab(connId, r.schema, r.table);
+      }
+      // for function: just expand the tree to show it (navigate via Explorer)
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') { e.preventDefault(); openGlobalSearch(); }
+      if (e.key === 'Escape' && !gsOverlay.classList.contains('hidden')) closeGlobalSearch();
+    });
+
     // ── Autocomplete ───────────────────────────────────────────────────────
     function registerCompletions(data) {
       if (!monacoReady) return;
@@ -2141,6 +2415,60 @@ if (tab === 'create-table') { renderCreateTable(); }
           break;
         }
         case 'historyLoaded': historyEntries = d || []; renderHistory(); break;
+        case 'snippetsLoaded': snippets = d || []; renderSnippets(); break;
+        case 'snippetSaved': showToast('Snippet saved.'); break;
+        case 'createSchemaResult':
+          document.getElementById('create-schema-ok').disabled = false;
+          if (d.ok) {
+            showToast('Schema "' + d.schemaName + '" created.');
+            closeCreateSchemaModal();
+            renderCreateTable();
+          } else {
+            showToast('Error: ' + d.error);
+          }
+          break;
+        case 'searchResults':
+          gsCurrentResults = (d && d.results) || [];
+          renderSearchResults(gsCurrentResults);
+          break;
+
+        // ── Menu commands (#77) ──────────────────────────────────────────────
+        case 'switchTab':
+          switchMainTab(d);
+          break;
+        case 'newQueryTab':
+          newQTab(); switchMainTab('query');
+          break;
+        case 'saveAsSnippet': {
+          switchMainTab('query');
+          var sqlSnip = monacoEditor ? monacoEditor.getValue().trim() : activeQTab().sql.trim();
+          if (!sqlSnip) { showToast('Editor is empty.'); break; }
+          openSnippetNameModal(sqlSnip);
+          break;
+        }
+        case 'exportResultsFromMenu':
+          if (lastResult && lastResult.rows && lastResult.rows.length) exportResult('csv');
+          else showToast('No results to export.');
+          break;
+        case 'newConnection':
+          showForm(null);
+          break;
+        case 'openGlobalSearch':
+          openGlobalSearch();
+          break;
+        case 'toggleSidebar': {
+          var sb = document.getElementById('sidebar');
+          var rh = document.getElementById('resize-handle');
+          var hidden = sb.style.display === 'none';
+          sb.style.display = hidden ? '' : 'none';
+          if (rh) rh.style.display = hidden ? '' : 'none';
+          break;
+        }
+        case 'createTableFromMenu': {
+          var firstConn = connections.find(function(c){ return (statuses[c.id]||'') === 'connected'; });
+          openCreateTablePanel(firstConn ? firstConn.id : null);
+          break;
+        }
         case 'completionsLoaded': registerCompletions(d); break;
         case 'settings':
           settings = Object.assign(settings, d); break;
@@ -2473,6 +2801,7 @@ if (tab === 'create-table') { renderCreateTable(); }
       wrap.innerHTML = '<div class="create-table-row">'
         + '<span class="create-table-label">Schema</span>'
         + '<select class="create-table-select" id="ct-schema-select">' + schemaOpts + '</select>'
+        + '<button class="btn btn-secondary" id="ct-create-schema" style="padding:3px 8px;font-size:12px" title="Create new schema"><i class="codicon codicon-add"></i>New Schema</button>'
         + '<span class="create-table-label" style="margin-left:12px">Table</span>'
         + '<input class="create-table-input" id="ct-table-name" placeholder="table_name" style="width:180px">'
         + '</div>'
@@ -2522,7 +2851,49 @@ if (tab === 'create-table') { renderCreateTable(); }
         api.send('executeQuery', { connId: connId, sql: sql, tabId: '__ct__' });
         document.getElementById('ct-execute').disabled = true;
       });
+
+      document.getElementById('ct-create-schema').addEventListener('click', function () {
+        var connId = ctGetConnId();
+        if (!connId) { showToast('Select a connection first.'); return; }
+        openCreateSchemaModal(connId);
+      });
     }
+
+    // ── Create Schema modal ────────────────────────────────────────────────
+    var csOverlay  = document.getElementById('create-schema-overlay');
+    var csInput    = document.getElementById('create-schema-input');
+    var csOk       = document.getElementById('create-schema-ok');
+    var csCancel   = document.getElementById('create-schema-cancel');
+    var csPending  = null;
+
+    function openCreateSchemaModal(connId) {
+      csPending = connId;
+      csInput.value = '';
+      csOverlay.classList.remove('hidden');
+      setTimeout(function () { csInput.focus(); }, 30);
+    }
+
+    function closeCreateSchemaModal() {
+      csOverlay.classList.add('hidden');
+      csPending = null;
+    }
+
+    function confirmCreateSchema() {
+      var name = csInput.value.trim();
+      if (!name) { csInput.focus(); return; }
+      if (!/^[a-zA-Z_][a-zA-Z0-9_$]*$/.test(name)) {
+        showToast('Invalid schema name.'); csInput.focus(); return;
+      }
+      csOk.disabled = true;
+      api.send('createSchema', { connId: csPending, schemaName: name });
+    }
+
+    csOk.addEventListener('click', confirmCreateSchema);
+    csCancel.addEventListener('click', closeCreateSchemaModal);
+    csInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') confirmCreateSchema();
+      if (e.key === 'Escape') closeCreateSchemaModal();
+    });
 
     // listen for CREATE TABLE result
     // (handled in the queryResult case — tabId === '__ct__')

@@ -92,6 +92,11 @@ export async function getSchemas(driver: PgDriver): Promise<SchemaInfo[]> {
   return rows.map(r => ({ name: r.schema_name }));
 }
 
+export async function createSchema(driver: PgDriver, schemaName: string): Promise<void> {
+  const safe = schemaName.replace(/"/g, '');
+  await driver.query(`CREATE SCHEMA IF NOT EXISTS "${safe}"`);
+}
+
 export async function getTables(driver: PgDriver, schema: string): Promise<TableInfo[]> {
   const rows = await driver.query<{ table_name: string; table_type: string }>(
     `SELECT table_name, table_type FROM information_schema.tables
@@ -644,6 +649,59 @@ export async function importTableRows(
     inserted += chunk.length;
   }
   return inserted;
+}
+
+// ── Global schema search (#74) ────────────────────────────────────────────────
+
+export interface SearchResult {
+  kind: 'table' | 'view' | 'column' | 'function';
+  schema: string;
+  table?: string;
+  name: string;
+  detail?: string;
+}
+
+export async function globalSearch(driver: PgDriver, term: string): Promise<SearchResult[]> {
+  const like = '%' + term.toLowerCase() + '%';
+  const [tables, columns, functions] = await Promise.all([
+    driver.query<{ schema: string; name: string; table_type: string }>(
+      `SELECT table_schema AS schema, table_name AS name, table_type
+       FROM information_schema.tables
+       WHERE table_schema NOT IN ('pg_catalog','information_schema','pg_toast')
+         AND LOWER(table_name) LIKE $1
+       ORDER BY table_schema, table_name LIMIT 40`,
+      [like]
+    ),
+    driver.query<{ schema: string; table_name: string; column_name: string; data_type: string }>(
+      `SELECT table_schema AS schema, table_name, column_name, data_type
+       FROM information_schema.columns
+       WHERE table_schema NOT IN ('pg_catalog','information_schema','pg_toast')
+         AND LOWER(column_name) LIKE $1
+       ORDER BY table_schema, table_name, column_name LIMIT 40`,
+      [like]
+    ),
+    driver.query<{ schema: string; name: string }>(
+      `SELECT routine_schema AS schema, routine_name AS name
+       FROM information_schema.routines
+       WHERE routine_schema NOT IN ('pg_catalog','information_schema','pg_toast')
+         AND routine_type IN ('FUNCTION','PROCEDURE')
+         AND LOWER(routine_name) LIKE $1
+       ORDER BY routine_schema, routine_name LIMIT 20`,
+      [like]
+    ),
+  ]);
+
+  const results: SearchResult[] = [];
+  for (const r of tables) {
+    results.push({ kind: r.table_type === 'VIEW' ? 'view' : 'table', schema: r.schema, name: r.name });
+  }
+  for (const r of columns) {
+    results.push({ kind: 'column', schema: r.schema, table: r.table_name, name: r.column_name, detail: r.data_type });
+  }
+  for (const r of functions) {
+    results.push({ kind: 'function', schema: r.schema, name: r.name });
+  }
+  return results;
 }
 
 export async function checkMigrationsTable(driver: PgDriver, schema = 'public'): Promise<boolean> {

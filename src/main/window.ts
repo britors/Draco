@@ -48,6 +48,25 @@ export function createMainWindow(): BrowserWindow {
   return win;
 }
 
+export function createAboutWindow(): void {
+  const win = new BrowserWindow({
+    width: 400,
+    height: 320,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    title: 'About Prisma4Postgres',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  win.setMenu(null);
+  win.loadFile(path.join(__dirname, '../renderer/about.html'));
+}
+
 export function createPanelWindow(
   htmlFile: string,
   title: string,
