@@ -1,7 +1,7 @@
 {
   "name": "prisma4postgres",
   "productName": "Prisma4Postgres",
-  "description": "PostgreSQL explorer and Prisma ORM integration",
+  "description": "PostgreSQL database explorer and query runner",
   "version": "10.5.1",
   "author": {
     "name": "britors",
