@@ -292,6 +292,18 @@
     .dash-info-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .dash-info-table td, .dash-info-table th { padding: 3px 6px; }
     .dash-info-table tr:nth-child(even) { background: var(--vscode-list-oddRowsBackground, rgba(128,128,128,.04)); }
+    .jobs-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .jobs-table th { padding: 5px 8px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--vscode-descriptionForeground); border-bottom: 2px solid var(--vscode-panel-border); white-space: nowrap; }
+    .jobs-table td { padding: 5px 8px; border-bottom: 1px solid var(--vscode-panel-border); vertical-align: middle; }
+    .jobs-table tr:hover td { background: var(--vscode-list-hoverBackground); }
+    .job-active { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+    .job-active.on  { background: #73c991; }
+    .job-active.off { background: var(--vscode-descriptionForeground); opacity: .4; }
+    .job-status-ok   { color: #73c991; font-size: 10px; }
+    .job-status-fail { color: var(--vscode-errorForeground); font-size: 10px; }
+    .job-status-run  { color: #e8a838; font-size: 10px; }
+    .jobs-no-cron { padding: 24px; display: flex; flex-direction: column; gap: 12px; max-width: 560px; }
+    .jobs-no-cron code { font-family: var(--vscode-editor-font-family, monospace); background: var(--vscode-textBlockQuote-background); padding: 2px 5px; border-radius: 3px; font-size: 11px; }
     .dash-refresh { position: absolute; top: 10px; right: 14px; }
     .roles-modal { position: absolute; inset: 0; background: rgba(0,0,0,.45); z-index: 300; display: flex; align-items: center; justify-content: center; }
     .roles-modal-box { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px; padding: 20px; min-width: 320px; max-width: 420px; width: 90%; }
@@ -514,6 +526,7 @@
       <button class="tab" data-tab="activity"><i class="codicon codicon-pulse"></i>Activity</button>
       <button class="tab" data-tab="stats"><i class="codicon codicon-graph"></i>Stats</button>
       <button class="tab" data-tab="roles"><i class="codicon codicon-person"></i>Roles</button>
+      <button class="tab" data-tab="jobs"><i class="codicon codicon-clock"></i>Jobs</button>
       <button class="tab" data-tab="erd"><i class="codicon codicon-type-hierarchy"></i>ERD</button>
       <div id="table-tab-list" style="display:flex;overflow-x:auto;"></div>
     </div>
@@ -683,6 +696,53 @@
       </div>
       <div style="flex:1;overflow:auto;padding:8px 12px;display:flex;flex-direction:column;gap:12px" id="stats-content">
         <div class="results-placeholder">Select a connection and click Refresh</div>
+      </div>
+    </div>
+
+    <!-- Jobs panel (pg_cron) -->
+    <div class="panel hidden" id="panel-jobs">
+      <div class="query-toolbar" style="gap:8px">
+        <span style="font-weight:600;font-size:12px">Scheduled Jobs</span>
+        <select class="conn-select" id="jobs-conn-select" style="max-width:200px"><option value="">Select connection…</option></select>
+        <button class="btn btn-secondary" id="btn-jobs-refresh"><i class="codicon codicon-refresh"></i>Refresh</button>
+        <button class="btn btn-primary hidden" id="btn-new-job"><i class="codicon codicon-add"></i>New Job</button>
+        <span style="flex:1"></span>
+        <span id="jobs-status" style="font-size:11px;color:var(--vscode-descriptionForeground)"></span>
+      </div>
+      <div style="flex:1;overflow:auto" id="jobs-content">
+        <div class="results-placeholder">Select a connection and click Refresh</div>
+      </div>
+      <!-- New/Edit Job modal -->
+      <div class="roles-modal hidden" id="jobs-modal">
+        <div class="roles-modal-box" style="width:500px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:12px" id="jobs-modal-title">New Job</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <label style="font-size:12px">Name (optional)<br>
+              <input class="conn-input" id="job-name" placeholder="my_job" style="width:100%;margin-top:4px">
+            </label>
+            <label style="font-size:12px">Schedule (cron expression)<br>
+              <input class="conn-input" id="job-schedule" placeholder="* * * * *" style="width:100%;margin-top:4px">
+              <span style="font-size:10px;color:var(--vscode-descriptionForeground)">min hour dom month dow — ex: "0 * * * *" = every hour, "0 2 * * *" = daily at 2 AM</span>
+            </label>
+            <label style="font-size:12px">Command (SQL)<br>
+              <textarea class="conn-input" id="job-command" rows="4" style="width:100%;margin-top:4px;font-family:var(--vscode-editor-font-family,monospace);resize:vertical" placeholder="DELETE FROM logs WHERE created_at \x3c now() - interval '30 days'"></textarea>
+            </label>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+            <button class="btn btn-secondary" id="btn-job-cancel">Cancel</button>
+            <button class="btn btn-primary" id="btn-job-save">Save</button>
+          </div>
+        </div>
+      </div>
+      <!-- Job run history modal -->
+      <div class="roles-modal hidden" id="job-runs-modal">
+        <div class="roles-modal-box" style="width:700px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:12px" id="job-runs-title">Run History</div>
+          <div id="job-runs-content" style="max-height:420px;overflow-y:auto"></div>
+          <div style="display:flex;justify-content:flex-end;margin-top:12px">
+            <button class="btn btn-secondary" id="btn-runs-close">Close</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1443,6 +1503,7 @@
       if (tab === 'activity') { renderActivityConnSelect(); }
       if (tab === 'stats') { renderStatsConnSelect(); }
       if (tab === 'roles') { renderRolesConnSelect(); }
+      if (tab === 'jobs') { renderJobsConnSelect(); }
       if (tab === 'erd') { if (window.__erdOnTabActivated) window.__erdOnTabActivated(); }
       if (tab === 'create-table') { renderCreateTable(); }
       if (isDynTab) { activeTableTabId = tab; renderActiveTableDetail(); }
@@ -2830,7 +2891,8 @@
           if (d.error) { showToast('Error: ' + d.error); }
           else {
             showToast('Table ' + d.table + ' dropped');
-            delete tables[d.connId + ':' + d.schema];
+            var dtKey = d.connId + ':' + d.schema;
+            if (tables[dtKey]) tables[dtKey] = tables[dtKey].filter(function (t) { return t.name !== d.table; });
             delete cols[d.connId + ':' + d.schema + ':' + d.table];
             renderTree();
           }
@@ -2862,6 +2924,33 @@
           break;
         }
         case 'roleChanged': loadRoles(); break;
+        case 'jobsLoaded':
+          renderJobs(d); break;
+        case 'jobChanged':
+          if (d.error) { showToast('Error: ' + d.error); }
+          else { loadJobs(); }
+          break;
+        case 'jobRunsLoaded': {
+          var runsContent = document.getElementById('job-runs-content');
+          if (!runsContent) break;
+          if (d.error) { runsContent.innerHTML = '<div class="results-placeholder" style="color:var(--vscode-errorForeground)">' + esc(d.error) + '</div>'; break; }
+          if (!d.runs || !d.runs.length) { runsContent.innerHTML = '<div class="results-placeholder">No run history found.</div>'; break; }
+          var rhtml = '<table class="jobs-table" style="width:100%"><thead><tr><th>Run ID</th><th>Status</th><th>Started (UTC)</th><th>Duration</th><th>Message</th></tr></thead><tbody>';
+          d.runs.forEach(function (r) {
+            var stCls = r.status === 'succeeded' ? 'job-status-ok' : r.status === 'failed' ? 'job-status-fail' : 'job-status-run';
+            rhtml += '<tr>'
+              + '<td style="color:var(--vscode-descriptionForeground)">' + esc(String(r.runid)) + '</td>'
+              + '<td><span class="' + stCls + '">' + esc(String(r.status || '—')) + '</span></td>'
+              + '<td style="white-space:nowrap;font-size:11px">' + esc(String(r.start_time || '—')) + '</td>'
+              + '<td style="text-align:right">' + (r.duration_sec !== null && r.duration_sec !== undefined ? esc(String(r.duration_sec)) + 's' : '—') + '</td>'
+              + '<td style="font-size:11px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(String(r.return_message || '')) + '">'
+              + esc(String(r.return_message || '')) + '</td>'
+              + '</tr>';
+          });
+          rhtml += '</tbody></table>';
+          runsContent.innerHTML = rhtml;
+          break;
+        }
         case 'funcParamsLoaded': funcParams[d.connId + ':' + d.schema + ':' + d.specificName] = d.params; delete loadingNodes['f:' + d.connId + ':' + d.schema + ':' + d.specificName]; renderTree(); break;
         case 'testResult': {
           var ts = document.getElementById('test-status');
@@ -3369,6 +3458,159 @@
         superuser: document.getElementById('role-superuser').checked,
       });
       document.getElementById('roles-modal').classList.add('hidden');
+    });
+
+    // ── pg_cron Job manager ───────────────────────────────────────────────
+
+    var jobsEditingId = null;
+
+    function renderJobsConnSelect() {
+      var sel = document.getElementById('jobs-conn-select');
+      if (!sel) return;
+      var prev = sel.value;
+      sel.innerHTML = '<option value="">Select connection…</option>'
+        + connections.map(function (c) {
+            var s = statuses[c.id] || 'disconnected';
+            return '<option value="' + esc(c.id) + '">' + esc(c.label) + (s === 'connected' ? ' ●' : ' ○') + '</option>';
+          }).join('');
+      if (prev) sel.value = prev;
+    }
+
+    function loadJobs() {
+      var sel = document.getElementById('jobs-conn-select');
+      if (!sel || !sel.value) return;
+      document.getElementById('jobs-status').textContent = 'Loading…';
+      document.getElementById('jobs-content').innerHTML = '<div class="results-placeholder"><i class="codicon codicon-loading codicon-modifier-spin"></i> Loading…</div>';
+      api.send('loadJobs', { connId: sel.value });
+    }
+
+    function renderJobs(d) {
+      var content = document.getElementById('jobs-content');
+      var newBtn = document.getElementById('btn-new-job');
+      var status = document.getElementById('jobs-status');
+      if (!content) return;
+      if (d.error) {
+        if (newBtn) newBtn.classList.add('hidden');
+        if (status) status.textContent = '';
+        content.innerHTML = '<div class="results-placeholder" style="color:var(--vscode-errorForeground)">' + esc(d.error) + '</div>';
+        return;
+      }
+      if (!d.installed) {
+        if (newBtn) newBtn.classList.add('hidden');
+        if (status) status.textContent = 'pg_cron not installed';
+        content.innerHTML = '<div class="jobs-no-cron">'
+          + '<div style="font-size:13px;font-weight:600">pg_cron is not installed on this server</div>'
+          + '<div style="font-size:12px;color:var(--vscode-descriptionForeground)">pg_cron is a PostgreSQL extension for scheduling SQL jobs using cron syntax. To install it:</div>'
+          + '<ol style="font-size:12px;padding-left:18px;display:flex;flex-direction:column;gap:6px">'
+          + '<li>Add to <code>postgresql.conf</code>:<br><code>shared_preload_libraries = \'pg_cron\'</code></li>'
+          + '<li>Restart PostgreSQL</li>'
+          + '<li>Run as superuser:<br><code>CREATE EXTENSION pg_cron;</code></li>'
+          + '</ol>'
+          + '<div style="font-size:11px;color:var(--vscode-descriptionForeground)">After installing, click Refresh.</div>'
+          + '</div>';
+        return;
+      }
+      if (newBtn) newBtn.classList.remove('hidden');
+      if (status) status.textContent = d.jobs.length + ' job' + (d.jobs.length !== 1 ? 's' : '');
+      if (!d.jobs.length) {
+        content.innerHTML = '<div class="results-placeholder">No jobs scheduled. Click <b>New Job</b> to create one.</div>';
+        return;
+      }
+      var html = '<table class="jobs-table"><thead><tr>'
+        + '<th></th><th>ID</th><th>Name</th><th>Schedule</th><th>Command</th><th>Database</th><th>Last run</th><th>Status</th><th></th>'
+        + '</tr></thead><tbody>';
+      d.jobs.forEach(function (j) {
+        var isActive = j.active === true || j.active === 't' || j.active === 'true';
+        var statusHtml = '';
+        if (j.last_status === 'succeeded') statusHtml = '<span class="job-status-ok">✔ ok</span>';
+        else if (j.last_status === 'failed') statusHtml = '<span class="job-status-fail">✘ failed</span>';
+        else if (j.last_status === 'running') statusHtml = '<span class="job-status-run">▶ running</span>';
+        else if (j.last_run) statusHtml = '<span style="font-size:10px;color:var(--vscode-descriptionForeground)">' + esc(String(j.last_status || '—')) + '</span>';
+        var cmd = String(j.command || '');
+        var cmdShort = cmd.length > 60 ? cmd.slice(0, 57) + '…' : cmd;
+        html += '<tr>'
+          + '<td><span class="job-active ' + (isActive ? 'on' : 'off') + '" title="' + (isActive ? 'Active' : 'Paused') + '"></span></td>'
+          + '<td style="color:var(--vscode-descriptionForeground)">' + esc(String(j.jobid)) + '</td>'
+          + '<td>' + esc(String(j.jobname || '—')) + '</td>'
+          + '<td><code style="font-size:11px">' + esc(String(j.schedule)) + '</code></td>'
+          + '<td title="' + esc(cmd) + '" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><code style="font-size:11px">' + esc(cmdShort) + '</code></td>'
+          + '<td>' + esc(String(j.database || '')) + '</td>'
+          + '<td style="font-size:11px;color:var(--vscode-descriptionForeground);white-space:nowrap">' + esc(String(j.last_run || '—')) + '</td>'
+          + '<td>' + statusHtml + '</td>'
+          + '<td style="white-space:nowrap">'
+          + '<button class="btn-icon" title="Edit" data-jaction="edit" data-jid="' + j.jobid + '" data-jname="' + esc(String(j.jobname || '')) + '" data-jsched="' + esc(String(j.schedule)) + '" data-jcmd="' + esc(cmd) + '"><i class="codicon codicon-edit"></i></button>'
+          + '<button class="btn-icon" title="' + (isActive ? 'Pause' : 'Resume') + '" data-jaction="toggle" data-jid="' + j.jobid + '" data-jactive="' + (isActive ? '0' : '1') + '"><i class="codicon ' + (isActive ? 'codicon-debug-pause' : 'codicon-play') + '"></i></button>'
+          + '<button class="btn-icon" title="View runs" data-jaction="runs" data-jid="' + j.jobid + '" data-jname="' + esc(String(j.jobname || String(j.jobid))) + '"><i class="codicon codicon-list-ordered"></i></button>'
+          + '<button class="btn-icon" title="Delete" data-jaction="delete" data-jid="' + j.jobid + '" data-jname="' + esc(String(j.jobname || String(j.jobid))) + '"><i class="codicon codicon-trash"></i></button>'
+          + '</td></tr>';
+      });
+      html += '</tbody></table>';
+      content.innerHTML = html;
+      content.querySelectorAll('[data-jaction]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var jid = parseInt(btn.dataset.jid);
+          var sel = document.getElementById('jobs-conn-select');
+          var connId = sel ? sel.value : '';
+          if (!connId) return;
+          switch (btn.dataset.jaction) {
+            case 'edit':
+              jobsEditingId = jid;
+              document.getElementById('jobs-modal-title').textContent = 'Edit Job';
+              document.getElementById('job-name').value = btn.dataset.jname || '';
+              document.getElementById('job-schedule').value = btn.dataset.jsched || '';
+              document.getElementById('job-command').value = btn.dataset.jcmd || '';
+              document.getElementById('jobs-modal').classList.remove('hidden');
+              break;
+            case 'toggle':
+              api.send('toggleJob', { connId: connId, jobId: jid, active: btn.dataset.jactive === '1' });
+              break;
+            case 'runs':
+              document.getElementById('job-runs-title').textContent = 'Run History — ' + (btn.dataset.jname || String(jid));
+              document.getElementById('job-runs-content').innerHTML = '<div class="results-placeholder"><i class="codicon codicon-loading codicon-modifier-spin"></i> Loading…</div>';
+              document.getElementById('job-runs-modal').classList.remove('hidden');
+              api.send('loadJobRuns', { connId: connId, jobId: jid });
+              break;
+            case 'delete':
+              if (confirm('Delete job ' + (btn.dataset.jname || String(jid)) + '?\n\nThis cannot be undone.')) {
+                api.send('deleteJob', { connId: connId, jobId: jid });
+              }
+              break;
+          }
+        });
+      });
+    }
+
+    document.getElementById('btn-jobs-refresh').addEventListener('click', loadJobs);
+    document.getElementById('jobs-conn-select').addEventListener('change', function () { if (this.value) loadJobs(); });
+
+    document.getElementById('btn-new-job').addEventListener('click', function () {
+      jobsEditingId = null;
+      document.getElementById('jobs-modal-title').textContent = 'New Job';
+      document.getElementById('job-name').value = '';
+      document.getElementById('job-schedule').value = '';
+      document.getElementById('job-command').value = '';
+      document.getElementById('jobs-modal').classList.remove('hidden');
+    });
+
+    document.getElementById('btn-job-cancel').addEventListener('click', function () {
+      document.getElementById('jobs-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-job-save').addEventListener('click', function () {
+      var sel = document.getElementById('jobs-conn-select');
+      var schedule = document.getElementById('job-schedule').value.trim();
+      var command = document.getElementById('job-command').value.trim();
+      if (!sel.value || !schedule || !command) return;
+      if (jobsEditingId !== null) {
+        api.send('updateJob', { connId: sel.value, jobId: jobsEditingId, schedule: schedule, command: command });
+      } else {
+        api.send('createJob', { connId: sel.value, name: document.getElementById('job-name').value.trim(), schedule: schedule, command: command });
+      }
+      document.getElementById('jobs-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-runs-close').addEventListener('click', function () {
+      document.getElementById('job-runs-modal').classList.add('hidden');
     });
 
     // ── Visual table creator (#58) ────────────────────────────────────────

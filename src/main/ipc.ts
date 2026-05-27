@@ -949,6 +949,117 @@ export function registerIpc(win: BrowserWindow): void {
         break;
       }
 
+      // ── pg_cron Job manager ───────────────────────────────────────────────
+
+      case 'loadJobs': {
+        const { connId } = data as { connId: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('jobsLoaded', { connId, error: 'Not connected.' }); break; }
+        try {
+          const extRows = await driver.query<{ extname: string }>(
+            `SELECT extname FROM pg_extension WHERE extname = 'pg_cron'`
+          );
+          if (!extRows.length) { send('jobsLoaded', { connId, installed: false, jobs: [] }); break; }
+          const jobRows = await driver.query<Record<string, unknown>>(`
+            SELECT j.jobid, j.jobname, j.schedule, j.command, j.database, j.username, j.active,
+              r.status AS last_status,
+              to_char(r.start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS last_run,
+              r.return_message AS last_msg
+            FROM cron.job j
+            LEFT JOIN LATERAL (
+              SELECT status, start_time, return_message
+              FROM cron.job_run_details
+              WHERE jobid = j.jobid
+              ORDER BY start_time DESC LIMIT 1
+            ) r ON true
+            ORDER BY j.jobid
+          `);
+          send('jobsLoaded', { connId, installed: true, jobs: jobRows });
+        } catch (err) {
+          send('jobsLoaded', { connId, error: String(err) });
+        }
+        break;
+      }
+
+      case 'createJob': {
+        const { connId, name, schedule, command } = data as { connId: string; name: string; schedule: string; command: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          if (name && name.trim()) {
+            await driver.query(`SELECT cron.schedule($1, $2, $3)`, [name.trim(), schedule, command]);
+          } else {
+            await driver.query(`SELECT cron.schedule($1, $2)`, [schedule, command]);
+          }
+          send('jobChanged', { connId });
+        } catch (err) {
+          send('jobChanged', { connId, error: String(err) });
+        }
+        break;
+      }
+
+      case 'updateJob': {
+        const { connId, jobId, schedule, command } = data as { connId: string; jobId: number; schedule: string; command: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          await driver.query(`UPDATE cron.job SET schedule = $1, command = $2 WHERE jobid = $3`, [schedule, command, jobId]);
+          send('jobChanged', { connId });
+        } catch (err) {
+          send('jobChanged', { connId, error: String(err) });
+        }
+        break;
+      }
+
+      case 'toggleJob': {
+        const { connId, jobId, active } = data as { connId: string; jobId: number; active: boolean };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          await driver.query(`UPDATE cron.job SET active = $1 WHERE jobid = $2`, [active, jobId]);
+          send('jobChanged', { connId });
+        } catch (err) {
+          send('jobChanged', { connId, error: String(err) });
+        }
+        break;
+      }
+
+      case 'deleteJob': {
+        const { connId, jobId } = data as { connId: string; jobId: number };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          await driver.query(`SELECT cron.unschedule($1)`, [jobId]);
+          send('jobChanged', { connId });
+        } catch (err) {
+          send('jobChanged', { connId, error: String(err) });
+        }
+        break;
+      }
+
+      case 'loadJobRuns': {
+        const { connId, jobId } = data as { connId: string; jobId: number };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          const rows = await driver.query<Record<string, unknown>>(`
+            SELECT runid, status, return_message,
+              to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS start_time,
+              to_char(end_time   AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS end_time,
+              CASE WHEN end_time IS NOT NULL AND start_time IS NOT NULL
+                THEN round(EXTRACT(EPOCH FROM (end_time - start_time))::numeric, 2)
+                ELSE NULL END AS duration_sec
+            FROM cron.job_run_details
+            WHERE jobid = $1
+            ORDER BY start_time DESC LIMIT 50
+          `, [jobId]);
+          send('jobRunsLoaded', { connId, jobId, runs: rows });
+        } catch (err) {
+          send('jobRunsLoaded', { connId, jobId, error: String(err) });
+        }
+        break;
+      }
+
       // ── Export ────────────────────────────────────────────────────────────
 
       case 'exportResult': {
