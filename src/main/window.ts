@@ -55,6 +55,7 @@ export function createMainWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    frame: false,
     title: 'Prisma4Postgres',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),

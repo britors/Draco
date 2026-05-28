@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, dialog, Notification, shell } from 'electron';
+import { BrowserWindow, ipcMain, dialog, Notification, shell, Menu } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -51,6 +51,17 @@ function pushConnections(): void {
 export function registerIpc(win: BrowserWindow): void {
   mainWin = win;
 
+  // ── Window controls ───────────────────────────────────────────────────────
+  ipcMain.on('win-ctrl', (_event, action: string) => {
+    if (win.isDestroyed()) return;
+    if (action === 'min') win.minimize();
+    else if (action === 'max') { if (win.isMaximized()) win.unmaximize(); else win.maximize(); }
+    else if (action === 'close') win.close();
+  });
+  const notifyMax = (v: boolean) => { if (!win.isDestroyed()) win.webContents.send('win-maximized', v); };
+  win.on('maximize', () => notifyMax(true));
+  win.on('unmaximize', () => notifyMax(false));
+
   // ── Fire-and-forget messages from renderer ────────────────────────────────
   ipcMain.on('from-renderer', async (event, { command, data }: { command: string; data: unknown }) => {
     // Forward navigate-to-table from child panels to main window
@@ -78,6 +89,12 @@ export function registerIpc(win: BrowserWindow): void {
       case 'refreshConnections':
         pushConnections();
         break;
+
+      case 'showAppMenu': {
+        const menu = Menu.getApplicationMenu();
+        if (menu) menu.popup({ window: win });
+        break;
+      }
 
       // ── Connection CRUD ───────────────────────────────────────────────────
 
@@ -705,7 +722,11 @@ export function registerIpc(win: BrowserWindow): void {
         const driver = connManager.getDriver(connId);
         if (!driver) { send('dashboardLoaded', { connId, error: 'Not connected.' }); break; }
         try {
-          const [serverRows, dbRows, connRows, perfRows, tableRows] = await Promise.all([
+          const timeout = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Dashboard queries timed out after 15s')), 15_000)
+          );
+          const [serverRows, dbRows, connRows, perfRows, tableRows] = await Promise.race([
+            Promise.all([
             driver.query<Record<string, unknown>>(`
               SELECT
                 split_part(version(), ' ', 2) AS pg_version,
@@ -750,7 +771,9 @@ export function registerIpc(win: BrowserWindow): void {
               WHERE c.relkind = 'r' AND n.nspname NOT IN ('pg_catalog','information_schema')
               ORDER BY pg_total_relation_size(c.oid) DESC LIMIT 10
             `),
-          ]);
+            ]),
+            timeout,
+          ]) as [Record<string, unknown>[], Record<string, unknown>[], Record<string, unknown>[], Record<string, unknown>[], Record<string, unknown>[]];
           const sv = serverRows[0] ?? {};
           const db = dbRows[0] ?? {};
           const cn = connRows[0] ?? {};

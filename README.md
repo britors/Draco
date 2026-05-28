@@ -53,7 +53,7 @@
 - **Top 10 largest tables** with proportional size bars
 - Server info: PostgreSQL version, uptime, host, port
 - Database info: name, size, encoding, collation
-- Refresh button + timestamp; accessible from the tree icon or **Connection → Dashboard** (`Ctrl+Shift+D`)
+- Accessible from the tree icon or **Connection → Dashboard** (`Ctrl+Shift+D`)
 
 ### Explorer (left sidebar)
 
@@ -297,6 +297,13 @@ Passwords are encrypted with `electron.safeStorage` and stored in `userData/pass
 - **Right area** holds Query, History, Activity, Stats, Roles, Jobs, ERD tabs + dynamic table / dashboard tabs
 - **Query/Results split** resizable (persisted per session)
 - **Row detail panel** slides in on the right when you click a result row
+
+### Title Bar
+
+- Custom frameless title bar — drag anywhere on the bar to move the window
+- **☰** hamburger button opens the full application menu (File, Edit, View, Connection, Help)
+- **─ □ ✕** window controls (minimize, maximize/restore, close) with comfortable click targets
+- Maximize icon switches to restore when the window is maximized
 
 ---
 

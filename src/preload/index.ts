@@ -10,4 +10,10 @@ contextBridge.exposeInMainWorld('api', {
   invoke(command: string, data?: unknown): Promise<unknown> {
     return ipcRenderer.invoke('ipc-invoke', { command, data });
   },
+  winMin(): void { ipcRenderer.send('win-ctrl', 'min'); },
+  winMax(): void { ipcRenderer.send('win-ctrl', 'max'); },
+  winClose(): void { ipcRenderer.send('win-ctrl', 'close'); },
+  onWinMaximize(cb: (maximized: boolean) => void): void {
+    ipcRenderer.on('win-maximized', (_e, v) => cb(v as boolean));
+  },
 });
