@@ -540,14 +540,28 @@
                 <label for="f-ssh-enabled">Enable SSH tunnel</label>
               </div>
               <div class="form-row">
-                <div class="form-group"><label>SSH Host</label><input type="text" id="f-ssh-host" placeholder="jump.example.com"></div>
+                <div class="form-group"><label>SSH Host</label><input type="text" id="f-ssh-host" placeholder="bastion.example.com"></div>
                 <div class="form-group"><label>SSH Port</label><input type="number" id="f-ssh-port" value="22" min="1" max="65535"></div>
               </div>
               <div class="form-row">
                 <div class="form-group"><label>SSH User</label><input type="text" id="f-ssh-user" placeholder="ubuntu"></div>
-                <div class="form-group"><label>SSH Password</label><input type="password" id="f-ssh-password" placeholder="or use key"></div>
+                <div class="form-group"><label id="f-ssh-password-label">SSH Password / Key Passphrase</label><input type="password" id="f-ssh-password" placeholder="password or passphrase"></div>
               </div>
               <div class="form-group"><label>Private key path (optional)</label><input type="text" id="f-ssh-key" placeholder="~/.ssh/id_rsa"></div>
+              <details style="margin-top:6px">
+                <summary style="cursor:pointer;font-size:11px;color:var(--vscode-descriptionForeground);user-select:none">Jump host (ProxyJump)</summary>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+                  <div class="form-row">
+                    <div class="form-group"><label>Jump Host</label><input type="text" id="f-ssh-jump-host" placeholder="proxy.example.com"></div>
+                    <div class="form-group"><label>Jump Port</label><input type="number" id="f-ssh-jump-port" value="22" min="1" max="65535"></div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group"><label>Jump User</label><input type="text" id="f-ssh-jump-user" placeholder="ubuntu"></div>
+                    <div class="form-group"><label>Jump Password / Passphrase</label><input type="password" id="f-ssh-jump-password" placeholder="password or passphrase"></div>
+                  </div>
+                  <div class="form-group"><label>Jump key path (optional)</label><input type="text" id="f-ssh-jump-key" placeholder="~/.ssh/jump_rsa"></div>
+                </div>
+              </details>
             </div>
           </details>
           <div class="form-actions">
@@ -576,6 +590,10 @@
       <button class="tab" data-tab="roles"><i class="codicon codicon-person"></i>Roles</button>
       <button class="tab" data-tab="jobs"><i class="codicon codicon-clock"></i>Jobs</button>
       <button class="tab" data-tab="erd"><i class="codicon codicon-type-hierarchy"></i>ERD</button>
+      <button class="tab" data-tab="slowqueries"><i class="codicon codicon-flame"></i>Slow Queries</button>
+      <button class="tab" data-tab="schemadiff"><i class="codicon codicon-diff"></i>Schema Diff</button>
+      <button class="tab" data-tab="replication"><i class="codicon codicon-server-process"></i>Replication</button>
+      <button class="tab" data-tab="pgdump"><i class="codicon codicon-database"></i>Backup</button>
       <div id="table-tab-list" style="display:flex;overflow-x:auto;"></div>
     </div>
 
@@ -604,6 +622,7 @@
         <div class="query-h-resize" id="query-h-resize"></div>
         <div class="query-results-pane" id="query-results-pane">
           <div class="query-status hidden" id="query-status"></div>
+          <div id="result-history-bar" class="hidden" style="display:flex;align-items:center;gap:0;padding:0 4px;background:var(--vscode-editorGroupHeader-tabsBackground);border-bottom:1px solid var(--vscode-panel-border);overflow-x:auto;flex-shrink:0;min-height:24px"></div>
           <div style="display:flex;flex:1;min-height:0;overflow:hidden">
             <div class="results-section" id="results-section" style="flex:1;overflow:auto">
               <div class="results-placeholder" id="results-placeholder">Run a query to see results</div>
@@ -694,6 +713,102 @@
             <g id="erd-nodes"></g>
           </g>
         </svg>
+      </div>
+    </div>
+
+    <!-- pg_dump / pg_restore panel (#90) -->
+    <div class="panel hidden" id="panel-pgdump" style="display:flex;flex-direction:column;overflow:hidden">
+      <div class="query-toolbar" style="gap:8px;flex-shrink:0;flex-wrap:wrap">
+        <span style="font-weight:600;font-size:12px"><i class="codicon codicon-database" style="margin-right:4px"></i>Backup &amp; Restore</span>
+        <select class="conn-select" id="pgdump-conn-select" style="max-width:200px"><option value="">Select connection…</option></select>
+        <span style="flex:1"></span>
+        <span id="pgdump-tools-status" style="font-size:11px;color:var(--vscode-descriptionForeground)"></span>
+      </div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:16px;overflow:auto;flex:1">
+        <!-- Backup section -->
+        <div style="border:1px solid var(--vscode-panel-border);border-radius:4px;padding:12px">
+          <div style="font-weight:600;font-size:12px;margin-bottom:10px"><i class="codicon codicon-export"></i> Backup (pg_dump)</div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <label style="font-size:12px">Format:
+              <select id="pgdump-format" style="margin-left:4px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border,transparent);padding:3px 6px;font-size:12px;border-radius:3px">
+                <option value="custom">Custom (compressed)</option>
+                <option value="plain">Plain SQL</option>
+                <option value="tar">Tar</option>
+              </select>
+            </label>
+            <label style="font-size:12px">Compression:
+              <select id="pgdump-compression" style="margin-left:4px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border,transparent);padding:3px 6px;font-size:12px;border-radius:3px">
+                <option value="6">6 (default)</option>
+                <option value="0">0 (none)</option>
+                <option value="9">9 (max)</option>
+              </select>
+            </label>
+            <button class="btn btn-primary" id="btn-pgdump-run"><i class="codicon codicon-export"></i>Backup…</button>
+          </div>
+          <div id="pgdump-progress" style="margin-top:10px;font-size:12px;display:none"></div>
+        </div>
+        <!-- Restore section -->
+        <div style="border:1px solid var(--vscode-panel-border);border-radius:4px;padding:12px">
+          <div style="font-weight:600;font-size:12px;margin-bottom:10px"><i class="codicon codicon-cloud-download"></i> Restore (pg_restore / psql)</div>
+          <div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:8px">Supports .dump (custom format), .tar, and .sql (plain) files.</div>
+          <button class="btn btn-secondary" id="btn-pgrestore-run"><i class="codicon codicon-cloud-download"></i>Choose file &amp; Restore…</button>
+          <div id="pgrestore-progress" style="margin-top:10px;font-size:12px;display:none"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Replication monitor panel (#91) -->
+    <div class="panel hidden" id="panel-replication" style="display:flex;flex-direction:column;overflow:hidden">
+      <div class="query-toolbar" style="gap:8px;flex-shrink:0">
+        <span style="font-weight:600;font-size:12px"><i class="codicon codicon-server-process" style="margin-right:4px"></i>Replication</span>
+        <select class="conn-select" id="rep-conn-select" style="max-width:200px"><option value="">Select connection…</option></select>
+        <button class="btn btn-secondary" id="btn-rep-refresh"><i class="codicon codicon-refresh"></i>Refresh</button>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+          <input type="checkbox" id="rep-auto-refresh" style="cursor:pointer"> Auto (15s)
+        </label>
+        <span style="flex:1"></span>
+        <span id="rep-status" style="font-size:11px;color:var(--vscode-descriptionForeground)"></span>
+      </div>
+      <div id="rep-results" class="results-section" style="flex:1;overflow:auto">
+        <div class="results-placeholder">Select a connection and click Refresh</div>
+      </div>
+    </div>
+
+    <!-- Schema diff panel (#87) -->
+    <div class="panel hidden" id="panel-schemadiff" style="display:flex;flex-direction:column;overflow:hidden">
+      <div class="query-toolbar" style="gap:8px;flex-shrink:0;flex-wrap:wrap">
+        <span style="font-weight:600;font-size:12px"><i class="codicon codicon-diff" style="margin-right:4px"></i>Schema Diff</span>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:11px;color:var(--vscode-descriptionForeground)">Left:</span>
+          <select id="sd-left-conn" class="conn-select" style="max-width:160px"><option value="">Connection…</option></select>
+          <select id="sd-left-schema" class="conn-select" style="max-width:120px"><option value="">Schema…</option></select>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:11px;color:var(--vscode-descriptionForeground)">Right:</span>
+          <select id="sd-right-conn" class="conn-select" style="max-width:160px"><option value="">Connection…</option></select>
+          <select id="sd-right-schema" class="conn-select" style="max-width:120px"><option value="">Schema…</option></select>
+        </div>
+        <button class="btn btn-primary" id="btn-sd-run"><i class="codicon codicon-diff"></i>Compare</button>
+        <span style="flex:1"></span>
+        <span id="sd-status" style="font-size:11px;color:var(--vscode-descriptionForeground)"></span>
+      </div>
+      <div id="sd-results" class="results-section" style="flex:1;overflow:auto">
+        <div class="results-placeholder">Select two connections/schemas and click Compare</div>
+      </div>
+    </div>
+
+    <!-- Slow queries panel (#92) -->
+    <div class="panel hidden" id="panel-slowqueries" style="display:flex;flex-direction:column;overflow:hidden">
+      <div class="query-toolbar" style="gap:8px;flex-shrink:0">
+        <span style="font-weight:600;font-size:12px"><i class="codicon codicon-flame" style="margin-right:4px"></i>Slow Queries</span>
+        <select class="conn-select" id="sq-conn-select" style="max-width:200px"><option value="">Select connection…</option></select>
+        <button class="btn btn-secondary" id="btn-sq-refresh"><i class="codicon codicon-refresh"></i>Refresh</button>
+        <button class="btn btn-secondary" id="btn-sq-reset" title="Reset pg_stat_statements counters"><i class="codicon codicon-trash"></i>Reset Stats</button>
+        <span style="flex:1"></span>
+        <span id="sq-status" style="font-size:11px;color:var(--vscode-descriptionForeground)"></span>
+      </div>
+      <div id="sq-results" class="results-section" style="flex:1;overflow:auto">
+        <div class="results-placeholder">Select a connection and click Refresh<br><small style="opacity:0.6">Requires pg_stat_statements extension</small></div>
       </div>
     </div>
 
@@ -904,9 +1019,27 @@
       <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--vscode-foreground)">Save Snippet</div>
       <input id="snippet-name-input" type="text" placeholder="Snippet name…" autocomplete="off"
         style="width:100%;box-sizing:border-box;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:3px;padding:5px 8px;font-size:13px;font-family:var(--vscode-font-family);outline:none">
+      <label id="snippet-pin-row" style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--vscode-foreground);cursor:pointer">
+        <input type="checkbox" id="snippet-pin-conn" style="cursor:pointer">
+        <span>Pin to connection:</span>
+        <span id="snippet-pin-conn-label" style="color:var(--vscode-descriptionForeground);font-size:11px;font-style:italic"></span>
+      </label>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
         <button id="snippet-name-cancel" style="background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:none;border-radius:3px;padding:4px 14px;font-size:12px;font-family:var(--vscode-font-family);cursor:pointer">Cancel</button>
         <button id="snippet-name-ok" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:3px;padding:4px 14px;font-size:12px;font-family:var(--vscode-font-family);cursor:pointer">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Insert row modal (#88) -->
+  <div id="insert-row-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;display:flex;align-items:center;justify-content:center">
+    <div style="background:var(--vscode-editor-background);border:1px solid var(--vscode-focusBorder);border-radius:6px;width:480px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--vscode-panel-border);font-weight:600;font-size:13px">Insert Row</div>
+      <div id="insert-row-fields" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px"></div>
+      <div id="insert-row-error" style="display:none;padding:4px 16px;font-size:12px;color:var(--vscode-errorForeground)"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--vscode-panel-border)">
+        <button id="insert-row-cancel" style="background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:none;border-radius:3px;padding:5px 16px;font-size:12px;font-family:var(--vscode-font-family);cursor:pointer">Cancel</button>
+        <button id="insert-row-ok" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:3px;padding:5px 16px;font-size:12px;font-family:var(--vscode-font-family);cursor:pointer"><i class="codicon codicon-add"></i> Insert</button>
       </div>
     </div>
   </div>
@@ -1614,6 +1747,10 @@
       if (tab === 'jobs') { renderJobsConnSelect(); }
       if (tab === 'func-editor') { ensureFuncMonaco(null); }
       if (tab === 'erd') { if (window.__erdOnTabActivated) window.__erdOnTabActivated(); }
+      if (tab === 'slowqueries') { if (window.__sqOnTabActivated) window.__sqOnTabActivated(); }
+      if (tab === 'schemadiff')  { if (window.__sdOnTabActivated) window.__sdOnTabActivated(); }
+      if (tab === 'replication') { if (window.__repOnTabActivated) window.__repOnTabActivated(); }
+      if (tab === 'pgdump')      { if (window.__pgdOnTabActivated) window.__pgdOnTabActivated(); }
       if (tab === 'create-table') { renderCreateTable(); }
       if (tab === 'edit-table') { renderEditTable(); }
       if (isDynTab) { activeTableTabId = tab; renderActiveTableDetail(); }
@@ -2066,6 +2203,8 @@
     function buildBrowseSection(tab) {
       var totalPages = Math.max(1, Math.ceil(tab.browseTotal / tab.browsePageSize));
       var currentPage = tab.browsePage + 1;
+      var pkCols0 = (tab.data && tab.data.columns) ? tab.data.columns.filter(function(c){ return c.isPrimaryKey; }).map(function(c){ return c.name; }) : [];
+      var canEdit = pkCols0.length > 0;
       var hdr = '<div class="tdetail-section-hdr" style="cursor:default">'
         + '<i class="codicon codicon-table"></i>Data'
         + '<div class="browse-toolbar" style="flex:1;padding:0 0 0 10px">'
@@ -2077,6 +2216,8 @@
         + '<select data-browse="pagesize" style="font-size:11px;margin-left:4px">'
         + [25, 50, 100, 200].map(function(n){ return '<option value="' + n + '"' + (n === tab.browsePageSize ? ' selected' : '') + '>' + n + ' rows</option>'; }).join('')
         + '</select>'
+        + '<span style="flex:1"></span>'
+        + '<button class="btn btn-secondary btn-xs" data-browse="insert" title="Insert a new row"><i class="codicon codicon-add"></i>Insert</button>'
         + '</div></div>';
 
       var body = '';
@@ -2085,21 +2226,23 @@
       } else if (tab.browseError) {
         body = '<div class="tdetail-error"><i class="codicon codicon-warning"></i> ' + esc(tab.browseError) + '</div>';
       } else if (tab.browseData && tab.browseData.columns.length) {
-        var pkCols = (tab.data && tab.data.columns) ? tab.data.columns.filter(function(c){ return c.isPrimaryKey; }).map(function(c){ return c.name; }) : [];
+        var pkCols = pkCols0;
         var colHeaders = tab.browseData.columns.map(function(c) {
           var isPk = pkCols.indexOf(c) >= 0;
           return '<th>' + esc(c) + (isPk ? ' <span class="tdetail-badge pk" style="font-size:8px">PK</span>' : '') + '</th>';
-        }).join('');
+        }).join('') + (canEdit ? '<th style="width:28px"></th>' : '');
         var rows = tab.browseData.rows.map(function(row, ri) {
+          var pkValsJson = JSON.stringify(pkCols.map(function(k){ return row[k]; }));
           var cells = tab.browseData.columns.map(function(c) {
             var isPk = pkCols.indexOf(c) >= 0;
             var val = row[c];
             var display = val === null || val === undefined
               ? '<span class="browse-cell-null">NULL</span>'
               : esc(typeof val === 'object' ? JSON.stringify(val) : String(val));
-            return '<td class="' + (isPk ? 'pk-col' : '') + '" data-row="' + ri + '" data-col="' + esc(c) + '" data-pk-cols="' + esc(JSON.stringify(pkCols)) + '" data-pk-vals="' + esc(JSON.stringify(pkCols.map(function(k){ return row[k]; }))) + '">' + display + '</td>';
+            return '<td class="' + (isPk ? 'pk-col' : '') + '" data-row="' + ri + '" data-col="' + esc(c) + '" data-pk-cols="' + esc(JSON.stringify(pkCols)) + '" data-pk-vals="' + esc(pkValsJson) + '">' + display + '</td>';
           }).join('');
-          return '<tr>' + cells + '</tr>';
+          var delBtn = canEdit ? '<td style="padding:0;text-align:center"><button class="btn-icon btn-danger" data-delete-row="1" data-pk-cols="' + esc(JSON.stringify(pkCols)) + '" data-pk-vals="' + esc(pkValsJson) + '" title="Delete row" style="padding:2px 4px"><i class="codicon codicon-trash"></i></button></td>' : '';
+          return '<tr>' + cells + delBtn + '</tr>';
         }).join('');
         body = '<div class="browse-grid-wrap"><table class="browse-grid"><thead><tr>' + colHeaders + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
       } else {
@@ -2109,7 +2252,7 @@
     }
 
     function attachBrowseListeners(content, tab) {
-      // Pagination buttons
+      // Pagination + Insert button
       content.querySelectorAll('[data-browse]').forEach(function(el) {
         var action = el.dataset.browse;
         if (action === 'pagesize') {
@@ -2118,6 +2261,8 @@
             tab.browsePage = 0;
             doLoadBrowse(tab);
           });
+        } else if (action === 'insert') {
+          el.addEventListener('click', function() { openInsertRowModal(tab); });
         } else {
           el.addEventListener('click', function() {
             var totalPages = Math.max(1, Math.ceil(tab.browseTotal / tab.browsePageSize));
@@ -2129,6 +2274,21 @@
           });
         }
       });
+
+      // Delete row buttons
+      var grid = content.querySelector('.browse-grid');
+      if (grid) {
+        grid.addEventListener('click', function(e) {
+          var delBtn = e.target.closest('[data-delete-row]');
+          if (!delBtn) return;
+          var pkCols = JSON.parse(delBtn.dataset.pkCols || '[]');
+          var pkVals = JSON.parse(delBtn.dataset.pkVals || '[]');
+          if (!pkCols.length) return;
+          var preview = pkCols.map(function(c,i){ return c + ' = ' + pkVals[i]; }).join(', ');
+          if (!confirm('Delete row where ' + preview + '?')) return;
+          api.send('deleteTableRow', { connId: tab.connId, schema: tab.schema, tableName: tab.tableName, pkCols: pkCols, pkVals: pkVals });
+        });
+      }
       // Double-click to edit (#63)
       var grid = content.querySelector('.browse-grid');
       if (!grid) return;
@@ -2159,6 +2319,58 @@
         inp.addEventListener('blur', commit);
       });
     }
+
+    // ── Insert row modal (#88) ────────────────────────────────────────────
+    var _insertRowTab = null;
+
+    function openInsertRowModal(tab) {
+      _insertRowTab = tab;
+      var cols = (tab.data && tab.data.columns) ? tab.data.columns : [];
+      var fields = document.getElementById('insert-row-fields');
+      var errEl  = document.getElementById('insert-row-error');
+      if (!fields) return;
+      errEl.style.display = 'none';
+      fields.innerHTML = cols.map(function(c) {
+        var hint = c.fullType || c.dataType || '';
+        var placeholder = c.isPrimaryKey ? '(auto / leave blank for serial)' : (c.columnDefault ? 'default: ' + c.columnDefault.slice(0,30) : '');
+        return '<div style="display:flex;align-items:center;gap:8px">'
+          + '<label style="width:160px;flex-shrink:0;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(c.name) + '">'
+          + esc(c.name) + (c.isPrimaryKey ? ' <span style="font-size:9px;color:var(--vscode-button-background)">PK</span>' : '')
+          + '<span style="color:var(--vscode-descriptionForeground);font-size:10px;margin-left:4px">' + esc(hint) + '</span></label>'
+          + '<input data-insert-col="' + esc(c.name) + '" type="text" placeholder="' + esc(placeholder) + '" autocomplete="off"'
+          + ' style="flex:1;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:3px;padding:4px 7px;font-size:12px;font-family:var(--vscode-font-family);outline:none">'
+          + '</div>';
+      }).join('');
+      document.getElementById('insert-row-overlay').classList.remove('hidden');
+      var first = fields.querySelector('input[data-insert-col]');
+      if (first) setTimeout(function(){ first.focus(); }, 30);
+    }
+
+    function closeInsertRowModal() {
+      document.getElementById('insert-row-overlay').classList.add('hidden');
+      _insertRowTab = null;
+    }
+
+    function confirmInsertRow() {
+      if (!_insertRowTab) return;
+      var tab = _insertRowTab;
+      var cols = (tab.data && tab.data.columns) ? tab.data.columns : [];
+      var inputs = document.querySelectorAll('#insert-row-fields [data-insert-col]');
+      var values = {};
+      inputs.forEach(function(inp) {
+        var col = inp.dataset.insertCol;
+        var val = inp.value;
+        // skip empty PK inputs (let DB handle serial)
+        var colInfo = cols.find(function(c){ return c.name === col; });
+        if (colInfo && colInfo.isPrimaryKey && !val.trim()) return;
+        values[col] = val.trim() === '' ? null : val;
+      });
+      document.getElementById('insert-row-error').style.display = 'none';
+      api.send('insertTableRow', { connId: tab.connId, schema: tab.schema, tableName: tab.tableName, values: values });
+    }
+
+    document.getElementById('insert-row-ok').addEventListener('click', confirmInsertRow);
+    document.getElementById('insert-row-cancel').addEventListener('click', closeInsertRowModal);
 
     function doLoadBrowse(tab) {
       tab.browseLoading = true;
@@ -2289,6 +2501,12 @@
       document.getElementById('f-ssh-user').value      = (conn && conn.sshUser)    ? conn.sshUser    : '';
       document.getElementById('f-ssh-key').value       = (conn && conn.sshKeyPath) ? conn.sshKeyPath : '';
       document.getElementById('f-ssh-password').value  = '';
+      // Jump host fields
+      document.getElementById('f-ssh-jump-host').value     = (conn && conn.sshJumpHost)    ? conn.sshJumpHost    : '';
+      document.getElementById('f-ssh-jump-port').value     = (conn && conn.sshJumpPort)    ? String(conn.sshJumpPort) : '22';
+      document.getElementById('f-ssh-jump-user').value     = (conn && conn.sshJumpUser)    ? conn.sshJumpUser    : '';
+      document.getElementById('f-ssh-jump-key').value      = (conn && conn.sshJumpKeyPath) ? conn.sshJumpKeyPath : '';
+      document.getElementById('f-ssh-jump-password').value = '';
       if (conn && conn.sshEnabled) document.getElementById('ssh-section').open = true;
       var ts = document.getElementById('test-status'); ts.textContent = ''; ts.className = 'test-status';
       document.getElementById('view-tree').classList.add('hidden');
@@ -2299,6 +2517,7 @@
 
     function getFormData() {
       var sshEnabled = document.getElementById('f-ssh-enabled').checked;
+      var jumpHost   = document.getElementById('f-ssh-jump-host').value.trim();
       return {
         conn: {
           id: editingId,
@@ -2313,9 +2532,14 @@
           sshPort:   parseInt(document.getElementById('f-ssh-port').value, 10) || 22,
           sshUser:   document.getElementById('f-ssh-user').value.trim() || undefined,
           sshKeyPath: document.getElementById('f-ssh-key').value.trim() || undefined,
+          sshJumpHost:    jumpHost || undefined,
+          sshJumpPort:    jumpHost ? (parseInt(document.getElementById('f-ssh-jump-port').value, 10) || 22) : undefined,
+          sshJumpUser:    jumpHost ? (document.getElementById('f-ssh-jump-user').value.trim() || undefined) : undefined,
+          sshJumpKeyPath: jumpHost ? (document.getElementById('f-ssh-jump-key').value.trim() || undefined) : undefined,
         },
-        password:    document.getElementById('f-password').value,
-        sshPassword: document.getElementById('f-ssh-password').value,
+        password:     document.getElementById('f-password').value,
+        sshPassword:  document.getElementById('f-ssh-password').value,
+        jumpPassword: jumpHost ? document.getElementById('f-ssh-jump-password').value : undefined,
       };
     }
 
@@ -2361,12 +2585,45 @@
     }
     document.getElementById('btn-new-tab').addEventListener('click', newQTab);
 
+    // ── Result history (per query tab, session-only) ───────────────────────
+    function renderResultHistory(tab) {
+      var bar = document.getElementById('result-history-bar');
+      if (!bar) return;
+      var history = tab && tab.resultHistory;
+      if (!history || history.length <= 1) { bar.classList.add('hidden'); return; }
+      bar.classList.remove('hidden');
+      var activeIdx = tab.activeHistIdx || 0;
+      bar.innerHTML = history.map(function (h, i) {
+        var label = new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        var rowInfo = h.result && !h.result.error ? (' · ' + h.result.rowCount + 'r') : '';
+        var active = i === activeIdx;
+        return '<button data-hist-idx="' + i + '" title="' + esc(h.sql.slice(0, 120)) + '" style="'
+          + 'background:' + (active ? 'var(--vscode-tab-activeBackground)' : 'transparent') + ';'
+          + 'color:' + (active ? 'var(--vscode-tab-activeForeground)' : 'var(--vscode-tab-inactiveForeground)') + ';'
+          + 'border:none;border-right:1px solid var(--vscode-panel-border);padding:2px 8px;font-size:10px;'
+          + 'font-family:var(--vscode-font-family);cursor:pointer;white-space:nowrap;height:100%">'
+          + esc(label) + esc(rowInfo)
+          + '</button>';
+      }).join('');
+      bar.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-hist-idx]');
+        if (!btn || !tab) return;
+        tab.activeHistIdx = parseInt(btn.dataset.histIdx, 10);
+        var h = tab.resultHistory[tab.activeHistIdx];
+        if (h) { renderResults(h.result); renderResultHistory(tab); }
+      });
+    }
+
     function switchQTab(id) {
       if (monacoEditor && activeQTabId) activeQTab().sql = monacoEditor.getValue();
       activeQTabId = id;
       var tab = activeQTab();
       if (monacoEditor) monacoEditor.setValue(tab.sql || '');
-      saveState(); renderQueryTabs(); renderConnSelect(); renderResults(tab.result);
+      renderResultHistory(tab);
+      var displayResult = tab.resultHistory && tab.resultHistory.length
+        ? tab.resultHistory[tab.activeHistIdx || 0].result
+        : tab.result;
+      saveState(); renderQueryTabs(); renderConnSelect(); renderResults(displayResult);
       var statusEl = document.getElementById('query-status');
       if (tab.result) {
         statusEl.classList.remove('hidden');
@@ -2798,9 +3055,12 @@
         return;
       }
       list.innerHTML = filtered.map(function (s) {
+        var connBadge = s.connLabel
+          ? '<span style="font-size:9px;background:var(--vscode-button-background);color:var(--vscode-button-foreground);border-radius:2px;padding:1px 5px;margin-left:5px;vertical-align:middle">' + esc(s.connLabel) + '</span>'
+          : '';
         return '<div class="history-item" data-snippet-id="' + esc(s.id) + '" style="display:flex;align-items:flex-start;gap:6px">'
           + '<div style="flex:1;min-width:0">'
-          + '<div class="history-sql" style="font-weight:600;font-family:var(--vscode-font-family)">' + esc(s.name) + '</div>'
+          + '<div class="history-sql" style="font-weight:600;font-family:var(--vscode-font-family)">' + esc(s.name) + connBadge + '</div>'
           + '<div class="history-sql" style="opacity:0.6">' + esc(s.sql.replace(/\s+/g, ' ').slice(0, 80)) + '</div>'
           + '</div>'
           + '<button class="btn-icon btn-danger" data-delete-snippet="' + esc(s.id) + '" title="Delete snippet" style="flex-shrink:0;margin-top:2px"><i class="codicon codicon-trash"></i></button>'
@@ -2834,8 +3094,9 @@
       var s = snippets.find(function (x) { return x.id === item.dataset.snippetId; });
       if (!s) return;
       activeQTab().sql = s.sql;
+      if (s.connId) { activeQTab().connId = s.connId; }
       if (monacoEditor) monacoEditor.setValue(s.sql);
-      saveState(); switchMainTab('query');
+      saveState(); renderConnSelect(); switchMainTab('query');
     });
 
     var snOverlay = document.getElementById('snippet-name-overlay');
@@ -2847,6 +3108,21 @@
     function openSnippetNameModal(sql) {
       snPending = sql;
       snInput.value = '';
+      var pinEl = document.getElementById('snippet-pin-conn');
+      var pinLabelEl = document.getElementById('snippet-pin-conn-label');
+      var pinRow = document.getElementById('snippet-pin-row');
+      var tab = activeQTab();
+      var hasConn = !!(tab && tab.connId);
+      if (pinEl) pinEl.checked = hasConn;
+      if (pinRow) pinRow.style.display = hasConn ? '' : 'none';
+      if (pinLabelEl) {
+        if (hasConn) {
+          var conn = connections.find(function(c){ return c.id === tab.connId; });
+          pinLabelEl.textContent = conn ? conn.label : tab.connId;
+        } else {
+          pinLabelEl.textContent = '';
+        }
+      }
       snOverlay.classList.remove('hidden');
       setTimeout(function () { snInput.focus(); }, 30);
     }
@@ -2859,7 +3135,17 @@
     function confirmSnippetName() {
       var name = snInput.value.trim();
       if (!name) { snInput.focus(); return; }
-      if (snPending) api.send('saveSnippet', { name: name, sql: snPending });
+      var pinEl = document.getElementById('snippet-pin-conn');
+      var connId = null; var connLabel = null;
+      if (pinEl && pinEl.checked) {
+        var tab = activeQTab();
+        if (tab && tab.connId) {
+          connId = tab.connId;
+          var conn = connections.find(function(c){ return c.id === connId; });
+          connLabel = conn ? conn.label : connId;
+        }
+      }
+      if (snPending) api.send('saveSnippet', { name: name, sql: snPending, connId: connId, connLabel: connLabel });
       closeSnippetNameModal();
     }
 
@@ -3023,6 +3309,10 @@
           if (!document.getElementById('view-form').classList.contains('hidden')) showTree();
           if (persisted.tab === 'query') renderConnSelect();
           if (window.__erdOnConnections) window.__erdOnConnections();
+          if (window.__sqOnConnections) window.__sqOnConnections();
+          if (window.__sdOnConnections) window.__sdOnConnections();
+          if (window.__repOnConnections) window.__repOnConnections();
+          if (window.__pgdOnConnections) window.__pgdOnConnections();
           break;
         case 'updateStatuses':
           statuses = d || {}; renderTree(); break;
@@ -3045,6 +3335,7 @@
         case 'schemasLoaded':
           schemas[d.connId] = d.schemas; delete loadingNodes['c:' + d.connId]; renderTree();
           if (window.__erdOnSchemas) window.__erdOnSchemas(d.connId, d.schemas);
+          if (window.__sdOnMessage) window.__sdOnMessage(msg);
           break;
         case 'tablesLoaded':  tables[d.connId + ':' + d.schema] = d.tables; delete loadingNodes['tg:' + d.connId + ':' + d.schema]; renderTree(); break;
         case 'columnsLoaded': cols[d.connId + ':' + d.schema + ':' + d.table] = d.columns; delete loadingNodes[(d.isView ? 'v:' : 't:') + d.connId + ':' + d.schema + ':' + d.table]; renderTree(); break;
@@ -3052,6 +3343,21 @@
         case 'seqsLoaded': seqs[d.connId + ':' + d.schema] = d.sequences; delete loadingNodes['sg:' + d.connId + ':' + d.schema]; renderTree(); break;
         case 'extsLoaded': exts[d.connId] = { installed: d.installed, available: d.available }; delete loadingNodes['eg:' + d.connId]; renderTree(); break;
         case 'seqNextValResult': showToast(d.error ? 'Error: ' + d.error : 'Next value: ' + d.value); break;
+        case 'slowQueriesLoaded': if (window.__sqOnMessage) window.__sqOnMessage(msg); break;
+        case 'slowQueriesReset':  if (window.__sqOnMessage) window.__sqOnMessage(msg); break;
+        case 'schemaDiffResult':   if (window.__sdOnMessage)  window.__sdOnMessage(msg);  break;
+        case 'replicationLoaded':  if (window.__repOnMessage) window.__repOnMessage(msg); break;
+        case 'pgToolsStatus':      if (window.__pgdOnMessage) window.__pgdOnMessage(msg); break;
+        case 'pgDumpProgress':     if (window.__pgdOnMessage) window.__pgdOnMessage(msg); break;
+        case 'pgRestoreProgress':  if (window.__pgdOnMessage) window.__pgdOnMessage(msg); break;
+        case 'tunnelHealthResult': {
+          if (!d.alive) {
+            statuses[d.connId] = 'error';
+            renderTree();
+            showToast('SSH tunnel lost for connection. Reconnect to restore.');
+          }
+          break;
+        }
         case 'vacuumResult': showToast(d.error ? 'Error: ' + d.error : d.op + ' completed in ' + d.durationMs + 'ms'); break;
         case 'dashboardLoaded': {
           var dTab = tableTabs.find(function (t) { return t.type === 'dashboard' && t.connId === d.connId; });
@@ -3233,7 +3539,15 @@
             break;
           }
           var tab = tabs.find(function (t) { return t.id === d.tabId; });
-          if (tab) tab.result = d;
+          if (tab) {
+            tab.result = d;
+            if (!d.error) {
+              if (!tab.resultHistory) tab.resultHistory = [];
+              tab.resultHistory.unshift({ id: Date.now(), sql: tab.sql, result: d, timestamp: Date.now() });
+              if (tab.resultHistory.length > 10) tab.resultHistory.length = 10;
+              tab.activeHistIdx = 0;
+            }
+          }
           stopRunning();
           if (!d.tabId || d.tabId === activeQTabId) {
             if (d.error) {
@@ -3244,6 +3558,7 @@
               setStatus(d.rowCount + ' rows · ' + d.durationMs + 'ms', false);
               renderResults(d);
             }
+            renderResultHistory(tab);
           }
           break;
         }
@@ -3521,6 +3836,23 @@
           if (d.error) { setStatus('Update failed: ' + d.error, true); break; }
           var ut = tableTabs.find(function(t){ return t.connId===d.connId && t.schema===d.schema && t.tableName===d.tableName; });
           if (ut && activeTableTabId === ut.id) doLoadBrowse(ut);
+          break;
+        }
+        case 'insertRowResult': {
+          if (d.error) {
+            var errEl = document.getElementById('insert-row-error');
+            if (errEl) { errEl.textContent = d.error; errEl.style.display = ''; }
+          } else {
+            closeInsertRowModal();
+            var it = tableTabs.find(function(t){ return t.connId===d.connId && t.schema===d.schema && t.tableName===d.tableName; });
+            if (it && activeTableTabId === it.id) doLoadBrowse(it);
+          }
+          break;
+        }
+        case 'deleteRowResult': {
+          if (d.error) { setStatus('Delete failed: ' + d.error, true); break; }
+          var dt = tableTabs.find(function(t){ return t.connId===d.connId && t.schema===d.schema && t.tableName===d.tableName; });
+          if (dt && activeTableTabId === dt.id) doLoadBrowse(dt);
           break;
         }
 
@@ -4715,6 +5047,351 @@
       }
     });
 
+    // ── pg_dump / pg_restore (#90) ───────────────────────────────────────
+    (function () {
+      var pgdConnSel   = document.getElementById('pgdump-conn-select');
+      var pgdTools     = document.getElementById('pgdump-tools-status');
+      var pgdProgress  = document.getElementById('pgdump-progress');
+      var pgrProgress  = document.getElementById('pgrestore-progress');
+
+      function renderPgdConnSelect() {
+        if (!pgdConnSel) return;
+        var prev = pgdConnSel.value;
+        pgdConnSel.innerHTML = '<option value="">Select connection…</option>'
+          + connections.map(function(c){
+              var s = statuses[c.id] || 'disconnected';
+              return '<option value="' + esc(c.id) + '"' + (c.id === prev ? ' selected' : '') + '>'
+                + esc(c.label) + (s === 'connected' ? ' ●' : ' ○') + '</option>';
+            }).join('');
+      }
+
+      function setProgress(el, msg, isErr) {
+        el.style.display = '';
+        el.style.color = isErr ? 'var(--vscode-errorForeground)' : 'var(--vscode-testing-iconPassed)';
+        el.textContent = msg;
+      }
+
+      document.getElementById('btn-pgdump-run').addEventListener('click', function () {
+        if (!pgdConnSel || !pgdConnSel.value) { showToast('Select a connection first.'); return; }
+        var fmt  = document.getElementById('pgdump-format').value;
+        var comp = document.getElementById('pgdump-compression').value;
+        pgdProgress.style.display = '';
+        pgdProgress.style.color = 'var(--vscode-foreground)';
+        pgdProgress.textContent = 'Preparing backup…';
+        api.send('pgDump', { connId: pgdConnSel.value, format: fmt, compression: parseInt(comp, 10) });
+      });
+
+      document.getElementById('btn-pgrestore-run').addEventListener('click', function () {
+        if (!pgdConnSel || !pgdConnSel.value) { showToast('Select a connection first.'); return; }
+        pgrProgress.style.display = '';
+        pgrProgress.style.color = 'var(--vscode-foreground)';
+        pgrProgress.textContent = 'Choosing file…';
+        api.send('pgRestore', { connId: pgdConnSel.value });
+      });
+
+      window.__pgdOnMessage = function (msg) {
+        var d = msg.data;
+        if (msg.command === 'pgToolsStatus') {
+          var parts = [];
+          if (d.pgDump)   parts.push('<span style="color:var(--vscode-testing-iconPassed)">pg_dump ✓</span>');
+          else            parts.push('<span style="color:var(--vscode-errorForeground)">pg_dump ✗</span>');
+          if (d.pgRestore) parts.push('<span style="color:var(--vscode-testing-iconPassed)">pg_restore ✓</span>');
+          else             parts.push('<span style="color:var(--vscode-errorForeground)">pg_restore ✗</span>');
+          if (d.psql)     parts.push('<span style="color:var(--vscode-testing-iconPassed)">psql ✓</span>');
+          else            parts.push('<span style="color:var(--vscode-errorForeground)">psql ✗</span>');
+          pgdTools.innerHTML = parts.join(' &nbsp;');
+          if (!d.pgDump || !d.pgRestore) {
+            pgdTools.innerHTML += ' <span style="color:var(--vscode-descriptionForeground);font-size:10px">(install postgresql-client)</span>';
+          }
+        }
+        if (msg.command === 'pgDumpProgress') {
+          if (d.error)   { setProgress(pgdProgress, 'Error: ' + d.error, true); }
+          else if (d.started) { setProgress(pgdProgress, 'Backup running…', false); pgdProgress.style.color = 'var(--vscode-foreground)'; }
+          else if (d.done)    { setProgress(pgdProgress, 'Backup saved to: ' + d.filePath, false); showToast('Backup completed.'); }
+        }
+        if (msg.command === 'pgRestoreProgress') {
+          if (d.error)   { setProgress(pgrProgress, 'Error: ' + d.error, true); }
+          else if (d.started) { setProgress(pgrProgress, 'Restoring from: ' + d.filePath + ' …', false); pgrProgress.style.color = 'var(--vscode-foreground)'; }
+          else if (d.done)    { setProgress(pgrProgress, 'Restore completed.', false); showToast('Restore completed.'); }
+        }
+      };
+
+      window.__pgdOnTabActivated = function () {
+        renderPgdConnSelect();
+        api.send('checkPgTools');
+      };
+      window.__pgdOnConnections = function () { renderPgdConnSelect(); };
+    }());
+
+    // ── Replication monitor (#91) ────────────────────────────────────────
+    (function () {
+      var repConnSel = document.getElementById('rep-conn-select');
+      var repResults = document.getElementById('rep-results');
+      var repStatus  = document.getElementById('rep-status');
+      var repTimer   = null;
+
+      function renderRepConnSelect() {
+        if (!repConnSel) return;
+        var prev = repConnSel.value;
+        repConnSel.innerHTML = '<option value="">Select connection…</option>'
+          + connections.map(function (c) {
+              var s = statuses[c.id] || 'disconnected';
+              return '<option value="' + esc(c.id) + '"' + (c.id === prev ? ' selected' : '') + '>'
+                + esc(c.label) + (s === 'connected' ? ' ●' : ' ○') + '</option>';
+            }).join('');
+      }
+
+      function loadReplication() {
+        if (!repConnSel || !repConnSel.value) return;
+        repStatus.textContent = 'Loading…';
+        api.send('loadReplication', { connId: repConnSel.value });
+      }
+
+      document.getElementById('btn-rep-refresh').addEventListener('click', loadReplication);
+      document.getElementById('rep-auto-refresh').addEventListener('change', function () {
+        clearInterval(repTimer);
+        if (this.checked) repTimer = setInterval(loadReplication, 15000);
+      });
+
+      window.__repOnMessage = function (msg) {
+        var d = msg.data;
+        if (msg.command !== 'replicationLoaded') return;
+        repStatus.textContent = '';
+        if (d.error) {
+          repResults.innerHTML = '<div class="results-placeholder" style="color:var(--vscode-errorForeground)">' + esc(d.error) + '</div>';
+          return;
+        }
+
+        var roleBadge = d.inRecovery
+          ? '<span style="background:#ffcc66;color:#000;border-radius:3px;padding:1px 6px;font-size:11px;font-weight:700">STANDBY</span>'
+          : '<span style="background:var(--vscode-testing-iconPassed);color:#000;border-radius:3px;padding:1px 6px;font-size:11px;font-weight:700">PRIMARY</span>';
+
+        var html = '<div style="padding:8px 12px;display:flex;align-items:center;gap:8px">'
+          + '<span style="font-size:12px;font-weight:600">Server role:</span>' + roleBadge + '</div>';
+
+        // Standbys (only on primary)
+        if (!d.inRecovery) {
+          html += '<div style="padding:4px 12px;font-size:11px;font-weight:700;color:var(--vscode-descriptionForeground)">STREAMING STANDBYS (' + (d.standbys.length || 0) + ')</div>';
+          if (!d.standbys.length) {
+            html += '<div style="padding:4px 24px;font-size:11px;color:var(--vscode-descriptionForeground)">No standbys connected.</div>';
+          } else {
+            var sCols = ['application_name','client_addr','state','sync_state','write_lag_s','flush_lag_s','replay_lag_s'];
+            var sLabels = { application_name: 'App', client_addr: 'Client', state: 'State', sync_state: 'Sync', write_lag_s: 'Write lag (s)', flush_lag_s: 'Flush lag (s)', replay_lag_s: 'Replay lag (s)' };
+            html += '<table class="result-grid"><thead><tr>' + sCols.map(function(c){ return '<th>' + (sLabels[c]||c) + '</th>'; }).join('') + '</tr></thead><tbody>';
+            d.standbys.forEach(function (r) {
+              html += '<tr>' + sCols.map(function(c){ var v = r[c]; return '<td>' + esc(v == null ? '' : String(v)) + '</td>'; }).join('') + '</tr>';
+            });
+            html += '</tbody></table>';
+          }
+        }
+
+        // WAL receiver (only on standby)
+        if (d.inRecovery && d.walReceiver.length) {
+          html += '<div style="padding:4px 12px;font-size:11px;font-weight:700;color:var(--vscode-descriptionForeground)">WAL RECEIVER</div>';
+          var wCols = ['status','sender_host','sender_port','received_lsn','last_msg_age_s'];
+          var wLabels = { status: 'Status', sender_host: 'Primary host', sender_port: 'Port', received_lsn: 'Received LSN', last_msg_age_s: 'Last msg age (s)' };
+          html += '<table class="result-grid"><thead><tr>' + wCols.map(function(c){ return '<th>' + (wLabels[c]||c) + '</th>'; }).join('') + '</tr></thead><tbody>';
+          d.walReceiver.forEach(function (r) {
+            html += '<tr>' + wCols.map(function(c){ var v = r[c]; return '<td>' + esc(v == null ? '' : String(v)) + '</td>'; }).join('') + '</tr>';
+          });
+          html += '</tbody></table>';
+        }
+
+        // Replication slots
+        html += '<div style="padding:4px 12px;margin-top:8px;font-size:11px;font-weight:700;color:var(--vscode-descriptionForeground)">REPLICATION SLOTS (' + (d.slots.length || 0) + ')</div>';
+        if (!d.slots.length) {
+          html += '<div style="padding:4px 24px;font-size:11px;color:var(--vscode-descriptionForeground)">No slots.</div>';
+        } else {
+          var slCols = ['slot_name','plugin','slot_type','active','temporary','lag'];
+          html += '<table class="result-grid"><thead><tr>' + slCols.map(function(c){ return '<th>' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>';
+          d.slots.forEach(function (r) {
+            html += '<tr>' + slCols.map(function(c){ var v = r[c]; return '<td>' + esc(v == null ? '' : String(v)) + '</td>'; }).join('') + '</tr>';
+          });
+          html += '</tbody></table>';
+        }
+
+        repResults.innerHTML = html;
+        repStatus.textContent = 'Updated ' + new Date().toLocaleTimeString();
+      };
+
+      window.__repOnTabActivated  = function () { renderRepConnSelect(); };
+      window.__repOnConnections   = function () { renderRepConnSelect(); };
+    }());
+
+    // ── Schema diff (#87) ────────────────────────────────────────────────
+    (function () {
+      var sdLeftConn    = document.getElementById('sd-left-conn');
+      var sdLeftSchema  = document.getElementById('sd-left-schema');
+      var sdRightConn   = document.getElementById('sd-right-conn');
+      var sdRightSchema = document.getElementById('sd-right-schema');
+      var sdResults     = document.getElementById('sd-results');
+      var sdStatus      = document.getElementById('sd-status');
+
+      function populateConns(sel, prevId) {
+        sel.innerHTML = '<option value="">Connection…</option>'
+          + connections.map(function(c){
+              var s = statuses[c.id] || 'disconnected';
+              return '<option value="' + esc(c.id) + '"' + (c.id === prevId ? ' selected' : '') + '>'
+                + esc(c.label) + (s === 'connected' ? ' ●' : ' ○') + '</option>';
+            }).join('');
+      }
+
+      function loadSchemas(connId, sel, prevSchema) {
+        if (!connId || (statuses[connId] || 'disconnected') !== 'connected') {
+          sel.innerHTML = '<option value="">Schema…</option>'; return;
+        }
+        var key = 'sd:' + connId;
+        if (window['__sdSchemas_' + connId]) {
+          var list = window['__sdSchemas_' + connId];
+          sel.innerHTML = '<option value="">Schema…</option>' + list.map(function(s){ return '<option value="' + esc(s) + '"' + (s === prevSchema ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('');
+          return;
+        }
+        api.send('loadSchemas', { connId: connId });
+        sel.innerHTML = '<option value="">Loading…</option>';
+        sel._pendingConn = connId;
+        sel._pendingSchema = prevSchema;
+      }
+
+      function renderConnSelects() {
+        populateConns(sdLeftConn, sdLeftConn.value);
+        populateConns(sdRightConn, sdRightConn.value);
+      }
+
+      sdLeftConn.addEventListener('change', function(){ loadSchemas(this.value, sdLeftSchema, ''); });
+      sdRightConn.addEventListener('change', function(){ loadSchemas(this.value, sdRightSchema, ''); });
+
+      document.getElementById('btn-sd-run').addEventListener('click', function() {
+        var lc = sdLeftConn.value; var ls = sdLeftSchema.value;
+        var rc = sdRightConn.value; var rs = sdRightSchema.value;
+        if (!lc || !ls || !rc || !rs) { sdStatus.textContent = 'Select both connections and schemas.'; return; }
+        sdStatus.textContent = 'Comparing…';
+        sdResults.innerHTML = '<div class="results-placeholder"><i class="codicon codicon-loading codicon-modifier-spin"></i> Comparing schemas…</div>';
+        api.send('runSchemaDiff', { leftConnId: lc, leftSchema: ls, rightConnId: rc, rightSchema: rs });
+      });
+
+      window.__sdOnMessage = function (msg) {
+        var d = msg.data;
+        if (msg.command === 'schemasLoaded') {
+          // populate pending schema selects
+          [sdLeftSchema, sdRightSchema].forEach(function(sel) {
+            if (sel._pendingConn === d.connId) {
+              var prev = sel._pendingSchema || '';
+              sel.innerHTML = '<option value="">Schema…</option>'
+                + (d.schemas || []).map(function(s){ return '<option value="' + esc(s.name) + '"' + (s.name === prev ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join('');
+              sel._pendingConn = null;
+            }
+          });
+        }
+        if (msg.command !== 'schemaDiffResult') return;
+        sdStatus.textContent = '';
+        if (d.error) {
+          sdResults.innerHTML = '<div class="results-placeholder" style="color:var(--vscode-errorForeground)">' + esc(d.error) + '</div>';
+          return;
+        }
+        if (!d.items || !d.items.length) {
+          sdResults.innerHTML = '<div class="results-placeholder" style="color:var(--vscode-testing-iconPassed)"><i class="codicon codicon-pass"></i> Schemas are identical.</div>';
+          sdStatus.textContent = '0 differences';
+          return;
+        }
+        var kindIcon = { table: 'codicon-table', column: 'codicon-symbol-field', index: 'codicon-list-tree' };
+        var statusColor = { only_left: 'var(--vscode-errorForeground)', only_right: 'var(--vscode-textLink-foreground)', changed: 'var(--vscode-editorWarning-foreground)' };
+        var statusLabel = { only_left: 'only in left', only_right: 'only in right', changed: 'changed' };
+        var html = '<div style="padding:8px 12px;font-size:11px;color:var(--vscode-descriptionForeground)">'
+          + 'Left: <strong>' + esc(d.leftLabel) + '</strong> &nbsp;|&nbsp; Right: <strong>' + esc(d.rightLabel) + '</strong>'
+          + '&nbsp;·&nbsp;' + d.items.length + ' difference(s)</div>';
+        html += '<table class="result-grid"><thead><tr><th>Kind</th><th>Table</th><th>Name</th><th>Status</th><th>Left detail</th><th>Right detail</th></tr></thead><tbody>';
+        d.items.forEach(function(item) {
+          var icon = kindIcon[item.kind] || 'codicon-circle-small';
+          var color = statusColor[item.status] || 'var(--vscode-foreground)';
+          var label = statusLabel[item.status] || item.status;
+          html += '<tr>'
+            + '<td><i class="codicon ' + icon + '"></i> ' + esc(item.kind) + '</td>'
+            + '<td>' + esc(item.table || '') + '</td>'
+            + '<td>' + esc(item.name) + '</td>'
+            + '<td style="color:' + color + ';font-weight:600">' + esc(label) + '</td>'
+            + '<td style="font-size:11px;font-family:monospace;color:var(--vscode-textPreformat-foreground)">' + esc(item.leftDetail || '') + '</td>'
+            + '<td style="font-size:11px;font-family:monospace;color:var(--vscode-textPreformat-foreground)">' + esc(item.rightDetail || '') + '</td>'
+            + '</tr>';
+        });
+        html += '</tbody></table>';
+        sdResults.innerHTML = html;
+        sdStatus.textContent = d.items.length + ' difference(s)';
+      };
+
+      window.__sdOnTabActivated = function () { renderConnSelects(); };
+      window.__sdOnConnections  = function () { renderConnSelects(); };
+    }());
+
+    // ── Slow queries (#92) ────────────────────────────────────────────────
+    (function () {
+      var sqConnSel = document.getElementById('sq-conn-select');
+      var sqResults = document.getElementById('sq-results');
+      var sqStatus  = document.getElementById('sq-status');
+
+      function renderSqConnSelect() {
+        if (!sqConnSel) return;
+        var prev = sqConnSel.value;
+        sqConnSel.innerHTML = '<option value="">Select connection…</option>'
+          + connections.map(function (c) {
+              var s = statuses[c.id] || 'disconnected';
+              return '<option value="' + esc(c.id) + '"' + (c.id === prev ? ' selected' : '') + '>' + esc(c.label) + (s === 'connected' ? ' ●' : ' ○') + '</option>';
+            }).join('');
+      }
+
+      function loadSlowQueries() {
+        if (!sqConnSel || !sqConnSel.value) return;
+        sqStatus.textContent = 'Loading…';
+        api.send('loadSlowQueries', { connId: sqConnSel.value });
+      }
+
+      document.getElementById('btn-sq-refresh').addEventListener('click', loadSlowQueries);
+      document.getElementById('btn-sq-reset').addEventListener('click', function () {
+        if (!sqConnSel || !sqConnSel.value) return;
+        api.send('resetSlowQueries', { connId: sqConnSel.value });
+      });
+
+      window.__sqOnMessage = function (msg) {
+        var d = msg.data;
+        if (msg.command === 'slowQueriesReset') {
+          sqStatus.textContent = 'Stats reset.';
+          loadSlowQueries();
+        }
+        if (msg.command === 'slowQueriesLoaded') {
+          sqStatus.textContent = '';
+          if (d.error) {
+            sqResults.innerHTML = '<div class="results-placeholder" style="color:var(--vscode-errorForeground)">' + esc(d.error) + '</div>';
+            return;
+          }
+          if (!d.installed) {
+            sqResults.innerHTML = '<div class="results-placeholder">pg_stat_statements is not installed.<br>'
+              + '<small style="opacity:0.6">Run: CREATE EXTENSION pg_stat_statements; (add shared_preload_libraries = \'pg_stat_statements\' to postgresql.conf and restart)</small></div>';
+            return;
+          }
+          if (!d.rows || !d.rows.length) {
+            sqResults.innerHTML = '<div class="results-placeholder">No statements recorded yet.</div>';
+            return;
+          }
+          var cols = ['query','calls','total_ms','mean_ms','min_ms','max_ms','total_rows','blks_hit_per_call','blks_read_per_call'];
+          var labels = { query: 'Query', calls: 'Calls', total_ms: 'Total (ms)', mean_ms: 'Mean (ms)',
+            min_ms: 'Min (ms)', max_ms: 'Max (ms)', total_rows: 'Rows', blks_hit_per_call: 'Blks Hit/Call', blks_read_per_call: 'Blks Read/Call' };
+          var html = '<table class="result-grid"><thead><tr>' + cols.map(function(c){ return '<th>' + (labels[c]||c) + '</th>'; }).join('') + '</tr></thead><tbody>';
+          d.rows.forEach(function (r) {
+            html += '<tr>' + cols.map(function (c) {
+              var v = r[c];
+              if (c === 'query') return '<td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--vscode-editor-font-family,monospace);font-size:11px" title="' + esc(String(v||'')) + '">' + esc(String(v||'').replace(/\s+/g,' ').slice(0,100)) + '</td>';
+              return '<td style="text-align:right">' + esc(v == null ? '' : String(v)) + '</td>';
+            }).join('') + '</tr>';
+          });
+          html += '</tbody></table>';
+          sqResults.innerHTML = html;
+          sqStatus.textContent = d.rows.length + ' statements';
+        }
+      };
+
+      window.__sqOnTabActivated = function () { renderSqConnSelect(); };
+      window.__sqOnConnections  = function () { renderSqConnSelect(); };
+    }());
+
     // ── ERD ───────────────────────────────────────────────────────────────
     (function () {
       var CARD_W = 210;
@@ -5192,6 +5869,15 @@
         maxBtn.title = isMax ? 'Restaurar' : 'Maximizar';
       });
     }());
+
+    // ── SSH tunnel health monitor (#94) ───────────────────────────────────
+    setInterval(function () {
+      connections.forEach(function (c) {
+        if (c.sshEnabled && (statuses[c.id] || 'disconnected') === 'connected') {
+          api.send('checkTunnelHealth', { connId: c.id });
+        }
+      });
+    }, 60_000);
 
     // ── Init ───────────────────────────────────────────────────────────────
     switchMainTab(persisted.tab || 'query');

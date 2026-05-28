@@ -107,6 +107,9 @@ function removePassword(id: string): void {
 export function getSshPassword(id: string): string { return getPassword('ssh:' + id); }
 export function storeSshPassword(id: string, password: string): void { storePassword('ssh:' + id, password); }
 
+export function getJumpSshPassword(id: string): string { return getPassword('jump:' + id); }
+export function storeJumpSshPassword(id: string, password: string): void { storePassword('jump:' + id, password); }
+
 export function getPassword(id: string): string {
   const map = getPasswordMap();
   const encoded = map[id];
@@ -144,6 +147,8 @@ export interface Snippet {
   name: string;
   sql: string;
   createdAt: number;
+  connId?: string;
+  connLabel?: string;
 }
 
 export function listSnippets(): Snippet[] {

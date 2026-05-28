@@ -704,6 +704,119 @@ export async function globalSearch(driver: PgDriver, term: string): Promise<Sear
   return results;
 }
 
+// ── Schema diff (#87) ────────────────────────────────────────────────────────
+
+export interface SchemaDiffItem {
+  kind: 'table' | 'column' | 'index';
+  status: 'only_left' | 'only_right' | 'changed';
+  name: string;
+  table?: string;
+  leftDetail?: string;
+  rightDetail?: string;
+}
+
+export interface SchemaDiffResult {
+  leftLabel: string;
+  rightLabel: string;
+  items: SchemaDiffItem[];
+}
+
+interface TableRow { table_name: string; [key: string]: unknown }
+interface ColumnRow { table_name: string; column_name: string; data_type: string; is_nullable: string; column_default: string | null; [key: string]: unknown }
+interface IndexRow { table_name: string; index_name: string; index_def: string; [key: string]: unknown }
+
+async function fetchSchemaSnapshot(driver: PgDriver, schema: string) {
+  const [tables, cols, idxs] = await Promise.all([
+    driver.query<TableRow>(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema = $1 AND table_type = 'BASE TABLE' ORDER BY table_name`, [schema]
+    ),
+    driver.query<ColumnRow>(
+      `SELECT c.table_name, c.column_name, c.data_type, c.is_nullable, c.column_default
+       FROM information_schema.columns c
+       JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+       WHERE c.table_schema = $1 AND t.table_type = 'BASE TABLE'
+       ORDER BY c.table_name, c.ordinal_position`, [schema]
+    ),
+    driver.query<IndexRow>(
+      `SELECT t.relname AS table_name, i.relname AS index_name, pg_get_indexdef(ix.indexrelid) AS index_def
+       FROM pg_index ix
+       JOIN pg_class i ON i.oid = ix.indexrelid
+       JOIN pg_class t ON t.oid = ix.indrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       WHERE n.nspname = $1 ORDER BY t.relname, i.relname`, [schema]
+    ),
+  ]);
+  return { tables, cols, idxs };
+}
+
+export async function getSchemaDiff(
+  leftDriver: PgDriver, leftSchema: string, leftLabel: string,
+  rightDriver: PgDriver, rightSchema: string, rightLabel: string
+): Promise<SchemaDiffResult> {
+  const [L, R] = await Promise.all([
+    fetchSchemaSnapshot(leftDriver, leftSchema),
+    fetchSchemaSnapshot(rightDriver, rightSchema),
+  ]);
+
+  const items: SchemaDiffItem[] = [];
+
+  const lTables = new Set(L.tables.map(r => r.table_name));
+  const rTables = new Set(R.tables.map(r => r.table_name));
+
+  for (const t of lTables) if (!rTables.has(t)) items.push({ kind: 'table', status: 'only_left', name: t });
+  for (const t of rTables) if (!lTables.has(t)) items.push({ kind: 'table', status: 'only_right', name: t });
+
+  // columns in common tables
+  const colKey = (r: ColumnRow) => r.table_name + '.' + r.column_name;
+  const lCols = new Map(L.cols.map(r => [colKey(r), r]));
+  const rCols = new Map(R.cols.map(r => [colKey(r), r]));
+
+  for (const [k, lc] of lCols) {
+    if (!lTables.has(lc.table_name) || !rTables.has(lc.table_name)) continue;
+    const rc = rCols.get(k);
+    if (!rc) {
+      items.push({ kind: 'column', status: 'only_left', name: lc.column_name, table: lc.table_name, leftDetail: lc.data_type });
+    } else {
+      const lDetail = lc.data_type + (lc.is_nullable === 'YES' ? ' NULL' : ' NOT NULL') + (lc.column_default ? ' DEFAULT ' + lc.column_default : '');
+      const rDetail = rc.data_type + (rc.is_nullable === 'YES' ? ' NULL' : ' NOT NULL') + (rc.column_default ? ' DEFAULT ' + rc.column_default : '');
+      if (lDetail !== rDetail) items.push({ kind: 'column', status: 'changed', name: lc.column_name, table: lc.table_name, leftDetail: lDetail, rightDetail: rDetail });
+    }
+  }
+  for (const [k, rc] of rCols) {
+    if (!lTables.has(rc.table_name) || !rTables.has(rc.table_name)) continue;
+    if (!lCols.has(k)) items.push({ kind: 'column', status: 'only_right', name: rc.column_name, table: rc.table_name, rightDetail: rc.data_type });
+  }
+
+  // indexes in common tables
+  const idxKey = (r: IndexRow) => r.table_name + '.' + r.index_name;
+  const lIdxs = new Map(L.idxs.map(r => [idxKey(r), r]));
+  const rIdxs = new Map(R.idxs.map(r => [idxKey(r), r]));
+
+  for (const [k, li] of lIdxs) {
+    if (!lTables.has(li.table_name) || !rTables.has(li.table_name)) continue;
+    const ri = rIdxs.get(k);
+    if (!ri) {
+      items.push({ kind: 'index', status: 'only_left', name: li.index_name, table: li.table_name, leftDetail: li.index_def });
+    } else if (li.index_def !== ri.index_def) {
+      items.push({ kind: 'index', status: 'changed', name: li.index_name, table: li.table_name, leftDetail: li.index_def, rightDetail: ri.index_def });
+    }
+  }
+  for (const [k, ri] of rIdxs) {
+    if (!lTables.has(ri.table_name) || !rTables.has(ri.table_name)) continue;
+    if (!lIdxs.has(k)) items.push({ kind: 'index', status: 'only_right', name: ri.index_name, table: ri.table_name, rightDetail: ri.index_def });
+  }
+
+  items.sort((a, b) => {
+    const ta = (a.table || a.name).toLowerCase();
+    const tb = (b.table || b.name).toLowerCase();
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    return a.kind < b.kind ? -1 : 1;
+  });
+
+  return { leftLabel: leftLabel + '.' + leftSchema, rightLabel: rightLabel + '.' + rightSchema, items };
+}
+
 export async function checkMigrationsTable(driver: PgDriver, schema = 'public'): Promise<boolean> {
   const rows = await driver.query<{ exists: boolean }>(
     `SELECT EXISTS (

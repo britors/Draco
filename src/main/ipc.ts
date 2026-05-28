@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, dialog, Notification, shell, Menu } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as child_process from 'child_process';
 import { randomUUID } from 'crypto';
 
 import { ConnectionManager } from '../db/ConnectionManager';
@@ -11,13 +12,13 @@ import {
   getFKMap, getTableEstimates,
   getTableDetail, getERDData,
   browseTableData, updateTableRow, getColumnStats, importTableRows,
-  globalSearch, createSchema,
+  globalSearch, createSchema, getSchemaDiff,
 } from '../db/queries';
 import { validateConnection, PgConnection } from '../types/PgConnection';
 import {
   listConnections, getConnection, saveConnection, deleteConnection, getPassword,
   listHistory, addHistory, clearHistory, getSettings, patchSettings,
-  getSshPassword, storeSshPassword,
+  getSshPassword, storeSshPassword, getJumpSshPassword, storeJumpSshPassword,
   listSnippets, saveSnippet, deleteSnippet, renameSnippet,
 } from './store';
 import { createPanelWindow } from './window';
@@ -105,8 +106,8 @@ export function registerIpc(win: BrowserWindow): void {
       // ── Connection CRUD ───────────────────────────────────────────────────
 
       case 'saveConnection': {
-        const { conn, password, sshPassword } = data as {
-          conn: Omit<PgConnection, 'id'> & { id?: string }; password: string; sshPassword?: string;
+        const { conn, password, sshPassword, jumpPassword } = data as {
+          conn: Omit<PgConnection, 'id'> & { id?: string }; password: string; sshPassword?: string; jumpPassword?: string;
         };
         const errors = validateConnection(conn);
         if (errors.length > 0) { send('formError', errors.join(', ')); return; }
@@ -117,6 +118,7 @@ export function registerIpc(win: BrowserWindow): void {
         try {
           const saved = saveConnection(conn, finalPassword);
           if (sshPassword !== undefined) storeSshPassword(saved.id, sshPassword);
+          if (jumpPassword !== undefined) storeJumpSshPassword(saved.id, jumpPassword);
           pushConnections();
         } catch (err) {
           send('formError', `Failed to save connection: ${String(err)}`);
@@ -161,11 +163,12 @@ export function registerIpc(win: BrowserWindow): void {
 
       case 'connect': {
         const { connId } = data as { connId: string };
-        const password    = getPassword(connId);
-        const sshPassword = getSshPassword(connId);
+        const password     = getPassword(connId);
+        const sshPassword  = getSshPassword(connId);
+        const jumpPassword = getJumpSshPassword(connId);
         const timeout = getSettings().queryTimeout;
         try {
-          await connManager.connect(connId, password, timeout, sshPassword || undefined);
+          await connManager.connect(connId, password, timeout, sshPassword || undefined, jumpPassword || undefined);
           send('connectionStatus', { id: connId, status: 'connected' });
         } catch (err) {
           const msg = String(err);
@@ -451,6 +454,53 @@ export function registerIpc(win: BrowserWindow): void {
           send('updateRowResult', { ok: true, connId, schema, tableName });
         } catch (err) {
           send('updateRowResult', { error: String(err) });
+        }
+        break;
+      }
+
+      // ── Insert row (#88) ─────────────────────────────────────────────────
+
+      case 'insertTableRow': {
+        const { connId, schema, tableName, values } = data as {
+          connId: string; schema: string; tableName: string;
+          values: Record<string, string | null>;
+        };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('insertRowResult', { error: 'Not connected.' }); break; }
+        const qSchema = schema.replace(/"/g, '""');
+        const qTable  = tableName.replace(/"/g, '""');
+        const cols    = Object.keys(values);
+        const colList = cols.map(c => `"${c.replace(/"/g, '""')}"`).join(', ');
+        const phs     = cols.map((_, i) => `$${i + 1}`).join(', ');
+        try {
+          await driver.query(
+            `INSERT INTO "${qSchema}"."${qTable}" (${colList}) VALUES (${phs})`,
+            cols.map(c => values[c] === '' ? null : values[c])
+          );
+          send('insertRowResult', { ok: true, connId, schema, tableName });
+        } catch (err) {
+          send('insertRowResult', { error: String(err) });
+        }
+        break;
+      }
+
+      // ── Delete row (#88) ─────────────────────────────────────────────────
+
+      case 'deleteTableRow': {
+        const { connId, schema, tableName, pkCols, pkVals } = data as {
+          connId: string; schema: string; tableName: string;
+          pkCols: string[]; pkVals: unknown[];
+        };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('deleteRowResult', { error: 'Not connected.' }); break; }
+        const qSchema = schema.replace(/"/g, '""');
+        const qTable  = tableName.replace(/"/g, '""');
+        const where   = pkCols.map((c, i) => `"${c.replace(/"/g, '""')}" = $${i + 1}`).join(' AND ');
+        try {
+          await driver.query(`DELETE FROM "${qSchema}"."${qTable}" WHERE ${where}`, pkVals);
+          send('deleteRowResult', { ok: true, connId, schema, tableName });
+        } catch (err) {
+          send('deleteRowResult', { error: String(err) });
         }
         break;
       }
@@ -1158,6 +1208,239 @@ export function registerIpc(win: BrowserWindow): void {
         break;
       }
 
+      // ── pg_dump / pg_restore (#90) ───────────────────────────────────────
+
+      case 'checkPgTools': {
+        const check = (cmd: string): boolean => {
+          try { child_process.execSync(`${cmd} --version`, { stdio: 'ignore' }); return true; } catch { return false; }
+        };
+        send('pgToolsStatus', { pgDump: check('pg_dump'), pgRestore: check('pg_restore'), psql: check('psql') });
+        break;
+      }
+
+      case 'pgDump': {
+        const { connId, format, compression } = data as { connId: string; format: string; compression: number };
+        const conn = getConnection(connId);
+        if (!conn) { send('pgDumpProgress', { error: 'Connection not found.' }); break; }
+        const password = getPassword(connId);
+        const ext = format === 'plain' ? 'sql' : format === 'tar' ? 'tar' : 'dump';
+        const result = await dialog.showSaveDialog(mainWin, {
+          title: 'Save backup',
+          defaultPath: `${conn.database}_${new Date().toISOString().slice(0,10)}.${ext}`,
+          filters: ext === 'sql'
+            ? [{ name: 'SQL files', extensions: ['sql'] }]
+            : [{ name: 'Backup files', extensions: [ext] }],
+        });
+        if (result.canceled || !result.filePath) break;
+        const args = [
+          '-h', conn.host, '-p', String(conn.port), '-U', conn.user, '-d', conn.database,
+          '-F', format === 'plain' ? 'p' : format === 'tar' ? 't' : 'c',
+          '-Z', String(compression),
+          '-f', result.filePath,
+        ];
+        const env = { ...process.env, PGPASSWORD: password };
+        send('pgDumpProgress', { started: true, filePath: result.filePath });
+        const proc = child_process.spawn('pg_dump', args, { env });
+        let stderr = '';
+        proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+        proc.on('close', (code) => {
+          if (code === 0) {
+            send('pgDumpProgress', { done: true, filePath: result.filePath });
+          } else {
+            send('pgDumpProgress', { error: stderr || `pg_dump exited with code ${code}` });
+          }
+        });
+        proc.on('error', (err) => { send('pgDumpProgress', { error: String(err) }); });
+        break;
+      }
+
+      case 'pgRestore': {
+        const { connId } = data as { connId: string };
+        const conn = getConnection(connId);
+        if (!conn) { send('pgRestoreProgress', { error: 'Connection not found.' }); break; }
+        const password = getPassword(connId);
+        const result = await dialog.showOpenDialog(mainWin, {
+          title: 'Select backup file',
+          filters: [
+            { name: 'Backup files', extensions: ['dump', 'tar', 'sql', 'gz'] },
+            { name: 'All files', extensions: ['*'] },
+          ],
+          properties: ['openFile'],
+        });
+        if (result.canceled || !result.filePaths.length) break;
+        const filePath = result.filePaths[0];
+        const ext = path.extname(filePath).toLowerCase();
+        const env = { ...process.env, PGPASSWORD: password };
+        send('pgRestoreProgress', { started: true, filePath });
+        if (ext === '.sql') {
+          // plain SQL — use psql
+          const args = ['-h', conn.host, '-p', String(conn.port), '-U', conn.user, '-d', conn.database, '-f', filePath];
+          const proc = child_process.spawn('psql', args, { env });
+          let stderr = '';
+          proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+          proc.on('close', (code) => {
+            if (code === 0) send('pgRestoreProgress', { done: true });
+            else send('pgRestoreProgress', { error: stderr || `psql exited with code ${code}` });
+          });
+          proc.on('error', (err) => { send('pgRestoreProgress', { error: String(err) }); });
+        } else {
+          const args = ['-h', conn.host, '-p', String(conn.port), '-U', conn.user, '-d', conn.database, '-F', 'c', filePath];
+          const proc = child_process.spawn('pg_restore', args, { env });
+          let stderr = '';
+          proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+          proc.on('close', (code) => {
+            if (code === 0) send('pgRestoreProgress', { done: true });
+            else send('pgRestoreProgress', { error: stderr || `pg_restore exited with code ${code}` });
+          });
+          proc.on('error', (err) => { send('pgRestoreProgress', { error: String(err) }); });
+        }
+        break;
+      }
+
+      // ── Replication monitor (#91) ─────────────────────────────────────────
+
+      case 'loadReplication': {
+        const { connId } = data as { connId: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('replicationLoaded', { connId, error: 'Not connected.' }); break; }
+        try {
+          const [primaryRows, walRows, slotRows, recoveryRows] = await Promise.allSettled([
+            driver.query<Record<string, unknown>>(`
+              SELECT
+                application_name,
+                client_addr::text,
+                state,
+                sync_state,
+                sent_lsn::text,
+                write_lsn::text,
+                flush_lsn::text,
+                replay_lsn::text,
+                round(EXTRACT(EPOCH FROM write_lag)::numeric,3)  AS write_lag_s,
+                round(EXTRACT(EPOCH FROM flush_lag)::numeric,3)  AS flush_lag_s,
+                round(EXTRACT(EPOCH FROM replay_lag)::numeric,3) AS replay_lag_s
+              FROM pg_stat_replication
+              ORDER BY application_name
+            `),
+            driver.query<Record<string, unknown>>(`
+              SELECT
+                status, conninfo,
+                received_lsn::text,
+                sender_host,
+                sender_port,
+                slot_name,
+                round(EXTRACT(EPOCH FROM (now() - last_msg_receipt_time))::numeric,1) AS last_msg_age_s
+              FROM pg_stat_wal_receiver
+            `),
+            driver.query<Record<string, unknown>>(`
+              SELECT slot_name, plugin, slot_type, active, temporary,
+                pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)) AS lag
+              FROM pg_replication_slots
+              ORDER BY slot_name
+            `),
+            driver.query<{ in_recovery: boolean }>(`SELECT pg_is_in_recovery() AS in_recovery`),
+          ]);
+
+          send('replicationLoaded', {
+            connId,
+            inRecovery: recoveryRows.status === 'fulfilled' ? Boolean(recoveryRows.value[0]?.in_recovery) : false,
+            standbys:   primaryRows.status === 'fulfilled'  ? primaryRows.value  : [],
+            walReceiver: walRows.status === 'fulfilled'     ? walRows.value      : [],
+            slots:      slotRows.status === 'fulfilled'     ? slotRows.value     : [],
+          });
+        } catch (err) {
+          send('replicationLoaded', { connId, error: String(err) });
+        }
+        break;
+      }
+
+      // ── SSH tunnel health check (#94) ────────────────────────────────────
+
+      case 'checkTunnelHealth': {
+        const { connId } = data as { connId: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('tunnelHealthResult', { connId, alive: false }); break; }
+        try {
+          await driver.query('SELECT 1');
+          send('tunnelHealthResult', { connId, alive: true });
+        } catch {
+          send('tunnelHealthResult', { connId, alive: false });
+        }
+        break;
+      }
+
+      // ── Schema diff (#87) ────────────────────────────────────────────────
+
+      case 'runSchemaDiff': {
+        const { leftConnId, leftSchema, rightConnId, rightSchema } =
+          data as { leftConnId: string; leftSchema: string; rightConnId: string; rightSchema: string };
+        const leftDriver  = connManager.getDriver(leftConnId);
+        const rightDriver = connManager.getDriver(rightConnId);
+        if (!leftDriver || !rightDriver) {
+          send('schemaDiffResult', { error: 'Both connections must be connected.' });
+          break;
+        }
+        const leftConn  = getConnection(leftConnId);
+        const rightConn = getConnection(rightConnId);
+        try {
+          const result = await getSchemaDiff(
+            leftDriver,  leftSchema,  leftConn?.label ?? leftConnId,
+            rightDriver, rightSchema, rightConn?.label ?? rightConnId
+          );
+          send('schemaDiffResult', result);
+        } catch (err) {
+          send('schemaDiffResult', { error: String(err) });
+        }
+        break;
+      }
+
+      // ── Slow query log (#92) ─────────────────────────────────────────────
+
+      case 'loadSlowQueries': {
+        const { connId } = data as { connId: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) { send('slowQueriesLoaded', { connId, error: 'Not connected.' }); break; }
+        try {
+          const extRows = await driver.query<{ extname: string }>(
+            `SELECT extname FROM pg_extension WHERE extname = 'pg_stat_statements'`
+          );
+          if (!extRows.length) { send('slowQueriesLoaded', { connId, installed: false, rows: [] }); break; }
+          const rows = await driver.query<Record<string, unknown>>(`
+            SELECT
+              LEFT(query, 300)                                    AS query,
+              calls,
+              round(total_exec_time::numeric, 2)                  AS total_ms,
+              round(mean_exec_time::numeric,  2)                  AS mean_ms,
+              round(min_exec_time::numeric,   2)                  AS min_ms,
+              round(max_exec_time::numeric,   2)                  AS max_ms,
+              round(stddev_exec_time::numeric, 2)                 AS stddev_ms,
+              rows                                                AS total_rows,
+              round(shared_blks_hit::numeric / NULLIF(calls,0), 1) AS blks_hit_per_call,
+              round(shared_blks_read::numeric/ NULLIF(calls,0), 1) AS blks_read_per_call
+            FROM pg_stat_statements
+            WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+            ORDER BY total_exec_time DESC
+            LIMIT 50
+          `);
+          send('slowQueriesLoaded', { connId, installed: true, rows });
+        } catch (err) {
+          send('slowQueriesLoaded', { connId, error: String(err) });
+        }
+        break;
+      }
+
+      case 'resetSlowQueries': {
+        const { connId } = data as { connId: string };
+        const driver = connManager.getDriver(connId);
+        if (!driver) break;
+        try {
+          await driver.query(`SELECT pg_stat_statements_reset()`);
+          send('slowQueriesReset', { connId });
+        } catch (err) {
+          send('showError', { message: String(err) });
+        }
+        break;
+      }
+
       // ── Export ────────────────────────────────────────────────────────────
 
       case 'exportResult': {
@@ -1216,8 +1499,8 @@ export function registerIpc(win: BrowserWindow): void {
         break;
 
       case 'saveSnippet': {
-        const { name, sql } = data as { name: string; sql: string };
-        const s = saveSnippet({ name, sql });
+        const { name, sql, connId, connLabel } = data as { name: string; sql: string; connId?: string; connLabel?: string };
+        const s = saveSnippet({ name, sql, ...(connId ? { connId, connLabel } : {}) });
         send('snippetsLoaded', listSnippets());
         send('snippetSaved', s);
         break;

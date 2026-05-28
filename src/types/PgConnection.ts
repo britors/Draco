@@ -11,6 +11,11 @@ export interface PgConnection {
   sshPort?: number;
   sshUser?: string;
   sshKeyPath?: string;
+  // jump host (ProxyJump)
+  sshJumpHost?: string;
+  sshJumpPort?: number;
+  sshJumpUser?: string;
+  sshJumpKeyPath?: string;
   favorite?: boolean;
 }
 

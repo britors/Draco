@@ -35,12 +35,12 @@ export class ConnectionManager {
     return this._map.get(id)?.driver;
   }
 
-  async connect(id: string, password: string, statementTimeout = 30_000, sshPassword?: string): Promise<void> {
+  async connect(id: string, password: string, statementTimeout = 30_000, sshPassword?: string, jumpPassword?: string): Promise<void> {
     const managed = this._map.get(id);
     if (!managed) throw new Error('Connection not registered');
 
     managed.status = 'connecting';
-    const driver = new PgDriver(managed.conn, password, statementTimeout, `p4p-${id}`, sshPassword);
+    const driver = new PgDriver(managed.conn, password, statementTimeout, `p4p-${id}`, sshPassword, jumpPassword);
     try {
       await driver.connect();
       managed.driver = driver;

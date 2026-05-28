@@ -4,34 +4,79 @@ import { Client as SshClient } from 'ssh2';
 import * as fs from 'fs';
 import { PgConnection } from '../types/PgConnection';
 
-function createSshTunnel(conn: PgConnection, sshPassword?: string): Promise<{ localPort: number; close: () => void }> {
+function buildSshCfg(
+  host: string, port: number, username: string,
+  keyPath: string | undefined, password: string | undefined
+): Record<string, unknown> {
+  const cfg: Record<string, unknown> = { host, port, username };
+  if (keyPath) {
+    cfg.privateKey = fs.readFileSync(keyPath);
+    if (password) cfg.passphrase = password;
+  } else {
+    cfg.password = password ?? '';
+  }
+  return cfg;
+}
+
+function createSshTunnel(
+  conn: PgConnection,
+  sshPassword?: string,
+  jumpPassword?: string,
+): Promise<{ localPort: number; close: () => void }> {
   return new Promise((resolve, reject) => {
-    const ssh = new SshClient();
-    const server = net.createServer();
-    server.listen(0, '127.0.0.1', () => {
-      const localPort = (server.address() as net.AddressInfo).port;
-      ssh.on('ready', () => {
-        server.on('connection', socket => {
-          ssh.forwardOut('127.0.0.1', localPort, conn.host, conn.port, (err, stream) => {
-            if (err) { socket.destroy(); return; }
-            socket.pipe(stream).pipe(socket);
-            stream.on('close', () => socket.destroy());
-            socket.on('close', () => stream.destroy());
+    const sshHost = conn.sshHost ?? conn.host;
+    const sshPort = conn.sshPort ?? 22;
+    const sshUser = conn.sshUser ?? process.env.USER ?? 'root';
+
+    function connectMain(sock?: import('stream').Duplex) {
+      const ssh = new SshClient();
+      const server = net.createServer();
+      server.listen(0, '127.0.0.1', () => {
+        const localPort = (server.address() as net.AddressInfo).port;
+        ssh.on('ready', () => {
+          server.on('connection', socket => {
+            ssh.forwardOut('127.0.0.1', localPort, conn.host, conn.port, (err, stream) => {
+              if (err) { socket.destroy(); return; }
+              socket.pipe(stream).pipe(socket);
+              stream.on('close', () => socket.destroy());
+              socket.on('close', () => stream.destroy());
+            });
+          });
+          resolve({
+            localPort,
+            close: () => {
+              try { ssh.end(); } catch { /* */ }
+              server.close();
+              if (sock) try { sock.destroy(); } catch { /* */ }
+            }
           });
         });
-        resolve({ localPort, close: () => { try { ssh.end(); } catch { /* */ } server.close(); } });
+        ssh.on('error', err => { server.close(); reject(err); });
+        const cfg = buildSshCfg(sshHost, sshPort, sshUser, conn.sshKeyPath, sshPassword);
+        if (sock) cfg.sock = sock;
+        ssh.connect(cfg as Parameters<SshClient['connect']>[0]);
       });
-      ssh.on('error', err => { server.close(); reject(err); });
-      const cfg: Record<string, unknown> = {
-        host: conn.sshHost ?? conn.host,
-        port: conn.sshPort ?? 22,
-        username: conn.sshUser ?? process.env.USER ?? 'root',
-      };
-      if (conn.sshKeyPath) cfg.privateKey = fs.readFileSync(conn.sshKeyPath);
-      else cfg.password = sshPassword ?? '';
-      ssh.connect(cfg as Parameters<SshClient['connect']>[0]);
-    });
-    server.on('error', reject);
+      server.on('error', reject);
+    }
+
+    if (conn.sshJumpHost) {
+      const jumpHost = conn.sshJumpHost;
+      const jumpPort = conn.sshJumpPort ?? 22;
+      const jumpUser = conn.sshJumpUser ?? process.env.USER ?? 'root';
+      const jump = new SshClient();
+      jump.on('ready', () => {
+        jump.forwardOut('127.0.0.1', 0, sshHost, sshPort, (err, stream) => {
+          if (err) { jump.end(); reject(err); return; }
+          connectMain(stream as unknown as import('stream').Duplex);
+          stream.on('error', (e: Error) => reject(e));
+        });
+      });
+      jump.on('error', err => reject(err));
+      const jumpCfg = buildSshCfg(jumpHost, jumpPort, jumpUser, conn.sshJumpKeyPath, jumpPassword);
+      jump.connect(jumpCfg as Parameters<SshClient['connect']>[0]);
+    } else {
+      connectMain();
+    }
   });
 }
 
@@ -46,6 +91,7 @@ export class PgDriver {
     private readonly _statementTimeout: number = 30_000,
     appName?: string,
     private readonly _sshPassword?: string,
+    private readonly _jumpPassword?: string,
   ) {
     if (appName) this._appName = appName;
   }
@@ -54,7 +100,7 @@ export class PgDriver {
     let host = this._conn.host;
     let port = this._conn.port;
     if (this._conn.sshEnabled) {
-      this._tunnel = await createSshTunnel(this._conn, this._sshPassword);
+      this._tunnel = await createSshTunnel(this._conn, this._sshPassword, this._jumpPassword);
       host = '127.0.0.1';
       port = this._tunnel.localPort;
     }
