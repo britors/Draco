@@ -51,6 +51,11 @@ function pushConnections(): void {
 export function registerIpc(win: BrowserWindow): void {
   mainWin = win;
 
+  // Remove stale listeners before re-registering (macOS activate calls this again)
+  ipcMain.removeAllListeners('win-ctrl');
+  ipcMain.removeAllListeners('from-renderer');
+  ipcMain.removeHandler('ipc-invoke');
+
   // ── Window controls ───────────────────────────────────────────────────────
   ipcMain.on('win-ctrl', (_event, action: string) => {
     if (win.isDestroyed()) return;
@@ -91,6 +96,7 @@ export function registerIpc(win: BrowserWindow): void {
         break;
 
       case 'showAppMenu': {
+        if (win.isDestroyed()) break;
         const menu = Menu.getApplicationMenu();
         if (menu) menu.popup({ window: win });
         break;
@@ -722,9 +728,10 @@ export function registerIpc(win: BrowserWindow): void {
         const driver = connManager.getDriver(connId);
         if (!driver) { send('dashboardLoaded', { connId, error: 'Not connected.' }); break; }
         try {
-          const timeout = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Dashboard queries timed out after 15s')), 15_000)
-          );
+          let dashTimer: ReturnType<typeof setTimeout>;
+          const timeout = new Promise<never>((_, reject) => {
+            dashTimer = setTimeout(() => reject(new Error('Dashboard queries timed out after 15s')), 15_000);
+          });
           const [serverRows, dbRows, connRows, perfRows, tableRows] = await Promise.race([
             Promise.all([
             driver.query<Record<string, unknown>>(`
@@ -774,6 +781,7 @@ export function registerIpc(win: BrowserWindow): void {
             ]),
             timeout,
           ]) as [Record<string, unknown>[], Record<string, unknown>[], Record<string, unknown>[], Record<string, unknown>[], Record<string, unknown>[]];
+          clearTimeout(dashTimer!);
           const sv = serverRows[0] ?? {};
           const db = dbRows[0] ?? {};
           const cn = connRows[0] ?? {};
@@ -792,6 +800,7 @@ export function registerIpc(win: BrowserWindow): void {
             topTables: tableRows,
           });
         } catch (err) {
+          clearTimeout(dashTimer!);
           send('dashboardLoaded', { connId, error: String(err) });
         }
         break;

@@ -1645,7 +1645,7 @@
 
     function openDashboardTab(connId) {
       var existing = tableTabs.find(function (t) { return t.type === 'dashboard' && t.connId === connId; });
-      if (existing) { switchMainTab(existing.id); return; }
+      if (existing) { switchMainTab(existing.id); api.send('loadDashboard', { connId: connId }); return; }
       var conn = connections.find(function (c) { return c.id === connId; });
       var id = 'dash-' + connId;
       var tab = { id: id, connId: connId, connLabel: conn ? conn.label : connId, type: 'dashboard', dashData: null, dashError: null };
