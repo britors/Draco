@@ -791,6 +791,11 @@
       </div>
     </div>
 
+    <!-- Edit Table panel -->
+    <div class="panel hidden" id="panel-edit-table">
+      <div class="create-table-wrap" id="edit-table-wrap"></div>
+    </div>
+
     <!-- Table detail panel (shared; content re-rendered per active table tab) -->
     <div class="panel hidden" id="panel-table">
       <div id="table-detail-toolbar" class="tdetail-toolbar">
@@ -798,6 +803,9 @@
         <span class="tdetail-meta" id="table-detail-meta"></span>
         <button class="btn btn-secondary" id="btn-run-select" style="flex-shrink:0">
           <i class="codicon codicon-play"></i>Run SELECT
+        </button>
+        <button class="btn btn-secondary" id="btn-edit-table" style="flex-shrink:0" title="Edit table structure">
+          <i class="codicon codicon-edit"></i>Edit
         </button>
 <button class="btn btn-secondary" id="btn-import-data" style="flex-shrink:0" title="Import CSV/JSON into table">
           <i class="codicon codicon-cloud-upload"></i>Import
@@ -1309,7 +1317,7 @@
       var colList = cols[connId + ':' + schemaName + ':' + t.name];
       var acts = btnIcon('open-table-detail', { connId: connId, schema: schemaName, table: t.name }, 'codicon-table', 'Open Details')
                + btnIcon('open-ddl', { connId: connId, schema: schemaName, table: t.name }, 'codicon-symbol-structure', 'View DDL')
-               + btnIcon('copy-name', { name: t.name }, 'codicon-copy', 'Copy name')
+               + btnIcon('edit-table', { connId: connId, schema: schemaName, table: t.name }, 'codicon-edit', 'Edit Table')
                + btnIcon('vacuum-table', { connId: connId, schema: schemaName, table: t.name }, 'codicon-wrench', 'VACUUM ANALYZE')
                + btnIcon('drop-table', { connId: connId, schema: schemaName, table: t.name }, 'codicon-trash', 'Drop table');
       var prismaPin = '';
@@ -1484,6 +1492,18 @@
           api.send('toggleFavorite', { id: d.connId }); break;
         case 'open-table-detail':
           openTableTab(d.connId, d.schema, d.table); break;
+        case 'edit-table': {
+          var etExisting = tableTabs.find(function (t) {
+            return t.connId === d.connId && t.schema === d.schema && t.tableName === d.table;
+          });
+          if (etExisting && etExisting.data) {
+            openEditTablePanel(etExisting);
+          } else {
+            etOpenAfterLoad = { connId: d.connId, schema: d.schema, tableName: d.table };
+            openTableTab(d.connId, d.schema, d.table);
+          }
+          break;
+        }
         case 'create-table-for-conn':
           openCreateTablePanel(d.connId); break;
         case 'open-ddl':
@@ -1528,7 +1548,7 @@
     function switchMainTab(tab) {
       if (tab === 'explorer') tab = 'query'; // explorer is always visible now
       var isDynTab = tab.indexOf('tdetail-') === 0 || tab.indexOf('dash-') === 0;
-      var isTableTab = isDynTab || tab === 'create-table';
+      var isTableTab = isDynTab || tab === 'create-table' || tab === 'edit-table';
       persisted.tab = tab;
       saveState();
       // highlight static tabs
@@ -1538,6 +1558,7 @@
       // show correct panel
       document.querySelectorAll('#main-area .panel').forEach(function (p) {
         var show = tab === 'create-table' ? p.id === 'panel-create-table'
+               : tab === 'edit-table' ? p.id === 'panel-edit-table'
                : isDynTab ? p.id === 'panel-table'
                : p.id === 'panel-' + tab;
         p.classList.toggle('hidden', !show);
@@ -1552,6 +1573,7 @@
       if (tab === 'func-editor') { ensureFuncMonaco(null); }
       if (tab === 'erd') { if (window.__erdOnTabActivated) window.__erdOnTabActivated(); }
       if (tab === 'create-table') { renderCreateTable(); }
+      if (tab === 'edit-table') { renderEditTable(); }
       if (isDynTab) { activeTableTabId = tab; renderActiveTableDetail(); }
     }
 
@@ -1978,6 +2000,9 @@
             api.send('loadColumnStats', { connId: tab.connId, schema: tab.schema, tableName: tab.tableName });
           });
         }
+        // Edit table button
+        var editBtn = document.getElementById('btn-edit-table');
+        if (editBtn) editBtn.onclick = function () { openEditTablePanel(tab); };
         // Import button
         var importBtn = document.getElementById('btn-import-data');
         if (importBtn) importBtn.onclick = function () {
@@ -3134,16 +3159,40 @@
         case 'formError':
           showToast(d); break;
         case 'queryResult': {
+          if (d.tabId === '__et__') {
+            var etBtn = document.getElementById('et-execute');
+            if (etBtn) etBtn.disabled = false;
+            if (d.error) { showToast('Error: ' + d.error); }
+            else {
+              showToast('Table updated successfully!');
+              var etKey = etConnId + ':' + etSchema;
+              delete tables[etKey];
+              api.send('loadTables', { connId: etConnId, schema: etSchema });
+              // Reload the table detail if it's still open
+              var etDetailTab = tableTabs.find(function (t) { return t.connId === etConnId && t.schema === etSchema && t.tableName === etOrigTable; });
+              if (etDetailTab) api.send('loadTableDetail', { connId: etConnId, schema: etSchema, tableName: etTable !== etOrigTable ? etTable : etOrigTable });
+              closeEditTablePanel();
+            }
+            break;
+          }
           if (d.tabId === '__ct__') {
             var ctBtn = document.getElementById('ct-execute');
             if (ctBtn) ctBtn.disabled = false;
             if (d.error) { showToast('Error: ' + d.error); }
             else {
               showToast('Table created successfully!');
-              // refresh explorer for all connected connections
-              connections.forEach(function (c) {
-                if (statuses[c.id] === 'connected') api.send('loadSchemas', { connId: c.id });
-              });
+              if (ctPendingConnId && ctPendingSchema) {
+                var ctKey = ctPendingConnId + ':' + ctPendingSchema;
+                delete tables[ctKey];
+                api.send('loadTables', { connId: ctPendingConnId, schema: ctPendingSchema });
+              } else {
+                connections.forEach(function (c) {
+                  if (statuses[c.id] === 'connected') api.send('loadSchemas', { connId: c.id });
+                });
+              }
+              ctPendingConnId = null;
+              ctPendingSchema = null;
+              closeCreateTablePanel();
             }
             break;
           }
@@ -3413,6 +3462,10 @@
           else { td.data = d.detail; }
           renderTableTabs();
           if (activeTableTabId === td.id) renderActiveTableDetail();
+          if (etOpenAfterLoad && etOpenAfterLoad.connId === d.connId && etOpenAfterLoad.schema === d.schema && etOpenAfterLoad.tableName === d.tableName && td.data) {
+            etOpenAfterLoad = null;
+            openEditTablePanel(td);
+          }
           break;
         }
 
@@ -3899,10 +3952,18 @@
 
     var ctColumns = [];
     var ctColId = 0;
+    var ctFKs = [];
+    var ctFKId = 0;
     var ctPresetConnId = null;
+    var ctPendingConnId = null;
+    var ctPendingSchema = null;
 
     function ctNewCol(isPk) {
-      return { id: ++ctColId, name: isPk ? 'id' : '', type: isPk ? 'serial' : 'varchar', length: isPk ? '' : '255', nullable: false, defVal: '', pk: !!isPk };
+      return { id: ++ctColId, name: isPk ? 'id' : '', type: isPk ? 'serial' : 'varchar', length: isPk ? '' : '255', nullable: false, defVal: '', pk: !!isPk, uq: false };
+    }
+
+    function ctNewFK() {
+      return { id: ++ctFKId, col: '', refSchema: 'public', refTable: '', refCol: '', onDelete: 'NO ACTION', onUpdate: 'NO ACTION' };
     }
 
     function openCreateTablePanel(connId) {
@@ -3910,6 +3971,7 @@
       ctPresetConnId = connId || null;
       ctColumns = [ctNewCol(true), ctNewCol(false)];
       ctColumns[1].name = 'name';
+      ctFKs = [];
 
       // add tab button if not present
       var container = document.getElementById('table-tab-list');
@@ -3967,6 +4029,15 @@
         return '  ' + n + ' ' + t + nullable + def + inlinePk;
       });
       if (pks.length > 1) lines.push('  PRIMARY KEY (' + pks.join(', ') + ')');
+      cols.filter(function (c) { return c.uq && !c.pk; }).forEach(function (c) {
+        lines.push('  UNIQUE ("' + c.name.trim() + '")');
+      });
+      ctFKs.filter(function (fk) { return fk.col && fk.refTable && fk.refCol; }).forEach(function (fk) {
+        var fkLine = '  FOREIGN KEY ("' + fk.col + '") REFERENCES "' + fk.refSchema + '"."' + fk.refTable + '" ("' + fk.refCol + '")';
+        if (fk.onDelete !== 'NO ACTION') fkLine += ' ON DELETE ' + fk.onDelete;
+        if (fk.onUpdate !== 'NO ACTION') fkLine += ' ON UPDATE ' + fk.onUpdate;
+        lines.push(fkLine);
+      });
       return 'CREATE TABLE "' + schema + '"."' + name + '" (\n' + lines.join(',\n') + '\n);';
     }
 
@@ -3989,6 +4060,7 @@
         + '<td style="text-align:center"><input type="checkbox" data-field="nullable"' + (c.nullable ? ' checked' : '') + '></td>'
         + '<td><input class="ct-cell-input" data-field="defVal" value="' + esc(c.defVal) + '" placeholder="—" style="width:90px"></td>'
         + '<td style="text-align:center"><input type="checkbox" data-field="pk"' + (c.pk ? ' checked' : '') + '></td>'
+        + '<td style="text-align:center"><input type="checkbox" data-field="uq"' + (c.uq ? ' checked' : '') + '></td>'
         + '<td><button class="btn-icon ct-del-col" title="Remove column"><i class="codicon codicon-trash"></i></button></td>';
 
       tr.querySelectorAll('[data-field]').forEach(function (el) {
@@ -3998,6 +4070,43 @@
       });
       tr.querySelector('.ct-del-col').addEventListener('click', function () {
         ctColumns = ctColumns.filter(function (x) { return x.id !== c.id; });
+        tr.remove();
+        ctUpdatePreview();
+      });
+
+      tbody.appendChild(tr);
+    }
+
+    function ctRenderFKRow(fk, tbody) {
+      var tr = document.createElement('tr');
+      tr.dataset.ctFkId = fk.id;
+
+      var colOpts = ctColumns
+        .filter(function (c) { return c.name.trim(); })
+        .map(function (c) { return '<option value="' + esc(c.name.trim()) + '"' + (fk.col === c.name.trim() ? ' selected' : '') + '>' + esc(c.name.trim()) + '</option>'; })
+        .join('');
+      var schemaOpts = ctGetSchemas().map(function (s) {
+        return '<option value="' + esc(s) + '"' + (fk.refSchema === s ? ' selected' : '') + '>' + esc(s) + '</option>';
+      }).join('');
+      var actions = ['NO ACTION', 'CASCADE', 'SET NULL', 'RESTRICT'];
+      var delOpts = actions.map(function (a) { return '<option value="' + a + '"' + (fk.onDelete === a ? ' selected' : '') + '>' + a + '</option>'; }).join('');
+      var updOpts = actions.map(function (a) { return '<option value="' + a + '"' + (fk.onUpdate === a ? ' selected' : '') + '>' + a + '</option>'; }).join('');
+
+      tr.innerHTML = '<td><select class="ct-cell-select" data-fkfield="col" style="width:110px"><option value="">column…</option>' + colOpts + '</select></td>'
+        + '<td><select class="ct-cell-select" data-fkfield="refSchema" style="width:90px">' + schemaOpts + '</select></td>'
+        + '<td><input class="ct-cell-input" data-fkfield="refTable" value="' + esc(fk.refTable) + '" placeholder="table" style="width:110px"></td>'
+        + '<td><input class="ct-cell-input" data-fkfield="refCol" value="' + esc(fk.refCol) + '" placeholder="column" style="width:90px"></td>'
+        + '<td><select class="ct-cell-select" data-fkfield="onDelete" style="width:100px">' + delOpts + '</select></td>'
+        + '<td><select class="ct-cell-select" data-fkfield="onUpdate" style="width:100px">' + updOpts + '</select></td>'
+        + '<td><button class="btn-icon ct-del-fk" title="Remove FK"><i class="codicon codicon-trash"></i></button></td>';
+
+      tr.querySelectorAll('[data-fkfield]').forEach(function (el) {
+        var field = el.dataset.fkfield;
+        el.addEventListener('change', function () { fk[field] = el.value; ctUpdatePreview(); });
+        el.addEventListener('input', function () { fk[field] = el.value; ctUpdatePreview(); });
+      });
+      tr.querySelector('.ct-del-fk').addEventListener('click', function () {
+        ctFKs = ctFKs.filter(function (x) { return x.id !== fk.id; });
         tr.remove();
         ctUpdatePreview();
       });
@@ -4027,10 +4136,19 @@
 
         + '<div>'
         + '<table class="ct-cols-table"><thead><tr>'
-        + '<th>Column name</th><th>Type</th><th>Length</th><th>Nullable</th><th>Default</th><th>PK</th><th></th>'
+        + '<th>Column name</th><th>Type</th><th>Length</th><th>Nullable</th><th>Default</th><th>PK</th><th>UQ</th><th></th>'
         + '</tr></thead>'
         + '<tbody id="ct-tbody"></tbody></table>'
         + '<button class="btn btn-secondary" id="ct-add-col" style="margin-top:6px"><i class="codicon codicon-add"></i>Add column</button>'
+        + '</div>'
+
+        + '<div>'
+        + '<div style="font-size:11px;font-weight:600;color:var(--vscode-descriptionForeground);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px">Foreign Keys</div>'
+        + '<table class="ct-cols-table"><thead><tr>'
+        + '<th>Column</th><th>Ref Schema</th><th>Ref Table</th><th>Ref Column</th><th>On Delete</th><th>On Update</th><th></th>'
+        + '</tr></thead>'
+        + '<tbody id="ct-fk-tbody"></tbody></table>'
+        + '<button class="btn btn-secondary" id="ct-add-fk" style="margin-top:6px"><i class="codicon codicon-add"></i>Add FK</button>'
         + '</div>'
 
         + '<div>'
@@ -4046,6 +4164,8 @@
 
       var tbody = document.getElementById('ct-tbody');
       ctColumns.forEach(function (c) { ctRenderColRow(c, tbody); });
+      var fkTbody = document.getElementById('ct-fk-tbody');
+      ctFKs.forEach(function (fk) { ctRenderFKRow(fk, fkTbody); });
       ctUpdatePreview();
 
       document.getElementById('ct-schema-select').addEventListener('change', ctUpdatePreview);
@@ -4058,6 +4178,15 @@
         ctUpdatePreview();
       });
 
+      document.getElementById('ct-add-fk').addEventListener('click', function () {
+        var fk = ctNewFK();
+        var firstColName = ctColumns.find(function (c) { return c.name.trim(); });
+        if (firstColName) fk.col = firstColName.name.trim();
+        ctFKs.push(fk);
+        ctRenderFKRow(fk, fkTbody);
+        ctUpdatePreview();
+      });
+
       document.getElementById('ct-copy-sql').addEventListener('click', function () {
         navigator.clipboard.writeText(ctBuildSQL()).then(function () { showToast('SQL copied to clipboard'); }).catch(function () {});
       });
@@ -4067,6 +4196,8 @@
         if (!connId) { showToast('Select a connection first.'); return; }
         var sql = ctBuildSQL();
         if (sql.startsWith('--')) { showToast(sql.replace('-- ', '')); return; }
+        ctPendingConnId = connId;
+        ctPendingSchema = (document.getElementById('ct-schema-select') || {}).value || 'public';
         api.send('executeQuery', { connId: connId, sql: sql, tabId: '__ct__' });
         document.getElementById('ct-execute').disabled = true;
       });
@@ -4116,6 +4247,427 @@
 
     // listen for CREATE TABLE result
     // (handled in the queryResult case — tabId === '__ct__')
+
+    // ── Edit Table ─────────────────────────────────────────────────────────
+
+    var etConnId = null;
+    var etSchema = null;
+    var etOrigTable = null;
+    var etOpenAfterLoad = null;
+    var etTable = null;
+    var etColumns = [];
+    var etColId = 0;
+    var etConstraints = [];
+    var etConstraintId = 0;
+    var etNewConstraints = [];
+    var etNewConstraintId = 0;
+
+    function openEditTablePanel(tab) {
+      if (!tab || !tab.data) { showToast('Table details not loaded yet.'); return; }
+      etConnId = tab.connId;
+      etSchema = tab.schema;
+      etOrigTable = tab.tableName;
+      etTable = tab.tableName;
+      etColId = 0;
+      etConstraintId = 0;
+      etNewConstraintId = 0;
+      etColumns = tab.data.columns.map(function (c) {
+        return { id: ++etColId, origName: c.name, name: c.name,
+                 origType: c.fullType, type: c.fullType,
+                 origNullable: c.isNullable, nullable: c.isNullable,
+                 origDefault: c.columnDefault !== null ? c.columnDefault : '',
+                 defVal: c.columnDefault !== null ? c.columnDefault : '',
+                 pk: c.isPrimaryKey, dropped: false, isNew: false };
+      });
+      etConstraints = tab.data.constraints
+        .filter(function (c) { return c.type !== 'PRIMARY KEY'; })
+        .map(function (c) {
+          return { id: ++etConstraintId, origName: c.name, type: c.type, definition: c.definition, dropped: false };
+        });
+      etNewConstraints = [];
+
+      var container = document.getElementById('table-tab-list');
+      var existing = container.querySelector('.et-tab-btn');
+      if (existing) existing.remove();
+      var btn = document.createElement('div');
+      btn.className = 'query-tab et-tab-btn';
+      btn.style.cssText = 'min-width:120px;max-width:220px;';
+      btn.innerHTML = '<i class="codicon codicon-edit" style="font-size:13px;flex-shrink:0"></i>'
+        + '<span class="query-tab-name" style="flex:1">Edit: ' + esc(tab.schema + '.' + tab.tableName) + '</span>'
+        + '<button class="query-tab-close" id="et-tab-close" title="Close"><i class="codicon codicon-close"></i></button>';
+      btn.addEventListener('click', function (e) {
+        if (e.target.closest('#et-tab-close')) { closeEditTablePanel(); return; }
+        switchMainTab('edit-table');
+      });
+      container.appendChild(btn);
+      switchMainTab('edit-table');
+    }
+
+    function closeEditTablePanel() {
+      var btn = document.querySelector('.et-tab-btn');
+      if (btn) btn.remove();
+      switchMainTab('query');
+    }
+
+    function etQ(s) { return '"' + String(s).replace(/"/g, '""') + '"'; }
+
+    function etBuildSQL() {
+      if (!etOrigTable) return '-- No table selected';
+      var stmts = [];
+      var tblRef = etQ(etSchema) + '.' + etQ(etOrigTable);
+      var tbl = etQ(etSchema) + '.' + etQ(etTable !== etOrigTable ? etTable : etOrigTable);
+
+      if (etTable !== etOrigTable && etTable.trim()) {
+        stmts.push('ALTER TABLE ' + tblRef + '\\n  RENAME TO ' + etQ(etTable) + ';');
+        tbl = etQ(etSchema) + '.' + etQ(etTable);
+      }
+
+      etColumns.forEach(function (c) {
+        if (c.dropped && !c.isNew) {
+          stmts.push('ALTER TABLE ' + tbl + '\\n  DROP COLUMN ' + etQ(c.origName) + ';');
+          return;
+        }
+        if (c.dropped) return;
+        if (c.isNew) {
+          if (!c.name.trim()) return;
+          var typePart = (c.type || 'text') + (c.length && ['varchar','char','numeric','decimal'].indexOf(c.type) >= 0 ? '(' + c.length + ')' : '');
+          var line = 'ALTER TABLE ' + tbl + '\\n  ADD COLUMN ' + etQ(c.name.trim()) + ' ' + typePart;
+          if (!c.nullable) line += ' NOT NULL';
+          if ((c.defVal || '').trim()) line += ' DEFAULT ' + c.defVal.trim();
+          stmts.push(line + ';');
+          return;
+        }
+        var curName = c.name.trim() || c.origName;
+        if (c.name !== c.origName && c.name.trim())
+          stmts.push('ALTER TABLE ' + tbl + '\\n  RENAME COLUMN ' + etQ(c.origName) + ' TO ' + etQ(c.name) + ';');
+        if (c.type !== c.origType && c.type.trim())
+          stmts.push('ALTER TABLE ' + tbl + '\\n  ALTER COLUMN ' + etQ(curName) + ' TYPE ' + c.type + ';');
+        if (c.nullable !== c.origNullable)
+          stmts.push('ALTER TABLE ' + tbl + '\\n  ALTER COLUMN ' + etQ(curName) + (c.nullable ? ' DROP NOT NULL' : ' SET NOT NULL') + ';');
+        if (c.defVal !== c.origDefault) {
+          if ((c.defVal || '').trim())
+            stmts.push('ALTER TABLE ' + tbl + '\\n  ALTER COLUMN ' + etQ(curName) + ' SET DEFAULT ' + c.defVal + ';');
+          else
+            stmts.push('ALTER TABLE ' + tbl + '\\n  ALTER COLUMN ' + etQ(curName) + ' DROP DEFAULT;');
+        }
+      });
+
+      etConstraints.filter(function (c) { return c.dropped; }).forEach(function (c) {
+        stmts.push('ALTER TABLE ' + tbl + '\\n  DROP CONSTRAINT ' + etQ(c.origName) + ';');
+      });
+
+      etNewConstraints.forEach(function (nc) {
+        if (nc.type === 'uq' && nc.col)
+          stmts.push('ALTER TABLE ' + tbl + '\\n  ADD UNIQUE (' + etQ(nc.col) + ');');
+        else if (nc.type === 'fk' && nc.col && nc.refTable && nc.refCol) {
+          var line = 'ALTER TABLE ' + tbl + '\\n  ADD FOREIGN KEY (' + etQ(nc.col) + ') REFERENCES '
+            + etQ(nc.refSchema) + '.' + etQ(nc.refTable) + ' (' + etQ(nc.refCol) + ')';
+          if (nc.onDelete !== 'NO ACTION') line += ' ON DELETE ' + nc.onDelete;
+          if (nc.onUpdate !== 'NO ACTION') line += ' ON UPDATE ' + nc.onUpdate;
+          stmts.push(line + ';');
+        }
+      });
+
+      return stmts.length ? stmts.join('\\n\\n') : '-- No changes';
+    }
+
+    function etUpdatePreview() {
+      var pre = document.getElementById('et-sql-preview');
+      if (pre) pre.textContent = etBuildSQL().replace(/\\n/g, '\n');
+    }
+
+    function etGetColNames() {
+      return etColumns.filter(function (c) { return !c.dropped && c.name.trim(); }).map(function (c) { return c.name.trim(); });
+    }
+
+    function etRenderExistingColRow(c, tbody) {
+      var tr = document.createElement('tr');
+      tr.dataset.etColId = c.id;
+      if (c.dropped) tr.style.opacity = '0.4';
+
+      var pkBadge = c.pk ? ' <span class="tdetail-badge pk">PK</span>' : '';
+      tr.innerHTML = (c.dropped
+        ? '<td><span style="font-family:var(--vscode-editor-font-family,monospace);font-size:12px;text-decoration:line-through">' + esc(c.origName) + '</span>' + pkBadge + '</td>'
+        : '<td>' + pkBadge + '<input class="ct-cell-input" data-etfield="name" value="' + esc(c.name) + '" style="width:120px"></td>')
+        + '<td><input class="ct-cell-input" data-etfield="type" value="' + esc(c.type) + '" placeholder="type" style="width:150px"' + (c.dropped ? ' disabled' : '') + '></td>'
+        + '<td style="text-align:center"><input type="checkbox" data-etfield="nullable"' + (c.nullable ? ' checked' : '') + (c.dropped ? ' disabled' : '') + '></td>'
+        + '<td><input class="ct-cell-input" data-etfield="defVal" value="' + esc(c.defVal) + '" placeholder="—" style="width:100px"' + (c.dropped ? ' disabled' : '') + '></td>'
+        + '<td>' + (c.dropped
+            ? '<button class="btn-icon et-undrop-col" title="Undo drop"><i class="codicon codicon-discard"></i></button>'
+            : '<button class="btn-icon et-drop-col" title="Drop column"' + (c.pk ? ' disabled title="Cannot drop PK column"' : '') + '><i class="codicon codicon-trash"></i></button>') + '</td>';
+
+      tr.querySelectorAll('[data-etfield]').forEach(function (el) {
+        var field = el.dataset.etfield;
+        el.addEventListener('input', function () { c[field] = el.type === 'checkbox' ? el.checked : el.value; etUpdatePreview(); });
+        el.addEventListener('change', function () { c[field] = el.type === 'checkbox' ? el.checked : el.value; etUpdatePreview(); });
+      });
+      var dropBtn = tr.querySelector('.et-drop-col');
+      if (dropBtn) dropBtn.addEventListener('click', function () {
+        c.dropped = true;
+        var newTr = document.createElement('tr');
+        newTr.dataset.etColId = c.id;
+        tbody.replaceChild(newTr, tr);
+        etRenderExistingColRowInto(c, newTr, tbody);
+        etUpdatePreview();
+      });
+      var undropBtn = tr.querySelector('.et-undrop-col');
+      if (undropBtn) undropBtn.addEventListener('click', function () {
+        c.dropped = false;
+        var newTr = document.createElement('tr');
+        newTr.dataset.etColId = c.id;
+        tbody.replaceChild(newTr, tr);
+        etRenderExistingColRowInto(c, newTr, tbody);
+        etUpdatePreview();
+      });
+      tbody.appendChild(tr);
+    }
+
+    function etRenderExistingColRowInto(c, tr, tbody) {
+      if (c.dropped) tr.style.opacity = '0.4'; else tr.style.opacity = '';
+      var pkBadge = c.pk ? ' <span class="tdetail-badge pk">PK</span>' : '';
+      tr.innerHTML = (c.dropped
+        ? '<td><span style="font-family:var(--vscode-editor-font-family,monospace);font-size:12px;text-decoration:line-through">' + esc(c.origName) + '</span>' + pkBadge + '</td>'
+        : '<td>' + pkBadge + '<input class="ct-cell-input" data-etfield="name" value="' + esc(c.name) + '" style="width:120px"></td>')
+        + '<td><input class="ct-cell-input" data-etfield="type" value="' + esc(c.type) + '" placeholder="type" style="width:150px"' + (c.dropped ? ' disabled' : '') + '></td>'
+        + '<td style="text-align:center"><input type="checkbox" data-etfield="nullable"' + (c.nullable ? ' checked' : '') + (c.dropped ? ' disabled' : '') + '></td>'
+        + '<td><input class="ct-cell-input" data-etfield="defVal" value="' + esc(c.defVal) + '" placeholder="—" style="width:100px"' + (c.dropped ? ' disabled' : '') + '></td>'
+        + '<td>' + (c.dropped
+            ? '<button class="btn-icon et-undrop-col" title="Undo drop"><i class="codicon codicon-discard"></i></button>'
+            : '<button class="btn-icon et-drop-col" title="Drop column"' + (c.pk ? ' disabled' : '') + '><i class="codicon codicon-trash"></i></button>') + '</td>';
+      tr.querySelectorAll('[data-etfield]').forEach(function (el) {
+        var field = el.dataset.etfield;
+        el.addEventListener('input', function () { c[field] = el.type === 'checkbox' ? el.checked : el.value; etUpdatePreview(); });
+        el.addEventListener('change', function () { c[field] = el.type === 'checkbox' ? el.checked : el.value; etUpdatePreview(); });
+      });
+      var dropBtn = tr.querySelector('.et-drop-col');
+      if (dropBtn) dropBtn.addEventListener('click', function () {
+        c.dropped = true;
+        var newTr = document.createElement('tr');
+        newTr.dataset.etColId = c.id;
+        tbody.replaceChild(newTr, tr);
+        etRenderExistingColRowInto(c, newTr, tbody);
+        etUpdatePreview();
+      });
+      var undropBtn = tr.querySelector('.et-undrop-col');
+      if (undropBtn) undropBtn.addEventListener('click', function () {
+        c.dropped = false;
+        var newTr = document.createElement('tr');
+        newTr.dataset.etColId = c.id;
+        tbody.replaceChild(newTr, tr);
+        etRenderExistingColRowInto(c, newTr, tbody);
+        etUpdatePreview();
+      });
+    }
+
+    function etRenderNewColRow(c, tbody) {
+      var tr = document.createElement('tr');
+      var typeOpts = CT_TYPES.map(function (t) {
+        return '<option value="' + t + '"' + (c.type === t ? ' selected' : '') + '>' + t + '</option>';
+      }).join('');
+      tr.innerHTML = '<td><input class="ct-cell-input" data-etfield="name" value="' + esc(c.name) + '" placeholder="column_name" style="width:110px"></td>'
+        + '<td><select class="ct-cell-select" data-etfield="type" style="width:120px">' + typeOpts + '</select></td>'
+        + '<td><input class="ct-cell-input" data-etfield="length" value="' + esc(c.length || '') + '" placeholder="—" style="width:46px"></td>'
+        + '<td style="text-align:center"><input type="checkbox" data-etfield="nullable"' + (c.nullable ? ' checked' : '') + '></td>'
+        + '<td><input class="ct-cell-input" data-etfield="defVal" value="' + esc(c.defVal) + '" placeholder="—" style="width:90px"></td>'
+        + '<td><button class="btn-icon et-del-new-col" title="Remove"><i class="codicon codicon-trash"></i></button></td>';
+      tr.querySelectorAll('[data-etfield]').forEach(function (el) {
+        var field = el.dataset.etfield;
+        el.addEventListener('input', function () { c[field] = el.type === 'checkbox' ? el.checked : el.value; etUpdatePreview(); });
+        el.addEventListener('change', function () { c[field] = el.type === 'checkbox' ? el.checked : el.value; etUpdatePreview(); });
+      });
+      tr.querySelector('.et-del-new-col').addEventListener('click', function () {
+        etColumns = etColumns.filter(function (x) { return x.id !== c.id; });
+        tr.remove();
+        etUpdatePreview();
+      });
+      tbody.appendChild(tr);
+    }
+
+    function etRenderConstraintRow(c, tbody) {
+      var tr = document.createElement('tr');
+      tbody.appendChild(tr);
+      etRenderConstraintRowInto(c, tr, tbody);
+    }
+
+    function etRenderConstraintRowInto(c, tr, tbody) {
+      if (c.dropped) tr.style.opacity = '0.4'; else tr.style.opacity = '';
+      var typeMap = { 'FOREIGN KEY': 'fk', 'UNIQUE': 'uq', 'CHECK': 'ck' };
+      var cls = typeMap[c.type] || '';
+      var label = c.type.replace('FOREIGN KEY','FK').replace('UNIQUE','UQ').replace('CHECK','CK');
+      tr.innerHTML = '<td><span class="tdetail-badge ' + cls + '">' + label + '</span></td>'
+        + '<td style="font-family:var(--vscode-editor-font-family,monospace);font-size:11px">' + esc(c.origName) + '</td>'
+        + '<td style="font-family:var(--vscode-editor-font-family,monospace);font-size:11px;color:var(--vscode-textPreformat-foreground)">' + esc(c.definition) + '</td>'
+        + '<td>' + (c.dropped
+            ? '<button class="btn-icon et-undrop-con" title="Undo drop"><i class="codicon codicon-discard"></i></button>'
+            : '<button class="btn-icon et-drop-con" title="Drop constraint"><i class="codicon codicon-trash"></i></button>') + '</td>';
+      var dropBtn = tr.querySelector('.et-drop-con');
+      if (dropBtn) dropBtn.addEventListener('click', function () {
+        c.dropped = true;
+        etRenderConstraintRowInto(c, tr, tbody);
+        etUpdatePreview();
+      });
+      var undropBtn = tr.querySelector('.et-undrop-con');
+      if (undropBtn) undropBtn.addEventListener('click', function () {
+        c.dropped = false;
+        etRenderConstraintRowInto(c, tr, tbody);
+        etUpdatePreview();
+      });
+    }
+
+    function etRenderNewConstraintRow(nc, tbody) {
+      var tr = document.createElement('tr');
+      if (nc.type === 'uq') {
+        var colOpts = etGetColNames().map(function (n) {
+          return '<option value="' + esc(n) + '"' + (nc.col === n ? ' selected' : '') + '>' + esc(n) + '</option>';
+        }).join('');
+        tr.innerHTML = '<td><span class="tdetail-badge uq">UQ</span></td>'
+          + '<td colspan="4"><select class="ct-cell-select" data-ncfield="col" style="width:180px"><option value="">column…</option>' + colOpts + '</select></td>'
+          + '<td><button class="btn-icon et-del-nc" title="Remove"><i class="codicon codicon-trash"></i></button></td>';
+        tr.querySelector('[data-ncfield]').addEventListener('change', function (e) { nc.col = e.target.value; etUpdatePreview(); });
+      } else {
+        var colOpts2 = etGetColNames().map(function (n) {
+          return '<option value="' + esc(n) + '"' + (nc.col === n ? ' selected' : '') + '>' + esc(n) + '</option>';
+        }).join('');
+        var schOpts = ctGetSchemas().map(function (s) {
+          return '<option value="' + esc(s) + '"' + (nc.refSchema === s ? ' selected' : '') + '>' + esc(s) + '</option>';
+        }).join('');
+        var actions = ['NO ACTION','CASCADE','SET NULL','RESTRICT'];
+        var delOpts = actions.map(function (a) { return '<option value="' + a + '"' + (nc.onDelete === a ? ' selected' : '') + '>' + a + '</option>'; }).join('');
+        var updOpts = actions.map(function (a) { return '<option value="' + a + '"' + (nc.onUpdate === a ? ' selected' : '') + '>' + a + '</option>'; }).join('');
+        tr.innerHTML = '<td><span class="tdetail-badge fk">FK</span></td>'
+          + '<td><select class="ct-cell-select" data-ncfield="col" style="width:100px"><option value="">col…</option>' + colOpts2 + '</select></td>'
+          + '<td><select class="ct-cell-select" data-ncfield="refSchema" style="width:80px">' + schOpts + '</select></td>'
+          + '<td><input class="ct-cell-input" data-ncfield="refTable" value="' + esc(nc.refTable) + '" placeholder="table" style="width:100px"></td>'
+          + '<td><input class="ct-cell-input" data-ncfield="refCol" value="' + esc(nc.refCol) + '" placeholder="column" style="width:90px"></td>'
+          + '<td><select class="ct-cell-select" data-ncfield="onDelete" style="width:100px">' + delOpts + '</select>'
+          + '  <select class="ct-cell-select" data-ncfield="onUpdate" style="width:100px">' + updOpts + '</select></td>'
+          + '<td><button class="btn-icon et-del-nc" title="Remove"><i class="codicon codicon-trash"></i></button></td>';
+        tr.querySelectorAll('[data-ncfield]').forEach(function (el) {
+          var field = el.dataset.ncfield;
+          el.addEventListener('change', function () { nc[field] = el.value; etUpdatePreview(); });
+          el.addEventListener('input', function () { nc[field] = el.value; etUpdatePreview(); });
+        });
+      }
+      tr.querySelector('.et-del-nc').addEventListener('click', function () {
+        etNewConstraints = etNewConstraints.filter(function (x) { return x.id !== nc.id; });
+        tr.remove();
+        etUpdatePreview();
+      });
+      tbody.appendChild(tr);
+    }
+
+    function renderEditTable() {
+      var wrap = document.getElementById('edit-table-wrap');
+      if (!wrap) return;
+
+      var secHdr = function(icon, label) {
+        return '<div style="font-size:11px;font-weight:600;color:var(--vscode-descriptionForeground);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px"><i class="codicon ' + icon + '" style="margin-right:4px"></i>' + label + '</div>';
+      };
+
+      wrap.innerHTML = '<div class="create-table-row">'
+        + '<span class="create-table-label">Schema</span>'
+        + '<span style="font-size:13px;padding:3px 6px;opacity:0.7">' + esc(etSchema || '') + '</span>'
+        + '<span class="create-table-label" style="margin-left:12px">Table</span>'
+        + '<input class="create-table-input" id="et-table-name" value="' + esc(etTable || '') + '" style="width:200px">'
+        + '</div>'
+
+        + '<div>'
+        + secHdr('codicon-list-flat', 'Existing Columns')
+        + '<table class="ct-cols-table"><thead><tr>'
+        + '<th>Column</th><th>Type</th><th>Nullable</th><th>Default</th><th></th>'
+        + '</tr></thead><tbody id="et-cols-tbody"></tbody></table>'
+        + '</div>'
+
+        + '<div>'
+        + secHdr('codicon-add', 'Add Columns')
+        + '<table class="ct-cols-table"><thead><tr>'
+        + '<th>Column name</th><th>Type</th><th>Length</th><th>Nullable</th><th>Default</th><th></th>'
+        + '</tr></thead><tbody id="et-new-cols-tbody"></tbody></table>'
+        + '<button class="btn btn-secondary" id="et-add-col" style="margin-top:6px"><i class="codicon codicon-add"></i>Add column</button>'
+        + '</div>'
+
+        + '<div>'
+        + secHdr('codicon-symbol-key', 'Constraints')
+        + '<table class="ct-cols-table" id="et-constraints-wrap"><thead><tr>'
+        + '<th>Type</th><th>Name</th><th>Definition</th><th></th>'
+        + '</tr></thead><tbody id="et-constraints-tbody"></tbody>'
+        + '<thead id="et-new-con-hdr" style="display:none"><tr>'
+        + '<th colspan="7" style="padding-top:8px">New Constraints</th></tr></thead>'
+        + '<tbody id="et-new-constraints-tbody"></tbody></table>'
+        + '<button class="btn btn-secondary" id="et-add-uq" style="margin-top:6px"><i class="codicon codicon-add"></i>Add UNIQUE</button>'
+        + ' <button class="btn btn-secondary" id="et-add-fk" style="margin-top:6px"><i class="codicon codicon-add"></i>Add FK</button>'
+        + '</div>'
+
+        + '<div>'
+        + secHdr('codicon-code', 'Generated SQL')
+        + '<div class="ct-sql-preview" id="et-sql-preview"></div>'
+        + '</div>'
+
+        + '<div class="ct-toolbar">'
+        + '<span style="font-size:12px;opacity:0.7;padding:0 4px">' + esc((etSchema || '') + '.' + (etOrigTable || '')) + '</span>'
+        + '<button class="btn btn-secondary" id="et-copy-sql"><i class="codicon codicon-clippy"></i>Copy SQL</button>'
+        + '<button class="btn btn-primary" id="et-execute"><i class="codicon codicon-play"></i>Execute</button>'
+        + '</div>';
+
+      var existingTbody = document.getElementById('et-cols-tbody');
+      etColumns.filter(function (c) { return !c.isNew; }).forEach(function (c) {
+        etRenderExistingColRow(c, existingTbody);
+      });
+
+      var newColsTbody = document.getElementById('et-new-cols-tbody');
+      etColumns.filter(function (c) { return c.isNew; }).forEach(function (c) {
+        etRenderNewColRow(c, newColsTbody);
+      });
+
+      var conTbody = document.getElementById('et-constraints-tbody');
+      etConstraints.forEach(function (c) { etRenderConstraintRow(c, conTbody); });
+
+      var newConTbody = document.getElementById('et-new-constraints-tbody');
+      etNewConstraints.forEach(function (nc) { etRenderNewConstraintRow(nc, newConTbody); });
+
+      etUpdatePreview();
+
+      document.getElementById('et-table-name').addEventListener('input', function (e) {
+        etTable = e.target.value; etUpdatePreview();
+      });
+
+      document.getElementById('et-add-col').addEventListener('click', function () {
+        var c = { id: ++etColId, origName: null, name: '', type: 'varchar', length: '255', nullable: false, defVal: '', pk: false, dropped: false, isNew: true };
+        etColumns.push(c);
+        etRenderNewColRow(c, newColsTbody);
+        etUpdatePreview();
+      });
+
+      document.getElementById('et-add-uq').addEventListener('click', function () {
+        var nc = { id: ++etNewConstraintId, type: 'uq', col: etGetColNames()[0] || '' };
+        etNewConstraints.push(nc);
+        document.getElementById('et-new-con-hdr').style.display = '';
+        etRenderNewConstraintRow(nc, newConTbody);
+        etUpdatePreview();
+      });
+
+      document.getElementById('et-add-fk').addEventListener('click', function () {
+        var schemas = ctGetSchemas();
+        var nc = { id: ++etNewConstraintId, type: 'fk', col: etGetColNames()[0] || '',
+                   refSchema: schemas[0] || 'public', refTable: '', refCol: '', onDelete: 'NO ACTION', onUpdate: 'NO ACTION' };
+        etNewConstraints.push(nc);
+        document.getElementById('et-new-con-hdr').style.display = '';
+        etRenderNewConstraintRow(nc, newConTbody);
+        etUpdatePreview();
+      });
+
+      document.getElementById('et-copy-sql').addEventListener('click', function () {
+        var sql = etBuildSQL().replace(/\\n/g, '\n');
+        navigator.clipboard.writeText(sql).then(function () { showToast('SQL copied to clipboard'); }).catch(function () {});
+      });
+
+      document.getElementById('et-execute').addEventListener('click', function () {
+        var sql = etBuildSQL().replace(/\\n/g, '\n');
+        if (sql.startsWith('-- No changes')) { showToast('No changes to apply.'); return; }
+        document.getElementById('et-execute').disabled = true;
+        api.send('executeQuery', { connId: etConnId, sql: sql, tabId: '__et__' });
+      });
+    }
 
     // ── Global keyboard shortcuts ──────────────────────────────────────────
     document.addEventListener('keydown', function (e) {

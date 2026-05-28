@@ -67,6 +67,7 @@
 - **Create Table icon** on each connected connection
 - **Star (☆)** icon — favourites appear at the top of the list
 - **VACUUM ANALYZE** wrench button on each table row
+- **Edit Table** pencil button on each table row — opens the Table Editor directly
 - **Drop Table** trash button on each table row (with confirmation)
 - **Edit** and **New Function** buttons on function nodes and the Functions group
 
@@ -117,15 +118,27 @@
 
 - Per-table tabs from the Explorer
 - Columns, constraints, indexes, FK map
-- **Run SELECT**, **Copy Prisma model**, **Import CSV/JSON**
+- **Run SELECT**, **Edit Table**, **Import CSV/JSON**
 - Column statistics (histogram, most common values)
 
 ### Visual Table Creator
 
 - GUI form — no SQL required
-- 20 PostgreSQL column types, nullable, default, PK
+- 20 PostgreSQL column types, nullable, default, PK, UNIQUE
+- **Foreign Key** constraints with referenced schema/table/column and ON DELETE / ON UPDATE actions
 - Live `CREATE TABLE` SQL preview
 - **New Schema** button inline
+- Tab closes automatically after the table is created
+
+### Table Editor
+
+- Opens from the **Edit** button on any table row in the Explorer
+- **Existing columns**: rename, change type, change nullability/default, or drop (with undo)
+- **Add columns**: same column editor as the Table Creator
+- **Existing constraints** (FK, UQ, CHECK): drop with one click, undo before applying
+- **Add constraints**: new UNIQUE or FK constraints with full reference and action options
+- Live `ALTER TABLE` SQL preview
+- Applies all changes in one execution; reloads the table detail on success
 
 ### Function Editor
 
