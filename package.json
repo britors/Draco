@@ -2,7 +2,7 @@
   "name": "prisma4postgres",
   "productName": "Prisma4Postgres",
   "description": "PostgreSQL database explorer and query runner",
-  "version": "11.1.1",
+  "version": "11.1.2",
   "author": {
     "name": "britors",
     "email": "rodrigo@w3ti.com.br"

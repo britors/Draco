@@ -27,8 +27,8 @@ function saveBounds(win: BrowserWindow): void {
 
 export function createSplashWindow(): BrowserWindow {
   const splash = new BrowserWindow({
-    width: 700,
-    height: 400,
+    width: 820,
+    height: 480,
     frame: false,
     resizable: false,
     minimizable: false,
