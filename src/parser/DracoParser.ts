@@ -1,31 +1,31 @@
-export interface PrismaDataSource {
+export interface dracoDataSource {
   provider: string;
   url: string;
   isPostgres: boolean;
 }
 
-export interface PrismaField {
+export interface dracoField {
   name: string;
-  prismaType: string;   // e.g. String, Int, Boolean, DateTime
+  dracoType: string;   // e.g. String, Int, Boolean, DateTime
   columnName: string;   // actual DB column name (from @map or field name)
   isOptional: boolean;
   isId: boolean;
   isList: boolean;      // array fields (relations or native arrays)
 }
 
-export interface PrismaModel {
+export interface dracoModel {
   name: string;
   tableName: string;    // from @@map("...") or model name
-  fields: PrismaField[];
+  fields: dracoField[];
 }
 
-export interface ParsedPrismaSchema {
+export interface ParseddracoSchema {
   filePath: string;
-  datasource: PrismaDataSource | null;
-  models: PrismaModel[];
+  datasource: dracoDataSource | null;
+  models: dracoModel[];
 }
 
-export function parseDracoSchema(filePath: string, content: string): ParsedPrismaSchema {
+export function parseDracoSchema(filePath: string, content: string): ParseddracoSchema {
   const clean = stripComments(content);
   return {
     filePath,
@@ -61,7 +61,7 @@ function stripComments(src: string): string {
   return out;
 }
 
-function parseDatasource(content: string): PrismaDataSource | null {
+function parseDatasource(content: string): dracoDataSource | null {
   const match = content.match(/datasource\s+\w+\s*\{([\s\S]*?)\}/);
   if (!match) return null;
   const block = match[1];
@@ -70,8 +70,8 @@ function parseDatasource(content: string): PrismaDataSource | null {
   return { provider, url: urlLine, isPostgres: /postgresql|postgres/i.test(provider) };
 }
 
-function parseModels(content: string): PrismaModel[] {
-  const models: PrismaModel[] = [];
+function parseModels(content: string): dracoModel[] {
+  const models: dracoModel[] = [];
   const lines = content.split('\n');
   let i = 0;
   while (i < lines.length) {
@@ -100,8 +100,8 @@ function parseModels(content: string): PrismaModel[] {
   return models;
 }
 
-function parseFields(body: string): PrismaField[] {
-  const fields: PrismaField[] = [];
+function parseFields(body: string): dracoField[] {
+  const fields: dracoField[] = [];
   for (const line of body.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('@@') || trimmed.startsWith('//')) continue;
@@ -112,11 +112,11 @@ function parseFields(body: string): PrismaField[] {
     const attrs     = m[3] ?? '';
     const isList    = typeRaw.includes('[');
     const isOptional = typeRaw.endsWith('?');
-    const prismaType = typeRaw.replace(/[\[\]?]/g, '');
+    const dracoType = typeRaw.replace(/[\[\]?]/g, '');
     const colMapMatch = attrs.match(/@map\s*\(\s*"([^"]+)"\s*\)/);
     fields.push({
       name: fieldName,
-      prismaType,
+      dracoType,
       columnName: colMapMatch ? colMapMatch[1] : fieldName,
       isOptional,
       isId: /@id\b/.test(attrs),

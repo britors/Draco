@@ -12,7 +12,7 @@ import { getSidebarHtml } from '../webview/getSidebarHtml';
 import { PreviewPanel } from './PreviewPanel';
 import { DDLPanel } from './DDLPanel';
 import { DriftPanel } from './DriftPanel';
-import { ParsedPrismaSchema, parseDracoSchema } from '../parser/DracoParser';
+import { ParseddracoSchema, parseDracoSchema } from '../parser/DracoParser';
 
 interface IpcMessage {
   command: string;
@@ -36,7 +36,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   static readonly viewId = 'draco.sidebar';
 
   private _view?: vscode.WebviewView;
-  private _prismaSchema: ParsedPrismaSchema | null = null;
+  private _dracoSchema: ParseddracoSchema | null = null;
 
   constructor(
     private readonly _context: vscode.ExtensionContext,
@@ -46,9 +46,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     private readonly _out: vscode.OutputChannel
   ) {}
 
-  setPrismaSchema(schema: ParsedPrismaSchema | null): void {
-    this._prismaSchema = schema;
-    this.postMessage('prismaSchema', schema);
+  setdracoSchema(schema: ParseddracoSchema | null): void {
+    this._dracoSchema = schema;
+    this.postMessage('dracoSchema', schema);
   }
 
   resolveWebviewView(
@@ -88,7 +88,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
       case 'ready': {
         this._pushConnections();
-        if (this._prismaSchema) this.postMessage('prismaSchema', this._prismaSchema);
+        if (this._dracoSchema) this.postMessage('dracoSchema', this._dracoSchema);
         const cfg = vscode.workspace.getConfiguration('draco');
         this.postMessage('settings', {
           defaultPort: cfg.get<number>('defaultPort', 5432),
@@ -418,7 +418,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         break;
       }
 
-      // ── Prisma Integration (#24–#28) ──────────────────────────────
+      // ── draco Integration (#24–#28) ──────────────────────────────
 
       case 'loadMigrations': {
         const { connId } = message.data as { connId: string };
@@ -435,21 +435,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         break;
       }
 
-      case 'runPrismaCommand': {
+      case 'rundracoCommand': {
         const { command, connId } = message.data as { command: 'db-pull' | 'migrate-status'; connId: string };
-        if (!this._prismaSchema) {
-          this.postMessage('prismaLog', { text: 'No schema.prisma found in workspace.\n', done: true }); return;
+        if (!this._dracoSchema) {
+          this.postMessage('dracoLog', { text: 'No schema.draco found in workspace.\n', done: true }); return;
         }
         const conn = this._storage.getConnection(connId);
         if (!conn) {
-          this.postMessage('prismaLog', { text: 'No connection selected.\n', done: true }); return;
+          this.postMessage('dracoLog', { text: 'No connection selected.\n', done: true }); return;
         }
         const password = await this._storage.getPassword(connId);
         const databaseUrl = buildDatabaseUrl(conn, password);
-        const schemaPath = this._prismaSchema.filePath;
+        const schemaPath = this._dracoSchema.filePath;
         const args = command === 'db-pull'
-          ? ['prisma', 'db', 'pull', '--schema', schemaPath]
-          : ['prisma', 'migrate', 'status', '--schema', schemaPath];
+          ? ['draco', 'db', 'pull', '--schema', schemaPath]
+          : ['draco', 'migrate', 'status', '--schema', schemaPath];
 
         const proc = spawn('npx', args, {
           cwd: path.dirname(schemaPath),
@@ -457,21 +457,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           shell: process.platform === 'win32',
         });
 
-        this.postMessage('prismaLog', { text: `> npx ${args.join(' ')}\n`, done: false });
-        proc.stdout.on('data', (data: Buffer) => this.postMessage('prismaLog', { text: data.toString(), done: false }));
-        proc.stderr.on('data', (data: Buffer) => this.postMessage('prismaLog', { text: data.toString(), done: false }));
+        this.postMessage('dracoLog', { text: `> npx ${args.join(' ')}\n`, done: false });
+        proc.stdout.on('data', (data: Buffer) => this.postMessage('dracoLog', { text: data.toString(), done: false }));
+        proc.stderr.on('data', (data: Buffer) => this.postMessage('dracoLog', { text: data.toString(), done: false }));
         proc.on('close', (code: number | null) => {
-          this.postMessage('prismaLog', { text: `\nFinished (exit ${code ?? '?'}).\n`, done: true });
+          this.postMessage('dracoLog', { text: `\nFinished (exit ${code ?? '?'}).\n`, done: true });
           if (command === 'db-pull' && code === 0) {
             vscode.workspace.fs.readFile(vscode.Uri.file(schemaPath)).then(bytes => {
               const parsed = parseDracoSchema(schemaPath, Buffer.from(bytes).toString('utf-8'));
-              this._prismaSchema = parsed;
-              this.postMessage('prismaSchema', parsed);
+              this._dracoSchema = parsed;
+              this.postMessage('dracoSchema', parsed);
             });
           }
         });
         proc.on('error', (err: Error) => {
-          this.postMessage('prismaLog', { text: `Error: ${err.message}\n`, done: true });
+          this.postMessage('dracoLog', { text: `Error: ${err.message}\n`, done: true });
         });
         break;
       }
@@ -482,7 +482,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         };
         const driver = this._connManager.getDriver(connId);
         if (!driver) { vscode.window.showErrorMessage('Not connected.'); return; }
-        const model = this._prismaSchema?.models.find(m => m.name === modelName);
+        const model = this._dracoSchema?.models.find(m => m.name === modelName);
         if (!model) { vscode.window.showErrorMessage(`Model "${modelName}" not found.`); return; }
         try {
           const columns = await getColumns(driver, schema, tableName);

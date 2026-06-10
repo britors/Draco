@@ -821,7 +821,7 @@ export async function checkMigrationsTable(driver: PostgresDriver, schema = 'pub
   const rows = await driver.query<{ exists: boolean }>(
     `SELECT EXISTS (
        SELECT 1 FROM information_schema.tables
-       WHERE table_schema = $1 AND table_name = '_prisma_migrations'
+       WHERE table_schema = $1 AND table_name = '_draco_migrations'
      ) AS exists`,
     [schema]
   );
@@ -839,7 +839,7 @@ export async function getMigrations(driver: PostgresDriver, schema = 'public'): 
     applied_steps_count: number;
   }>(
     `SELECT id, migration_name, started_at, finished_at, rolled_back_at, logs, applied_steps_count
-     FROM "${schema}"._prisma_migrations
+     FROM "${schema}"._draco_migrations
      ORDER BY started_at DESC`
   );
   return rows.map(r => ({

@@ -29,25 +29,25 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // ── Prisma schema.prisma watcher (#24) ─────────────────────────────
-  const scanPrismaSchema = async () => {
-    const files = await vscode.workspace.findFiles('**/schema.prisma', '**/node_modules/**', 1);
-    if (files.length === 0) { provider.setPrismaSchema(null); return; }
+  // ── draco schema.draco watcher (#24) ─────────────────────────────
+  const scandracoSchema = async () => {
+    const files = await vscode.workspace.findFiles('**/schema.draco', '**/node_modules/**', 1);
+    if (files.length === 0) { provider.setdracoSchema(null); return; }
     try {
       const bytes = await vscode.workspace.fs.readFile(files[0]);
       const parsed = parseDracoSchema(files[0].fsPath, Buffer.from(bytes).toString('utf-8'));
-      provider.setPrismaSchema(parsed);
+      provider.setdracoSchema(parsed);
     } catch {
-      provider.setPrismaSchema(null);
+      provider.setdracoSchema(null);
     }
   };
 
-  scanPrismaSchema();
+  scandracoSchema();
 
-  const watcher = vscode.workspace.createFileSystemWatcher('**/schema.prisma');
-  watcher.onDidCreate(scanPrismaSchema);
-  watcher.onDidChange(scanPrismaSchema);
-  watcher.onDidDelete(() => provider.setPrismaSchema(null));
+  const watcher = vscode.workspace.createFileSystemWatcher('**/schema.draco');
+  watcher.onDidCreate(scandracoSchema);
+  watcher.onDidChange(scandracoSchema);
+  watcher.onDidDelete(() => provider.setdracoSchema(null));
   context.subscriptions.push(watcher);
 }
 

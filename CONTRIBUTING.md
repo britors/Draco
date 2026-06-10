@@ -90,7 +90,6 @@ When generating HTML with inline `<script>` blocks, follow these escaping rules 
 | v0.2 Database Explorer | #8–#14 | Done |
 | v0.3 Query Editor | #15–#19 | Done |
 | v0.4 Schema Inspection | #20–#23 | Open |
-| v0.5 Prisma Integration | #24–#28 | Open |
 | v0.6 Polish | #29–#32 | Open |
 
 Pick up any open issue in the next milestone. Reference the issue number in your commit message (`Closes #N`).

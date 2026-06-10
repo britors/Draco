@@ -1,17 +1,17 @@
-import { PrismaModel, PrismaField } from '../parser/PrismaParser';
+import { dracoModel, dracoField } from '../parser/dracoParser';
 import { ColumnInfo } from '../db/queries';
 
-const PRISMA_SCALARS = new Set([
+const draco_SCALARS = new Set([
   'String','Int','BigInt','Float','Decimal','Boolean','DateTime','Json','Bytes',
 ]);
 
-function isRelationField(f: PrismaField): boolean {
-  return f.isList && !PRISMA_SCALARS.has(f.prismaType);
+function isRelationField(f: dracoField): boolean {
+  return f.isList && !draco_SCALARS.has(f.dracoType);
 }
 
-function typeCompatible(prismaType: string, dbType: string): boolean {
+function typeCompatible(dracoType: string, dbType: string): boolean {
   const db = dbType.toLowerCase();
-  switch (prismaType) {
+  switch (dracoType) {
     case 'String':   return /text|varchar|char|citext|uuid|name|enum/.test(db);
     case 'Int':      return /int|integer|int2|int4|serial|smallint/.test(db);
     case 'BigInt':   return /bigint|int8|bigserial/.test(db);
@@ -34,7 +34,7 @@ type RowStatus = 'ok' | 'type-mismatch' | 'missing-in-db' | 'missing-in-model';
 interface DriftRow {
   status: RowStatus;
   fieldName: string | null;
-  prismaType: string | null;
+  dracoType: string | null;
   columnName: string | null;
   dbType: string | null;
 }
@@ -43,7 +43,7 @@ export function getDriftHtml(params: {
   modelName: string;
   tableName: string;
   schema: string;
-  model: PrismaModel;
+  model: dracoModel;
   columns: ColumnInfo[];
 }): string {
   const { modelName, tableName, schema, model, columns } = params;
@@ -58,11 +58,11 @@ export function getDriftHtml(params: {
     const col = dbColMap.get(field.columnName);
     usedCols.add(field.columnName);
     if (col) {
-      const ok = typeCompatible(field.prismaType, col.dataType);
+      const ok = typeCompatible(field.dracoType, col.dataType);
       rows.push({
         status: ok ? 'ok' : 'type-mismatch',
         fieldName: field.name,
-        prismaType: field.prismaType + (field.isList ? '[]' : '') + (field.isOptional ? '?' : ''),
+        dracoType: field.dracoType + (field.isList ? '[]' : '') + (field.isOptional ? '?' : ''),
         columnName: col.name,
         dbType: col.dataType,
       });
@@ -70,7 +70,7 @@ export function getDriftHtml(params: {
       rows.push({
         status: 'missing-in-db',
         fieldName: field.name,
-        prismaType: field.prismaType,
+        dracoType: field.dracoType,
         columnName: null,
         dbType: null,
       });
@@ -79,7 +79,7 @@ export function getDriftHtml(params: {
 
   for (const col of columns) {
     if (!usedCols.has(col.name)) {
-      rows.push({ status: 'missing-in-model', fieldName: null, prismaType: null, columnName: col.name, dbType: col.dataType });
+      rows.push({ status: 'missing-in-model', fieldName: null, dracoType: null, columnName: col.name, dbType: col.dataType });
     }
   }
 
@@ -99,7 +99,7 @@ export function getDriftHtml(params: {
   const tableRows = rows.map(r => `
     <tr class="${r.status}">
       <td>${r.fieldName ? esc(r.fieldName) : '<em style="color:var(--vscode-descriptionForeground)">—</em>'}</td>
-      <td>${r.prismaType ? `<code>${esc(r.prismaType)}</code>` : '<em style="color:var(--vscode-descriptionForeground)">—</em>'}</td>
+      <td>${r.dracoType ? `<code>${esc(r.dracoType)}</code>` : '<em style="color:var(--vscode-descriptionForeground)">—</em>'}</td>
       <td>${r.columnName ? esc(r.columnName) : '<em style="color:var(--vscode-descriptionForeground)">—</em>'}</td>
       <td>${r.dbType ? `<code>${esc(r.dbType)}</code>` : '<em style="color:var(--vscode-descriptionForeground)">—</em>'}</td>
       <td>${statusIcon(r.status)}</td>
@@ -145,7 +145,7 @@ export function getDriftHtml(params: {
 </head>
 <body>
   <h1>Drift: <code>${esc(modelName)}</code> ↔ <code>${esc(schema)}.${esc(tableName)}</code></h1>
-  <div class="subtitle">Prisma model vs database table comparison</div>
+  <div class="subtitle">draco model vs database table comparison</div>
   <div class="summary">
     <span class="badge badge-ok">✓ ${okCount} matched</span>
     ${warnCount ? `<span class="badge badge-warn">⚠ ${warnCount} type mismatch</span>` : ''}
@@ -154,8 +154,8 @@ export function getDriftHtml(params: {
   <table>
     <thead>
       <tr>
-        <th>Prisma field</th>
-        <th>Prisma type</th>
+        <th>draco field</th>
+        <th>draco type</th>
         <th>DB column</th>
         <th>DB type</th>
         <th>Status</th>

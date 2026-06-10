@@ -127,7 +127,7 @@
     .resize-handle:hover, .resize-handle.dragging { background: var(--vscode-focusBorder); }
     .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
-    /* ── Tab bar (right side only: Query / History / Prisma) ── */
+    /* ── Tab bar (right side only: Query / History / draco) ── */
     .tab-bar {
       display: flex; flex-shrink: 0;
       border-bottom: 1px solid var(--vscode-panel-border);
@@ -589,7 +589,7 @@
       </div>
     </div>
 
-    <!-- Tab bar (Query / History / Prisma + dynamic table tabs) -->
+    <!-- Tab bar (Query / History / draco + dynamic table tabs) -->
     <div class="tab-bar" id="main-tab-bar">
       <button class="tab" data-tab="query"><i class="codicon codicon-file-code"></i>Query</button>
       <button class="tab" data-tab="history"><i class="codicon codicon-history"></i>History</button>
@@ -1504,7 +1504,7 @@
                + btnIcon('edit-table', { connId: connId, schema: schemaName, table: t.name }, 'codicon-edit', 'Edit Table')
                + btnIcon('vacuum-table', { connId: connId, schema: schemaName, table: t.name }, 'codicon-wrench', 'VACUUM ANALYZE')
                + btnIcon('drop-table', { connId: connId, schema: schemaName, table: t.name }, 'codicon-trash', 'Drop table');
-      var prismaPin = '';
+      var dracoPin = '';
       var estKey = connId + ':' + schemaName;
       var estVal = settings.showRowCount && estimates[estKey] !== undefined ? estimates[estKey][t.name] : undefined;
       var badgeHtml = estVal !== undefined
@@ -1515,7 +1515,7 @@
         + '<span class="toggle codicon ' + (isExp ? 'codicon-chevron-down' : 'codicon-chevron-right') + '"></span>'
         + treeIcon(isView ? 'view' : 'table')
         + '<span class="tree-label">' + hl(t.name, f) + '</span>'
-        + prismaPin + badgeHtml
+        + dracoPin + badgeHtml
         + '<div class="tree-actions">' + acts + '</div></div>';
       if (isExp) {
         if (loadingNodes[nid]) { html += loadingRow(4); }

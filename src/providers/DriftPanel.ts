@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { PrismaModel } from '../parser/DracoParser';
+import { dracoModel } from '../parser/DracoParser';
 import { ColumnInfo } from '../db/queries';
 import { getDriftHtml } from '../webview/getDriftHtml';
 
@@ -7,7 +7,7 @@ interface DriftPanelOptions {
   modelName: string;
   tableName: string;
   schema: string;
-  model: PrismaModel;
+  model: dracoModel;
   columns: ColumnInfo[];
 }
 

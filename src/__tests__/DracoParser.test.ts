@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseDracoSchema } from '../parser/DracoParser';
 
-const FILE = '/workspace/schema.prisma';
+const FILE = '/workspace/schema.draco';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function parse(content: string) {
