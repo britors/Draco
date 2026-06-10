@@ -1,7 +1,7 @@
-# Prisma4Postgres
+# Draco
 
-Extensão VS Code para explorar bancos de dados Postgres, com integração ao Prisma ORM.
-GitHub: https://github.com/britors/Prisma4Postgres
+Extensão VS Code para explorar bancos de dados, com integração ao Draco Parser.
+GitHub: https://github.com/britors/Draco
 
 ## Stack
 
@@ -40,7 +40,7 @@ Para evitar SyntaxError em template literals de HTML injetado na webview:
 
 ## Issues e Milestones
 
-Todas as issues estão em https://github.com/britors/Prisma4Postgres/issues
+Todas as issues estão em https://github.com/britors/Draco/issues
 
 - **v0.1 Foundation** (#2–#7): boilerplate, conexões, SecretStorage, driver pg
 - **v0.2 Database Explorer** (#8–#14): TreeView, preview de tabela
@@ -51,9 +51,9 @@ Todas as issues estão em https://github.com/britors/Prisma4Postgres/issues
 
 ## Diferenças em relação ao SQL Runner
 
-| | SQL Runner | Prisma4Postgres |
+| | SQL Runner | Draco |
 |---|---|---|
-| Banco | Multi (MSSQL, PG, Oracle) | Postgres only |
+| Banco | Multi (MSSQL, PG, Oracle) | Multi-DB focus |
 | Driver | CLI externo (psql) | node-postgres nativo |
 | Conexões | Lidas de appsettings.json | Gerenciadas na UI + SecretStorage |
-| Foco | Scaffold + queries | Exploração + Prisma ORM |
+| Foco | Scaffold + queries | Exploração + Draco Parser |

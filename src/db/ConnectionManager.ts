@@ -1,19 +1,20 @@
-import { PgConnection } from '../types/PgConnection';
-import { PgDriver } from './PgDriver';
+import { DbConnection } from '../types/DbConnection';
+import { DbDriver } from './DbDriver';
+import { PostgresDriver } from './PostgresDriver';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 export interface ManagedConnection {
-  conn: PgConnection;
+  conn: DbConnection;
   status: ConnectionStatus;
-  driver?: PgDriver;
+  driver?: DbDriver;
   error?: string;
 }
 
 export class ConnectionManager {
   private readonly _map = new Map<string, ManagedConnection>();
 
-  syncConnections(connections: PgConnection[]): void {
+  syncConnections(connections: DbConnection[]): void {
     const ids = new Set(connections.map(c => c.id));
     for (const id of this._map.keys()) {
       if (!ids.has(id)) this._remove(id);
@@ -31,7 +32,7 @@ export class ConnectionManager {
     return this._map.get(id);
   }
 
-  getDriver(id: string): PgDriver | undefined {
+  getDriver(id: string): DbDriver | undefined {
     return this._map.get(id)?.driver;
   }
 
@@ -40,7 +41,8 @@ export class ConnectionManager {
     if (!managed) throw new Error('Connection not registered');
 
     managed.status = 'connecting';
-    const driver = new PgDriver(managed.conn, password, statementTimeout, `p4p-${id}`, sshPassword, jumpPassword);
+    // TODO: Factory for different engines
+    const driver = new PostgresDriver(managed.conn, password, statementTimeout, `draco-${id}`, sshPassword, jumpPassword);
     try {
       await driver.connect();
       managed.driver = driver;

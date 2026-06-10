@@ -34,7 +34,7 @@ export function createSplashWindow(): BrowserWindow {
     minimizable: false,
     maximizable: false,
     center: true,
-    title: 'Prisma4Postgres',
+    title: 'Draco',
     backgroundColor: '#090b14',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -59,7 +59,7 @@ export function createMainWindow(): BrowserWindow {
     frame: false,
     backgroundColor: '#0d0f1a',
     autoHideMenuBar: true,
-    title: 'Prisma4Postgres',
+    title: 'Draco',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -82,7 +82,7 @@ export function createAboutWindow(): void {
     resizable: false,
     minimizable: false,
     maximizable: false,
-    title: 'About Prisma4Postgres',
+    title: 'About Draco',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,

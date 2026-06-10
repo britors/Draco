@@ -1,16 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePrismaSchema } from '../prisma/PrismaParser';
+import { parseDracoSchema } from '../parser/DracoParser';
 
 const FILE = '/workspace/schema.prisma';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function parse(content: string) {
-  return parsePrismaSchema(FILE, content);
+  return parseDracoSchema(FILE, content);
 }
 
 // ── datasource ────────────────────────────────────────────────────────────────
-describe('parsePrismaSchema — datasource', () => {
+describe('parseDracoSchema — datasource', () => {
   it('returns null datasource for empty content', () => {
     assert.equal(parse('').datasource, null);
   });
@@ -57,7 +57,7 @@ datasource db {
 });
 
 // ── models ────────────────────────────────────────────────────────────────────
-describe('parsePrismaSchema — models', () => {
+describe('parseDracoSchema — models', () => {
   it('returns empty models array for schema without models', () => {
     assert.deepEqual(parse('').models, []);
   });

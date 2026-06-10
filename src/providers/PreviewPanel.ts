@@ -24,7 +24,7 @@ export class PreviewPanel {
       panel.reveal(vscode.ViewColumn.One);
     } else {
       panel = vscode.window.createWebviewPanel(
-        'prisma4postgres.preview',
+        'draco.preview',
         title,
         vscode.ViewColumn.One,
         { enableScripts: false, retainContextWhenHidden: true }

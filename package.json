@@ -1,7 +1,7 @@
 {
-  "name": "prisma4postgres",
-  "productName": "Prisma4Postgres",
-  "description": "PostgreSQL database explorer and query runner",
+  "name": "draco",
+  "productName": "Draco",
+  "description": "Multi-database explorer and query runner",
   "version": "11.1.2",
   "author": {
     "name": "britors",
@@ -10,7 +10,7 @@
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "https://github.com/britors/Prisma4Postgres.git"
+    "url": "https://github.com/britors/Draco.git"
   },
   "main": "out/main/index.js",
   "scripts": {
@@ -19,14 +19,14 @@
     "watch": "node esbuild.js --watch",
     "package": "node esbuild.js --production && electron-builder --publish never",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/__tests__/PgConnection.test.ts src/__tests__/PrismaParser.test.ts src/__tests__/ConnectionManager.test.ts",
+    "test": "node --import tsx --test src/__tests__/PgConnection.test.ts src/__tests__/DracoParser.test.ts src/__tests__/ConnectionManager.test.ts",
     "flatpak:gen-sources": "flatpak-node-generator npm package-lock.json -o flatpak/generated-sources.json",
-    "flatpak:build": "flatpak-builder --force-clean build-dir flatpak/br.com.w3ti.Prisma4Postgres.yml",
-    "flatpak:run": "flatpak-builder --force-clean --run build-dir flatpak/br.com.w3ti.Prisma4Postgres.yml run.sh"
+    "flatpak:build": "flatpak-builder --force-clean build-dir flatpak/br.com.w3ti.Draco.yml",
+    "flatpak:run": "flatpak-builder --force-clean --run build-dir flatpak/br.com.w3ti.Draco.yml run.sh"
   },
   "build": {
-    "appId": "com.britors.prisma4postgres",
-    "productName": "Prisma4Postgres",
+    "appId": "com.britors.draco",
+    "productName": "Draco",
     "directories": {
       "output": "dist"
     },

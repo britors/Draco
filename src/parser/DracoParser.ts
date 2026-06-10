@@ -25,7 +25,7 @@ export interface ParsedPrismaSchema {
   models: PrismaModel[];
 }
 
-export function parsePrismaSchema(filePath: string, content: string): ParsedPrismaSchema {
+export function parseDracoSchema(filePath: string, content: string): ParsedPrismaSchema {
   const clean = stripComments(content);
   return {
     filePath,

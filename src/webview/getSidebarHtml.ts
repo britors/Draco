@@ -21,7 +21,7 @@ export function getSidebarHtml(params: {
              connect-src https://cdn.jsdelivr.net;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="${codiconsUri}">
-  <title>Prisma4Postgres</title>
+  <title>Draco</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -279,10 +279,10 @@ export function getSidebarHtml(params: {
 
   <!-- Tab bar -->
   <div class="tab-bar">
-    <button class="tab" data-tab="explorer"><i class="codicon codicon-database"></i>Explorer</button>
-    <button class="tab" data-tab="query"><i class="codicon codicon-file-code"></i>Query</button>
-    <button class="tab" data-tab="history"><i class="codicon codicon-history"></i>History</button>
-    <button class="tab" data-tab="prisma" id="tab-btn-prisma"><i class="codicon codicon-symbol-class"></i>Prisma</button>
+    <button class="tab" data-tab="explorer" title="Explorer"><i class="codicon codicon-database"></i></button>
+    <button class="tab" data-tab="query" title="Query"><i class="codicon codicon-file-code"></i></button>
+    <button class="tab" data-tab="history" title="History"><i class="codicon codicon-history"></i></button>
+    <button class="tab" data-tab="prisma" id="tab-btn-prisma" title="Parser"><i class="codicon codicon-symbol-class"></i></button>
   </div>
 
   <!-- ── Explorer panel ───────────────────────────────────────────── -->

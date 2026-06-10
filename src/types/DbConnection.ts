@@ -1,4 +1,4 @@
-export interface PgConnection {
+export interface DbConnection {
   id: string;
   label: string;
   host: string;
@@ -19,7 +19,7 @@ export interface PgConnection {
   favorite?: boolean;
 }
 
-export function validateConnection(conn: Partial<PgConnection>): string[] {
+export function validateConnection(conn: Partial<DbConnection>): string[] {
   const errors: string[] = [];
   if (!conn.label?.trim()) errors.push('Label is required');
   if (!conn.host?.trim()) errors.push('Host is required');
@@ -30,6 +30,6 @@ export function validateConnection(conn: Partial<PgConnection>): string[] {
   return errors;
 }
 
-export function defaultConnection(): Omit<PgConnection, 'id'> {
-  return { label: '', host: 'localhost', port: 5432, database: '', user: '', ssl: false };
+export function defaultConnection(): Omit<DbConnection, 'id'> {
+  return { engine: 'postgres', label: '', host: 'localhost', port: 5432, database: '', user: '', ssl: false };
 }

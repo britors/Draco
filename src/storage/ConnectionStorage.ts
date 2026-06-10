@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
-import { PgConnection } from '../types/PgConnection';
+import { DbConnection } from '../types/DbConnection';
 
-const CONNECTIONS_KEY = 'prisma4postgres.connections';
-const SECRET_PREFIX = 'prisma4postgres.password.';
+const CONNECTIONS_KEY = 'draco.connections';
+const SECRET_PREFIX = 'draco.password.';
 
 export class ConnectionStorage {
   constructor(
@@ -11,11 +11,11 @@ export class ConnectionStorage {
     private readonly _secrets: vscode.SecretStorage
   ) {}
 
-  listConnections(): PgConnection[] {
-    return this._globalState.get<PgConnection[]>(CONNECTIONS_KEY, []);
+  listConnections(): DbConnection[] {
+    return this._globalState.get<DbConnection[]>(CONNECTIONS_KEY, []);
   }
 
-  getConnection(id: string): PgConnection | undefined {
+  getConnection(id: string): DbConnection | undefined {
     return this.listConnections().find(c => c.id === id);
   }
 
@@ -24,12 +24,12 @@ export class ConnectionStorage {
   }
 
   async saveConnection(
-    conn: Omit<PgConnection, 'id'> & { id?: string },
+    conn: Omit<DbConnection, 'id'> & { id?: string },
     password: string
-  ): Promise<PgConnection> {
+  ): Promise<DbConnection> {
     const connections = this.listConnections();
     const id = conn.id ?? randomUUID();
-    const full: PgConnection = { ...conn, id };
+    const full: DbConnection = { ...conn, id };
 
     const idx = connections.findIndex(c => c.id === id);
     if (idx >= 0) {

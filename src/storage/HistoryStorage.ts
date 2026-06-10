@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 
-const HISTORY_KEY = 'prisma4postgres.queryHistory';
+const HISTORY_KEY = 'draco.queryHistory';
 const MAX_ENTRIES = 50;
 
 export interface HistoryEntry {

@@ -1,9 +1,9 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { ConnectionManager } from '../db/ConnectionManager';
-import type { PgConnection } from '../types/PgConnection';
+import type { DbConnection } from '../types/DbConnection';
 
-function makeConn(id: string, label = id): PgConnection {
+function makeConn(id: string, label = id): DbConnection {
   return { id, label, host: 'localhost', port: 5432, database: 'db', user: 'u', ssl: false };
 }
 

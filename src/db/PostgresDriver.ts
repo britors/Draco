@@ -2,7 +2,8 @@ import { Pool, QueryResult } from 'pg';
 import * as net from 'net';
 import { Client as SshClient } from 'ssh2';
 import * as fs from 'fs';
-import { PgConnection } from '../types/PgConnection';
+import { DbConnection } from '../types/DbConnection';
+import { DbDriver } from './DbDriver';
 
 function buildSshCfg(
   host: string, port: number, username: string,
@@ -19,7 +20,7 @@ function buildSshCfg(
 }
 
 function createSshTunnel(
-  conn: PgConnection,
+  conn: DbConnection,
   sshPassword?: string,
   jumpPassword?: string,
 ): Promise<{ localPort: number; close: () => void }> {
@@ -80,13 +81,13 @@ function createSshTunnel(
   });
 }
 
-export class PgDriver {
+export class PostgresDriver implements DbDriver {
   private _pool: Pool | null = null;
-  private _appName: string = 'prisma4postgres';
+  private _appName: string = 'draco';
   private _tunnel: { localPort: number; close: () => void } | null = null;
 
   constructor(
-    private readonly _conn: PgConnection,
+    private readonly _conn: DbConnection,
     private readonly _password: string,
     private readonly _statementTimeout: number = 30_000,
     appName?: string,
@@ -150,8 +151,8 @@ export class PgDriver {
   }
 }
 
-export async function testConnection(conn: PgConnection, password: string): Promise<void> {
-  const driver = new PgDriver(conn, password);
+export async function testConnection(conn: DbConnection, password: string): Promise<void> {
+  const driver = new PostgresDriver(conn, password);
   try {
     await driver.connect();
   } finally {

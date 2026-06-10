@@ -1,4 +1,4 @@
-# Contributing to Prisma4Postgres
+# Contributing to Draco
 
 ## Prerequisites
 
@@ -9,8 +9,8 @@
 ## Setup
 
 ```bash
-git clone https://github.com/britors/Prisma4Postgres.git
-cd Prisma4Postgres
+git clone https://github.com/britors/Draco.git
+cd Draco
 npm install
 ```
 

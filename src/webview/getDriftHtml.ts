@@ -1,4 +1,4 @@
-import { PrismaModel, PrismaField } from '../prisma/PrismaParser';
+import { PrismaModel, PrismaField } from '../parser/PrismaParser';
 import { ColumnInfo } from '../db/queries';
 
 const PRISMA_SCALARS = new Set([

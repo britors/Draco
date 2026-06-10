@@ -138,11 +138,11 @@ export function createMenu(win: BrowserWindow): void {
       submenu: [
         {
           label: 'GitHub Repository',
-          click: () => shell.openExternal('https://github.com/britors/Prisma4Postgres'),
+          click: () => shell.openExternal('https://github.com/britors/Draco'),
         },
         {
           label: 'Report Issue',
-          click: () => shell.openExternal('https://github.com/britors/Prisma4Postgres/issues/new'),
+          click: () => shell.openExternal('https://github.com/britors/Draco/issues/new'),
         },
         { type: 'separator' },
         {

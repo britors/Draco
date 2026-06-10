@@ -3,13 +3,13 @@ import { SidebarProvider } from './providers/SidebarProvider';
 import { ConnectionStorage } from './storage/ConnectionStorage';
 import { ConnectionManager } from './db/ConnectionManager';
 import { HistoryStorage } from './storage/HistoryStorage';
-import { parsePrismaSchema } from './prisma/PrismaParser';
+import { parseDracoSchema } from './parser/DracoParser';
 
 export function activate(context: vscode.ExtensionContext) {
   const storage     = new ConnectionStorage(context.globalState, context.secrets);
   const connManager = new ConnectionManager();
   const history     = new HistoryStorage(context.globalState);
-  const out         = vscode.window.createOutputChannel('Prisma4Postgres');
+  const out         = vscode.window.createOutputChannel('Draco');
   const provider    = new SidebarProvider(context, storage, connManager, history, out);
   context.subscriptions.push(out);
 
@@ -18,13 +18,13 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('prisma4postgres.addConnection', () => {
+    vscode.commands.registerCommand('draco.addConnection', () => {
       provider.postMessage('addConnection', {});
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('prisma4postgres.refreshConnections', () => {
+    vscode.commands.registerCommand('draco.refreshConnections', () => {
       provider.postMessage('refreshConnections', {});
     })
   );
@@ -35,7 +35,7 @@ export function activate(context: vscode.ExtensionContext) {
     if (files.length === 0) { provider.setPrismaSchema(null); return; }
     try {
       const bytes = await vscode.workspace.fs.readFile(files[0]);
-      const parsed = parsePrismaSchema(files[0].fsPath, Buffer.from(bytes).toString('utf-8'));
+      const parsed = parseDracoSchema(files[0].fsPath, Buffer.from(bytes).toString('utf-8'));
       provider.setPrismaSchema(parsed);
     } catch {
       provider.setPrismaSchema(null);

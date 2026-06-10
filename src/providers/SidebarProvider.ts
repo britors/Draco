@@ -4,15 +4,15 @@ import { spawn } from 'child_process';
 import { ConnectionStorage } from '../storage/ConnectionStorage';
 import { ConnectionManager } from '../db/ConnectionManager';
 import { HistoryStorage } from '../storage/HistoryStorage';
-import { testConnection } from '../db/PgDriver';
+import { testConnection } from '../db/PostgresDriver';
 import { getSchemas, getTables, getColumns, getFunctions, getFunctionParams, previewTable, getCompletionData, getTableDDL, getIndexes, getConstraints, getFKMap, checkMigrationsTable, getMigrations, getTableEstimates } from '../db/queries';
-import { validateConnection } from '../types/PgConnection';
-import { PgConnection } from '../types/PgConnection';
+import { validateConnection } from '../types/DbConnection';
+import { DbConnection } from '../types/DbConnection';
 import { getSidebarHtml } from '../webview/getSidebarHtml';
 import { PreviewPanel } from './PreviewPanel';
 import { DDLPanel } from './DDLPanel';
 import { DriftPanel } from './DriftPanel';
-import { ParsedPrismaSchema, parsePrismaSchema } from '../prisma/PrismaParser';
+import { ParsedPrismaSchema, parseDracoSchema } from '../parser/DracoParser';
 
 interface IpcMessage {
   command: string;
@@ -33,7 +33,7 @@ interface SaveConnectionData {
 }
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
-  static readonly viewId = 'prisma4postgres.sidebar';
+  static readonly viewId = 'draco.sidebar';
 
   private _view?: vscode.WebviewView;
   private _prismaSchema: ParsedPrismaSchema | null = null;
@@ -89,7 +89,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'ready': {
         this._pushConnections();
         if (this._prismaSchema) this.postMessage('prismaSchema', this._prismaSchema);
-        const cfg = vscode.workspace.getConfiguration('prisma4postgres');
+        const cfg = vscode.workspace.getConfiguration('draco');
         this.postMessage('settings', {
           defaultPort: cfg.get<number>('defaultPort', 5432),
           defaultSsl:  cfg.get<boolean>('defaultSsl', false),
@@ -160,7 +160,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'connect': {
         const { connId } = message.data as { connId: string };
         const password = await this._storage.getPassword(connId);
-        const cfg = vscode.workspace.getConfiguration('prisma4postgres');
+        const cfg = vscode.workspace.getConfiguration('draco');
         const timeout = cfg.get<number>('queryTimeout', 30_000);
         try {
           await this._connManager.connect(connId, password, timeout);
@@ -288,11 +288,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           const isTimeout = /canceling statement due to statement timeout/i.test(msg);
           if (isTimeout) {
             const ans = await vscode.window.showErrorMessage(
-              'Query timed out. Increase prisma4postgres.queryTimeout in settings.',
+              'Query timed out. Increase draco.queryTimeout in settings.',
               'Open Settings'
             );
             if (ans === 'Open Settings') {
-              vscode.commands.executeCommand('workbench.action.openSettings', 'prisma4postgres.queryTimeout');
+              vscode.commands.executeCommand('workbench.action.openSettings', 'draco.queryTimeout');
             }
           }
           this.postMessage('queryResult', { tabId, error: msg, durationMs });
@@ -464,7 +464,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
           this.postMessage('prismaLog', { text: `\nFinished (exit ${code ?? '?'}).\n`, done: true });
           if (command === 'db-pull' && code === 0) {
             vscode.workspace.fs.readFile(vscode.Uri.file(schemaPath)).then(bytes => {
-              const parsed = parsePrismaSchema(schemaPath, Buffer.from(bytes).toString('utf-8'));
+              const parsed = parseDracoSchema(schemaPath, Buffer.from(bytes).toString('utf-8'));
               this._prismaSchema = parsed;
               this.postMessage('prismaSchema', parsed);
             });
@@ -500,7 +500,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         const driver = this._connManager.getDriver(connId);
         if (!driver) { vscode.window.showErrorMessage('Not connected. Please connect first.'); return; }
         const conn = this._storage.getConnection(connId);
-        const rowLimit = vscode.workspace.getConfiguration('prisma4postgres').get<number>('previewRowLimit', 100);
+        const rowLimit = vscode.workspace.getConfiguration('draco').get<number>('previewRowLimit', 100);
         try {
           const { columns, rows, estimate } = await previewTable(driver, schema, table, rowLimit);
           PreviewPanel.show({
@@ -539,7 +539,7 @@ function getNonce(): string {
   return text;
 }
 
-function buildDatabaseUrl(conn: PgConnection, password: string): string {
+function buildDatabaseUrl(conn: DbConnection, password: string): string {
   const user = encodeURIComponent(conn.user);
   const pass = encodeURIComponent(password);
   const db   = encodeURIComponent(conn.database);

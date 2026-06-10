@@ -6,7 +6,7 @@
     content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net data:; worker-src blob:; connect-src https://cdn.jsdelivr.net;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="./codicon.css">
-  <title>Prisma4Postgres</title>
+  <title>Draco</title>
   <style>
     /* ── OpenBase.Theme colors ── https://github.com/britors/OpenBase.Theme ── */
     :root {
@@ -577,7 +577,7 @@
       <div class="topbar-left">
         <button class="wc-btn" id="btn-menu" title="Menu"><i class="codicon codicon-menu"></i></button>
         <div>
-          <div class="topbar-title" id="topbar-title">Prisma 4 Postgres</div>
+          <div class="topbar-title" id="topbar-title">Draco</div>
         </div>
       </div>
       <div class="topbar-actions">
@@ -1933,7 +1933,7 @@
 
       html += '<div class="dash-panel"><div class="dash-section-title"><i class="codicon codicon-server" style="margin-right:4px"></i>Server</div>'
         + '<table class="dash-info-table">'
-        + '<tr><td>PostgreSQL</td><td><b>' + esc(String(d.pgVersion || '—')) + '</b></td></tr>'
+        + '<tr><td>Version</td><td><b>' + esc(String(d.pgVersion || '—')) + '</b></td></tr>'
         + '<tr><td>Uptime</td><td>' + esc(String(d.uptime || '—')) + '</td></tr>'
         + '<tr><td>Host</td><td>' + esc(String(d.host || 'localhost')) + '</td></tr>'
         + '<tr><td>Port</td><td>' + esc(String(d.port || '5432')) + '</td></tr>'
@@ -5866,7 +5866,6 @@
     // SSH fields are now integrated directly into getFormData() and showForm()
 
     // ── Window controls ────────────────────────────────────────────────────
-    document.getElementById('btn-menu').onclick = function () { api.send('showAppMenu'); };
     document.getElementById('btn-win-min').onclick = function () { api.winMin(); };
     document.getElementById('btn-win-close').onclick = function () { api.winClose(); };
     (function () {
@@ -5890,6 +5889,13 @@
 
     // ── Init ───────────────────────────────────────────────────────────────
     switchMainTab(persisted.tab || 'query');
+    renderTree();
+    api.send('ready');
+  }());
+  </script>
+</body>
+</html>
+witchMainTab(persisted.tab || 'query');
     renderTree();
     api.send('ready');
   }());

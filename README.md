@@ -1,44 +1,44 @@
 <p align="center">
-  <img src="logo-banner.svg" alt="Prisma4Postgres" width="480">
+  <img src="logo-banner.svg" alt="Draco" width="480">
 </p>
 
 <p align="center">
-  <a href="https://github.com/britors/Prisma4Postgres/releases">
-    <img src="https://img.shields.io/github/v/release/britors/Prisma4Postgres?label=release&color=b44fff" alt="Release">
+  <a href="https://github.com/britors/Draco/releases">
+    <img src="https://img.shields.io/github/v/release/britors/Draco?label=release&color=b44fff" alt="Release">
   </a>
-  <a href="https://github.com/britors/Prisma4Postgres/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/britors/Prisma4Postgres" alt="License">
+  <a href="https://github.com/britors/Draco/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/britors/Draco" alt="License">
   </a>
-  <a href="https://github.com/britors/Prisma4Postgres/issues">
-    <img src="https://img.shields.io/github/issues/britors/Prisma4Postgres" alt="Issues">
+  <a href="https://github.com/britors/Draco/issues">
+    <img src="https://img.shields.io/github/issues/britors/Draco" alt="Issues">
   </a>
-  <a href="https://aur.archlinux.org/packages/prisma4postgres-bin">
-    <img src="https://img.shields.io/aur/version/prisma4postgres-bin?label=AUR&color=b44fff" alt="AUR">
+  <a href="https://aur.archlinux.org/packages/draco-bin">
+    <img src="https://img.shields.io/aur/version/draco-bin?label=AUR&color=b44fff" alt="AUR">
   </a>
 </p>
 
-**Prisma4Postgres** is a standalone Electron desktop app for exploring, querying, and **administering** PostgreSQL databases. No VS Code required, no CLI wrappers, no config files — just connect and work.
+**Draco** is a standalone Electron desktop app for exploring, querying, and **administering** databases. No VS Code required, no CLI wrappers, no config files — just connect and work.
 
-> Built for developers and DBAs who want a fast, native PostgreSQL client that goes beyond simple query execution.
+> Built for developers and DBAs who want a fast, native database client that goes beyond simple query execution.
 
 ---
 
 <p align="center">
-  <a href="https://github.com/britors/Prisma4Postgres/releases/latest">
+  <a href="https://github.com/britors/Draco/releases/latest">
     <img src="https://img.shields.io/badge/⬇%20Download%20latest%20release-b44fff?style=for-the-badge&logoColor=white" alt="Download latest release">
   </a>
 </p>
 
 ## Download
 
-> **[👉 GitHub Releases — download the latest version](https://github.com/britors/Prisma4Postgres/releases/latest)**
+> **[👉 GitHub Releases — download the latest version](https://github.com/britors/Draco/releases/latest)**
 
 | Platform | File |
 |---|---|
 | 🪟 Windows | `.exe` (NSIS installer) |
 | 🐧 Linux (Debian/Ubuntu) | `.deb` |
 | 🐧 Linux (Fedora/RHEL) | `.rpm` |
-| 🐧 Linux (Arch/Manjaro) | [AUR: prisma4postgres-bin](https://aur.archlinux.org/packages/prisma4postgres-bin) |
+| 🐧 Linux (Arch/Manjaro) | [AUR: draco-bin](https://aur.archlinux.org/packages/draco-bin) |
 
 ---
 
@@ -124,7 +124,7 @@
 ### Visual Table Creator
 
 - GUI form — no SQL required
-- 20 PostgreSQL column types, nullable, default, PK, UNIQUE
+- Native column types, nullable, default, PK, UNIQUE
 - **Foreign Key** constraints with referenced schema/table/column and ON DELETE / ON UPDATE actions
 - Live `CREATE TABLE` SQL preview
 - **New Schema** button inline
@@ -291,7 +291,7 @@ Passwords are encrypted with `electron.safeStorage` and stored in `userData/pass
 
 ## Layout
 
-![Prisma4Postgres — Explorer sidebar and SQL query editor](image.png)
+![Draco — Explorer sidebar and SQL query editor](image.png)
 
 - **Left sidebar** always visible, drag handle to resize (160–600 px, persisted)
 - **Right area** holds Query, History, Activity, Stats, Roles, Jobs, ERD tabs + dynamic table / dashboard tabs
@@ -318,8 +318,8 @@ Passwords are encrypted with `electron.safeStorage` and stored in `userData/pass
 ### Setup
 
 ```bash
-git clone https://github.com/britors/Prisma4Postgres.git
-cd Prisma4Postgres
+git clone https://github.com/britors/Draco.git
+cd Draco
 npm install
 ```
 
@@ -335,7 +335,7 @@ npm run dev
 npm test
 ```
 
-46 unit tests covering `PgConnection` validation, `PrismaParser`, and `ConnectionManager`.
+46 unit tests covering `PgConnection` validation, `DracoParser`, and `ConnectionManager`.
 
 ### Build for distribution
 
@@ -367,10 +367,11 @@ Produces a `.deb` / `.rpm` (Linux) or `.exe` (Windows) in `dist/`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, architecture overview, and coding guidelines.
 
-Found a bug or have a feature request? [Open an issue](https://github.com/britors/Prisma4Postgres/issues).
+Found a bug or have a feature request? [Open an issue](https://github.com/britors/Draco/issues).
 
 ---
 
 ## License
 
 [GPL-3.0-or-later](LICENSE) © Rodrigo Brito
+rito

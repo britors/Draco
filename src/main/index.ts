@@ -1,7 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import { createMainWindow, createSplashWindow } from './window';
 import { registerIpc } from './ipc';
-import { createMenu } from './menu';
 
 const gotLock = app.requestSingleInstanceLock();
 
@@ -21,7 +20,6 @@ if (!gotLock) {
     const splash = createSplashWindow();
     const win = createMainWindow();
     registerIpc(win);
-    createMenu(win);
 
     const splashStart = Date.now();
     win.once('ready-to-show', () => {

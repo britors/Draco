@@ -17,7 +17,7 @@
     "src/preload/**/*",
     "src/db/**/*",
     "src/types/**/*",
-    "src/prisma/**/*"
+    "src/parser/**/*"
   ],
   "exclude": ["node_modules", "out", "src/storage/**/*", "src/providers/**/*", "src/webview/**/*", "src/extension.ts"]
 }

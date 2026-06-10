@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { PrismaModel } from '../prisma/PrismaParser';
+import { PrismaModel } from '../parser/DracoParser';
 import { ColumnInfo } from '../db/queries';
 import { getDriftHtml } from '../webview/getDriftHtml';
 
@@ -25,7 +25,7 @@ export class DriftPanel {
 
   private constructor(opts: DriftPanelOptions, key: string) {
     this._panel = vscode.window.createWebviewPanel(
-      'prisma4postgres.drift',
+      'draco.drift',
       `Drift: ${opts.modelName} ↔ ${opts.schema}.${opts.tableName}`,
       vscode.ViewColumn.One,
       { enableScripts: false }

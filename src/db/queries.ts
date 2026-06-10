@@ -1,4 +1,4 @@
-import { PgDriver } from './PgDriver';
+import { PostgresDriver } from './PostgresDriver';
 
 export interface SchemaInfo {
   name: string;
@@ -83,7 +83,7 @@ export interface FunctionParam {
   mode: string;
 }
 
-export async function getSchemas(driver: PgDriver): Promise<SchemaInfo[]> {
+export async function getSchemas(driver: PostgresDriver): Promise<SchemaInfo[]> {
   const rows = await driver.query<{ schema_name: string }>(
     `SELECT schema_name FROM information_schema.schemata
      WHERE schema_name NOT IN ('pg_catalog','information_schema','pg_toast')
@@ -92,12 +92,12 @@ export async function getSchemas(driver: PgDriver): Promise<SchemaInfo[]> {
   return rows.map(r => ({ name: r.schema_name }));
 }
 
-export async function createSchema(driver: PgDriver, schemaName: string): Promise<void> {
+export async function createSchema(driver: PostgresDriver, schemaName: string): Promise<void> {
   const safe = schemaName.replace(/"/g, '');
   await driver.query(`CREATE SCHEMA IF NOT EXISTS "${safe}"`);
 }
 
-export async function getTables(driver: PgDriver, schema: string): Promise<TableInfo[]> {
+export async function getTables(driver: PostgresDriver, schema: string): Promise<TableInfo[]> {
   const rows = await driver.query<{ table_name: string; table_type: string }>(
     `SELECT table_name, table_type FROM information_schema.tables
      WHERE table_schema = $1 ORDER BY table_name`,
@@ -106,7 +106,7 @@ export async function getTables(driver: PgDriver, schema: string): Promise<Table
   return rows.map(r => ({ name: r.table_name, type: r.table_type === 'VIEW' ? 'view' : 'table' }));
 }
 
-export async function getColumns(driver: PgDriver, schema: string, table: string): Promise<ColumnInfo[]> {
+export async function getColumns(driver: PostgresDriver, schema: string, table: string): Promise<ColumnInfo[]> {
   const rows = await driver.query<{
     column_name: string;
     data_type: string;
@@ -153,7 +153,7 @@ export async function getColumns(driver: PgDriver, schema: string, table: string
   }));
 }
 
-export async function getFunctions(driver: PgDriver, schema: string): Promise<FunctionInfo[]> {
+export async function getFunctions(driver: PostgresDriver, schema: string): Promise<FunctionInfo[]> {
   const rows = await driver.query<{
     routine_name: string;
     routine_type: string;
@@ -175,7 +175,7 @@ export async function getFunctions(driver: PgDriver, schema: string): Promise<Fu
 }
 
 export async function getFunctionParams(
-  driver: PgDriver,
+  driver: PostgresDriver,
   schema: string,
   specificName: string
 ): Promise<FunctionParam[]> {
@@ -193,7 +193,7 @@ export async function getFunctionParams(
   return rows.map(r => ({ name: r.parameter_name, dataType: r.data_type, mode: r.parameter_mode }));
 }
 
-export async function getCompletionData(driver: PgDriver): Promise<{
+export async function getCompletionData(driver: PostgresDriver): Promise<{
   tables: { schema: string; name: string; type: 'table' | 'view' }[];
   functions: { schema: string; name: string }[];
 }> {
@@ -219,7 +219,7 @@ export async function getCompletionData(driver: PgDriver): Promise<{
 }
 
 export async function getTableEstimates(
-  driver: PgDriver,
+  driver: PostgresDriver,
   schema: string
 ): Promise<Record<string, number>> {
   const rows = await driver.query<{ relname: string; estimate: number }>(
@@ -231,7 +231,7 @@ export async function getTableEstimates(
   return Object.fromEntries(rows.map(r => [r.relname, Number(r.estimate)]));
 }
 
-export async function getTableDDL(driver: PgDriver, schema: string, table: string): Promise<string> {
+export async function getTableDDL(driver: PostgresDriver, schema: string, table: string): Promise<string> {
   const oidRows = await driver.query<{ oid: number }>(
     `SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname = $2 AND n.nspname = $1`,
     [schema, table]
@@ -275,7 +275,7 @@ export async function getTableDDL(driver: PgDriver, schema: string, table: strin
   return `CREATE TABLE "${qSchema}"."${qTable}" (\n${body}\n);`;
 }
 
-export async function getIndexes(driver: PgDriver, schema: string, table: string): Promise<IndexInfo[]> {
+export async function getIndexes(driver: PostgresDriver, schema: string, table: string): Promise<IndexInfo[]> {
   const rows = await driver.query<{
     index_name: string;
     index_def: string;
@@ -303,7 +303,7 @@ export async function getIndexes(driver: PgDriver, schema: string, table: string
   }));
 }
 
-export async function getConstraints(driver: PgDriver, schema: string, table: string): Promise<ConstraintInfo[]> {
+export async function getConstraints(driver: PostgresDriver, schema: string, table: string): Promise<ConstraintInfo[]> {
   const oidRows = await driver.query<{ oid: number }>(
     `SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname = $2 AND n.nspname = $1`,
     [schema, table]
@@ -320,7 +320,7 @@ export async function getConstraints(driver: PgDriver, schema: string, table: st
   return rows.map(r => ({ name: r.name, type: r.type, definition: r.definition }));
 }
 
-export async function getFKMap(driver: PgDriver, schema: string, table: string): Promise<FKMapEntry[]> {
+export async function getFKMap(driver: PostgresDriver, schema: string, table: string): Promise<FKMapEntry[]> {
   const [out, inc] = await Promise.all([
     driver.query<{
       constraint_name: string;
@@ -377,7 +377,7 @@ export async function getFKMap(driver: PgDriver, schema: string, table: string):
 }
 
 export async function getTableDetail(
-  driver: PgDriver,
+  driver: PostgresDriver,
   schema: string,
   table: string
 ): Promise<TableDetail> {
@@ -482,7 +482,7 @@ export interface ERDRelation {
 }
 
 export async function getERDData(
-  driver: PgDriver,
+  driver: PostgresDriver,
   schema: string
 ): Promise<{ tables: ERDTable[]; relations: ERDRelation[] }> {
   const [tableRows, colRows, pkRows, fkRows] = await Promise.all([
@@ -559,7 +559,7 @@ export async function getERDData(
 // ── Browse table data (#62) ──────────────────────────────────────────────────
 
 export async function browseTableData(
-  driver: PgDriver,
+  driver: PostgresDriver,
   schema: string,
   table: string,
   offset: number,
@@ -577,7 +577,7 @@ export async function browseTableData(
 // ── Update table row (#63) ────────────────────────────────────────────────────
 
 export async function updateTableRow(
-  driver: PgDriver,
+  driver: PostgresDriver,
   schema: string,
   table: string,
   pkCols: string[],
@@ -605,7 +605,7 @@ export interface ColumnStat extends Record<string, unknown> {
   histogramBounds: string | null;
 }
 
-export async function getColumnStats(driver: PgDriver, schema: string, table: string): Promise<ColumnStat[]> {
+export async function getColumnStats(driver: PostgresDriver, schema: string, table: string): Promise<ColumnStat[]> {
   return driver.query<ColumnStat>(
     `SELECT attname          AS "column",
             null_frac        AS "nullFrac",
@@ -625,7 +625,7 @@ export async function getColumnStats(driver: PgDriver, schema: string, table: st
 // ── Import table data (#66) ───────────────────────────────────────────────────
 
 export async function importTableRows(
-  driver: PgDriver,
+  driver: PostgresDriver,
   schema: string,
   table: string,
   columns: string[],
@@ -661,7 +661,7 @@ export interface SearchResult {
   detail?: string;
 }
 
-export async function globalSearch(driver: PgDriver, term: string): Promise<SearchResult[]> {
+export async function globalSearch(driver: PostgresDriver, term: string): Promise<SearchResult[]> {
   const like = '%' + term.toLowerCase() + '%';
   const [tables, columns, functions] = await Promise.all([
     driver.query<{ schema: string; name: string; table_type: string }>(
@@ -725,7 +725,7 @@ interface TableRow { table_name: string; [key: string]: unknown }
 interface ColumnRow { table_name: string; column_name: string; data_type: string; is_nullable: string; column_default: string | null; [key: string]: unknown }
 interface IndexRow { table_name: string; index_name: string; index_def: string; [key: string]: unknown }
 
-async function fetchSchemaSnapshot(driver: PgDriver, schema: string) {
+async function fetchSchemaSnapshot(driver: PostgresDriver, schema: string) {
   const [tables, cols, idxs] = await Promise.all([
     driver.query<TableRow>(
       `SELECT table_name FROM information_schema.tables
@@ -751,8 +751,8 @@ async function fetchSchemaSnapshot(driver: PgDriver, schema: string) {
 }
 
 export async function getSchemaDiff(
-  leftDriver: PgDriver, leftSchema: string, leftLabel: string,
-  rightDriver: PgDriver, rightSchema: string, rightLabel: string
+  leftDriver: PostgresDriver, leftSchema: string, leftLabel: string,
+  rightDriver: PostgresDriver, rightSchema: string, rightLabel: string
 ): Promise<SchemaDiffResult> {
   const [L, R] = await Promise.all([
     fetchSchemaSnapshot(leftDriver, leftSchema),
@@ -817,7 +817,7 @@ export async function getSchemaDiff(
   return { leftLabel: leftLabel + '.' + leftSchema, rightLabel: rightLabel + '.' + rightSchema, items };
 }
 
-export async function checkMigrationsTable(driver: PgDriver, schema = 'public'): Promise<boolean> {
+export async function checkMigrationsTable(driver: PostgresDriver, schema = 'public'): Promise<boolean> {
   const rows = await driver.query<{ exists: boolean }>(
     `SELECT EXISTS (
        SELECT 1 FROM information_schema.tables
@@ -828,7 +828,7 @@ export async function checkMigrationsTable(driver: PgDriver, schema = 'public'):
   return Boolean(rows[0]?.exists);
 }
 
-export async function getMigrations(driver: PgDriver, schema = 'public'): Promise<MigrationEntry[]> {
+export async function getMigrations(driver: PostgresDriver, schema = 'public'): Promise<MigrationEntry[]> {
   const rows = await driver.query<{
     id: string;
     migration_name: string;

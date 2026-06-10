@@ -5,7 +5,7 @@ import * as child_process from 'child_process';
 import { randomUUID } from 'crypto';
 
 import { ConnectionManager } from '../db/ConnectionManager';
-import { testConnection } from '../db/PgDriver';
+import { testConnection } from '../db/PostgresDriver';
 import {
   getSchemas, getTables, getColumns, getFunctions, getFunctionParams,
   getCompletionData, getTableDDL, getIndexes, getConstraints,
@@ -14,7 +14,7 @@ import {
   browseTableData, updateTableRow, getColumnStats, importTableRows,
   globalSearch, createSchema, getSchemaDiff,
 } from '../db/queries';
-import { validateConnection, PgConnection } from '../types/PgConnection';
+import { validateConnection, DbConnection } from '../types/DbConnection';
 import {
   listConnections, getConnection, saveConnection, deleteConnection, getPassword,
   listHistory, addHistory, clearHistory, getSettings, patchSettings,
@@ -96,18 +96,11 @@ export function registerIpc(win: BrowserWindow): void {
         pushConnections();
         break;
 
-      case 'showAppMenu': {
-        if (win.isDestroyed()) break;
-        const menu = Menu.getApplicationMenu();
-        if (menu) menu.popup({ window: win });
-        break;
-      }
-
       // ── Connection CRUD ───────────────────────────────────────────────────
 
       case 'saveConnection': {
         const { conn, password, sshPassword, jumpPassword } = data as {
-          conn: Omit<PgConnection, 'id'> & { id?: string }; password: string; sshPassword?: string; jumpPassword?: string;
+          conn: Omit<DbConnection, 'id'> & { id?: string }; password: string; sshPassword?: string; jumpPassword?: string;
         };
         const errors = validateConnection(conn);
         if (errors.length > 0) { send('formError', errors.join(', ')); return; }
@@ -149,7 +142,7 @@ export function registerIpc(win: BrowserWindow): void {
       }
 
       case 'testConnection': {
-        const { conn, password } = data as { conn: PgConnection; password: string };
+        const { conn, password } = data as { conn: DbConnection; password: string };
         try {
           await testConnection(conn as never, password);
           send('testResult', { success: true });

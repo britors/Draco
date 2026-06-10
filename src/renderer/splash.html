@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
-  <title>Prisma4Postgres</title>
+    content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self';">
+  <title>Draco</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -58,7 +58,7 @@
       margin-bottom: 18px;
       animation: pop 0.45s cubic-bezier(0.34,1.56,0.64,1) both;
     }
-    .icon-wrap svg { width: 72px; height: 72px; display: block; }
+    .icon-wrap svg { width: 120px; height: 120px; display: block; }
 
     .brand {
       font-size: 30px;
@@ -233,43 +233,11 @@
   <!-- Left: branding -->
   <div class="left">
     <div class="icon-wrap">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
-        <defs>
-          <radialGradient id="bg" cx="50%" cy="35%" r="65%">
-            <stop offset="0%" stop-color="#182035"/>
-            <stop offset="100%" stop-color="#080d1a"/>
-          </radialGradient>
-          <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="14" result="b"/>
-            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-          <clipPath id="pc"><polygon points="250,62 52,370 448,370"/></clipPath>
-        </defs>
-        <rect width="500" height="500" fill="url(#bg)" rx="30"/>
-        <polygon points="250,62 52,370 448,370" fill="#2255a0" opacity="0.30" filter="url(#glow)"/>
-        <polygon points="250,62 151,216 349,216" fill="#64b3f4"/>
-        <polygon points="151,216 250,370 349,216" fill="#3d8fd9"/>
-        <polygon points="52,370 151,216 250,370"  fill="#2265a8"/>
-        <polygon points="448,370 349,216 250,370" fill="#174f8c"/>
-        <g clip-path="url(#pc)" opacity="0.10">
-          <line x1="0" y1="190" x2="500" y2="190" stroke="#9dd4fa" stroke-width="2"/>
-          <line x1="0" y1="255" x2="500" y2="255" stroke="#9dd4fa" stroke-width="2"/>
-          <line x1="0" y1="320" x2="500" y2="320" stroke="#9dd4fa" stroke-width="2"/>
-        </g>
-        <g fill="none" stroke="#05090f" stroke-width="2" stroke-linejoin="round">
-          <polygon points="250,62 52,370 448,370"/>
-          <line x1="151" y1="216" x2="349" y2="216"/>
-          <line x1="151" y1="216" x2="250" y2="370"/>
-          <line x1="349" y1="216" x2="250" y2="370"/>
-        </g>
-        <line x1="250" y1="62" x2="151" y2="216" stroke="#9dd4fa" stroke-width="2.5" stroke-linecap="round" opacity="0.80"/>
-        <line x1="250" y1="62" x2="349" y2="216" stroke="#6ab9f5" stroke-width="2.0" stroke-linecap="round" opacity="0.50"/>
-        <circle cx="250" cy="62" r="4" fill="#b8e2ff" opacity="0.90"/>
-      </svg>
+      <img src="logo.svg" width="120" height="120" alt="Logo" />
     </div>
 
-    <div class="brand">Prisma<span>4</span>Postgres</div>
-    <div class="tagline">PostgreSQL Explorer</div>
+    <div class="brand">Draco</div>
+    <div class="tagline">Database Explorer</div>
     <div class="divider"></div>
     <div class="copy">Explore. Query.<br>Manage with ease.</div>
     <div class="pills">
@@ -287,7 +255,7 @@
         <div class="dot dot-r"></div>
         <div class="dot dot-y"></div>
         <div class="dot dot-g"></div>
-        <span class="mock-label">Prisma4Postgres</span>
+        <span class="mock-label">Draco</span>
       </div>
 
       <div class="mock-tree">

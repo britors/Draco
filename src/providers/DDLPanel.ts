@@ -34,7 +34,7 @@ export class DDLPanel {
     this._onNavigate = opts.onNavigate;
 
     this._panel = vscode.window.createWebviewPanel(
-      'prisma4postgres.ddl',
+      'draco.ddl',
       `DDL: ${opts.schema}.${opts.table}`,
       vscode.ViewColumn.One,
       { enableScripts: true, retainContextWhenHidden: true }

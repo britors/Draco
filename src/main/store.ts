@@ -2,7 +2,7 @@ import { app, safeStorage } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-import { PgConnection } from '../types/PgConnection';
+import { DbConnection } from '../types/DbConnection';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,21 +52,21 @@ function writeJson(name: string, data: unknown): void {
 
 // ── Connections ──────────────────────────────────────────────────────────────
 
-export function listConnections(): PgConnection[] {
-  return readJson<PgConnection[]>('connections.json', []);
+export function listConnections(): DbConnection[] {
+  return readJson<DbConnection[]>('connections.json', []);
 }
 
-export function getConnection(id: string): PgConnection | undefined {
+export function getConnection(id: string): DbConnection | undefined {
   return listConnections().find(c => c.id === id);
 }
 
 export function saveConnection(
-  conn: Omit<PgConnection, 'id'> & { id?: string },
+  conn: Omit<DbConnection, 'id'> & { id?: string },
   password: string
-): PgConnection {
+): DbConnection {
   const connections = listConnections();
   const id = conn.id ?? randomUUID();
-  const full: PgConnection = { ...conn, id };
+  const full: DbConnection = { ...conn, id };
 
   const idx = connections.findIndex(c => c.id === id);
   if (idx >= 0) connections[idx] = full;
