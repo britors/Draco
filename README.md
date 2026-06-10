@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo-banner.svg" alt="Draco" width="480">
+  <img src="logo.svg" alt="Draco" width="200">
 </p>
 
 <p align="center">
