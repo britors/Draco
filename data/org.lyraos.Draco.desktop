@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Draco
+Name[pt_BR]=Draco
+GenericName=Database Client
+GenericName[pt_BR]=Cliente de Banco de Dados
+Comment=Explore, query and administer PostgreSQL databases
+Comment[pt_BR]=Explore, consulte e administre bancos de dados PostgreSQL
+Exec=draco
+Icon=org.lyraos.Draco
+Terminal=false
+Categories=Development;Database;
+Keywords=postgres;postgresql;sql;database;db;query;lyra;
+StartupNotify=true

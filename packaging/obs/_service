@@ -1,0 +1,8 @@
+<services>
+  <service name="cargo_vendor" mode="disabled">
+    <param name="src">draco-*.tar.zst</param>
+    <param name="compression">zst</param>
+    <param name="update">false</param>
+    <param name="respect-lockfile">true</param>
+  </service>
+</services>

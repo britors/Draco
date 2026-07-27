@@ -1,0 +1,24 @@
+[package]
+name = "draco-gtk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "GTK4/libadwaita frontend for Draco"
+build = "build.rs"
+
+[[bin]]
+name = "draco"
+path = "src/main.rs"
+
+[dependencies]
+draco-core = { path = "../draco-core" }
+gio = "0.22"
+gtk = { version = "0.11", package = "gtk4", features = ["v4_12"] }
+adw = { version = "0.9", package = "libadwaita", features = ["v1_5"] }
+sourceview5 = "0.11"
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+gettext-rs = { version = "0.7", features = ["gettext-system"] }

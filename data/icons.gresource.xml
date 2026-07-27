@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/lyraos/Draco/icons">
+    <file>hicolor/scalable/apps/org.lyraos.Draco.svg</file>
+    <file>hicolor/symbolic/apps/org.lyraos.Draco-symbolic.svg</file>
+  </gresource>
+</gresources>

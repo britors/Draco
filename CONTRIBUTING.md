@@ -1,113 +1,99 @@
-# Contributing to Draco
+# Contribuindo com o Draco
 
-## Prerequisites
+## Pré-requisitos
 
-- Node.js ≥ 18 (tested with v24)
-- VS Code 1.80+
-- A running PostgreSQL instance for manual testing
+- Rust estável recente (`cargo`, `rustc` ≥ 1.85)
+- `gtk4-devel` (≥ 4.12), `libadwaita-devel` (≥ 1.5), `gtksourceview5-devel` (≥ 5.0)
+- Uma instância PostgreSQL rodando para teste manual
 
 ## Setup
 
 ```bash
 git clone https://github.com/britors/Draco.git
 cd Draco
-npm install
+cargo build
 ```
 
-## Development workflow
+## Fluxo de desenvolvimento
 
-**Build once:**
+**Build:**
 ```bash
-node esbuild.js
+cargo build --workspace
 ```
 
-**Watch mode:**
+**Rodar:**
 ```bash
-node esbuild.js --watch
+DRACO_LOG=debug cargo run -p draco-gtk
 ```
 
-**Type-check (no emit):**
+**Lint e testes** (rodar antes de qualquer PR):
 ```bash
-npx tsc --noEmit
+cargo clippy --workspace
+cargo test -p draco-core
 ```
 
-Open the repo in VS Code and press **F5** to launch the Extension Development Host. Changes in watch mode are picked up after reloading the host window (`Ctrl+R`).
-
-## Project structure
+## Estrutura do repositório
 
 ```
-src/
-  extension.ts              # Entry point — registers providers and commands
-  types/PgConnection.ts     # Core connection interface + validation
-  storage/
-    ConnectionStorage.ts    # Metadata in globalState, passwords in SecretStorage
-    HistoryStorage.ts       # Query history in globalState (max 50 entries)
-  db/
-    PgDriver.ts             # node-postgres pool wrapper + testConnection()
-    ConnectionManager.ts    # Lifecycle manager for per-connection PgDriver instances
-    queries.ts              # All information_schema queries
-  providers/
-    SidebarProvider.ts      # WebviewViewProvider — main IPC hub
-    PreviewPanel.ts         # Static WebviewPanel for table preview
-  webview/
-    getSidebarHtml.ts       # Full sidebar HTML/CSS/JS (Monaco, tree, history)
-    getPreviewHtml.ts       # Static preview panel HTML
+draco-core/     # pool Postgres, túnel SSH, queries, storage local, segredos —
+                # sem dependência de nenhum toolkit gráfico
+draco-gtk/      # frontend GTK4/libadwaita (binário `draco`)
+data/           # .desktop, metainfo AppStream, ícones
+packaging/obs/  # spec RPM para o OBS (home:rodrigosbrito:lyra/draco)
+aur/            # PKGBUILD
+docs/migration/ # matriz de paridade funcional da reescrita Rust/GTK
 ```
 
-## Architecture
+## Arquitetura
 
-The extension uses a **WebviewView sidebar** communicating with the extension host via `postMessage({ command, data })` in both directions.
+- `draco-core` é agnóstico de UI: tudo que fala com o Postgres, com SSH ou com
+  o disco vive lá, testável sem GTK.
+- `draco-gtk` roda o loop do GTK na thread principal e um runtime `tokio`
+  dedicado numa thread própria (`draco-tokio`, ver `draco-gtk/src/main.rs`).
+  Trabalho async é disparado com `runtime_handle.spawn(...)` e o
+  `JoinHandle` é aguardado dentro de um
+  `glib::MainContext::default().spawn_local(...)` na thread GTK — nunca se
+  bloqueia o main loop nem a thread do tokio uma na outra.
+- Segredos (senhas de conexão, senha de túnel SSH) passam pelo Serviço de
+  Segredos do sistema via `oo7` — nunca são gravados em disco em texto plano
+  nem logados.
 
-- Webview → host: `vscode.postMessage({ command, data })`
-- Host → webview: `webview.postMessage({ command, data })`
+## Regras de UI
 
-All database access happens on the extension host side through `PgDriver` (a `node-postgres` pool). The webview never touches the database directly.
+A interface deve usar **somente** widgets GTK4/libadwaita nativos:
 
-## UI rules
+- Cores, espaçamento e tipografia seguem o tema `libadwaita` ativo (claro/escuro
+  automático) — sem CSS custom hardcoded fora do necessário.
+- Ícones via ícones simbólicos do tema do sistema (nome `-symbolic`).
+- Editor SQL: `GtkSourceView5` (highlighting + completion nativos).
+- Grids/listas: `gtk::ColumnView` + `gio::ListStore` (virtualizado).
+- Visualizações custom (gauges do dashboard, ERD): `gtk::DrawingArea` + `cairo`.
 
-The sidebar must look native to VS Code:
+## Migração Electron → Rust/GTK
 
-- **Colors**: only `--vscode-*` CSS variables — never hardcoded hex values
-- **Icons**: codicons only (`<i class="codicon codicon-NAME">`)
-- **No external UI libraries** (Bootstrap, Tailwind, Material, etc.)
-- **Fonts**: `var(--vscode-font-family)` / `var(--vscode-font-size)`
-
-Monaco Editor is loaded from the jsDelivr CDN (`monaco-editor@0.45.0`). The CSP allows `https://cdn.jsdelivr.net` for scripts and fonts, and `blob:` for Monaco's web workers.
-
-## Webview template literal rules
-
-When generating HTML with inline `<script>` blocks, follow these escaping rules to avoid `SyntaxError` at runtime:
-
-- Use `\\n` (not `\n`) inside JS string literals embedded in template literals
-- Use `/\x3c/g` (not `/</g`) in regex literals
-- Use Unicode escapes for any `<` or `>` in JS string values inside `<script>` blocks
-
-## Milestones
-
-| Milestone | Issues | Status |
-|-----------|--------|--------|
-| v0.1 Foundation | #2–#7 | Done |
-| v0.2 Database Explorer | #8–#14 | Done |
-| v0.3 Query Editor | #15–#19 | Done |
-| v0.4 Schema Inspection | #20–#23 | Open |
-| v0.6 Polish | #29–#32 | Open |
-
-Pick up any open issue in the next milestone. Reference the issue number in your commit message (`Closes #N`).
+O Draco era um app Electron/TypeScript; a reescrita atual segue o padrão dos
+outros apps do ecossistema Lyra OS (Vega, Beam, Sulafat, Chord — workspace
+`<nome>-core` + `<nome>-gtk`, app id `org.lyraos.<Nome>`). A matriz de
+paridade funcional em
+[`docs/migration/rust-gtk-parity.md`](docs/migration/rust-gtk-parity.md) é a
+lista de aceite: ao portar um módulo, atualize o estado da linha
+correspondente (`pendente` → `em desenvolvimento` → `implementado` →
+`validado`).
 
 ## Pull requests
 
-- One PR per issue or small group of tightly related issues
-- Run `npx tsc --noEmit` and `node esbuild.js` before opening a PR — both must succeed with no errors
-- Keep the sidebar HTML/JS in `getSidebarHtml.ts` self-contained; avoid importing runtime dependencies into the webview bundle
+- Um PR por módulo/milestone da matriz de paridade, quando possível.
+- Rode `cargo clippy --workspace` e `cargo test -p draco-core` antes de abrir
+  o PR — ambos devem passar sem erros.
+- Ao completar uma superfície da matriz de paridade, atualize
+  `docs/migration/rust-gtk-parity.md` no mesmo PR.
 
-## Commit style
+## Estilo de commit
 
 ```
-feat: short description (#N)
+feat: descrição curta
 
-Optional body explaining the why.
-
-Closes #N
+Corpo opcional explicando o porquê.
 ```
 
-Types: `feat`, `fix`, `chore`, `refactor`, `docs`.
+Tipos: `feat`, `fix`, `chore`, `refactor`, `docs`.

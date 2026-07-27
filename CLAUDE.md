@@ -1,59 +1,68 @@
 # Draco
 
-Extensão VS Code para explorar bancos de dados, com integração ao Draco Parser.
+Cliente de banco de dados (explorador de esquemas, editor SQL, administração)
+para PostgreSQL, app do ecossistema **Lyra OS**.
 GitHub: https://github.com/britors/Draco
 
 ## Stack
 
-- **Linguagem**: TypeScript
-- **Plataforma**: VS Code Extension (webview sidebar)
-- **Driver**: `node-postgres` (`pg`) — sem dependência de CLI externo
-- **Editor SQL**: Monaco Editor (mesma configuração do SQL Runner)
-- **Build**: esbuild
+- **Linguagem**: Rust
+- **Plataforma**: desktop Linux nativo, GTK4 + libadwaita
+- **Driver**: `tokio-postgres` — sem dependência de CLI externo (`psql`)
+- **Túnel SSH**: `russh` (em processo, sem shell out pro binário `ssh`)
+- **Editor SQL**: GtkSourceView5 (sem Monaco/CDN)
+- **Segredos**: `oo7` (Secret Service / GNOME Keyring) — nunca texto plano
+- **Build**: `cargo` (workspace)
+
+Reescrito de Electron/TypeScript para Rust/GTK4 seguindo o mesmo padrão dos
+outros apps do ecossistema (Vega, Beam, Sulafat, Chord).
 
 ## Arquitetura
 
-Seguir o mesmo padrão do SQL Runner (OpenBase.VsCode):
-- `extension.ts` — entry point, providers, commands
-- Webview sidebar com IPC via `postMessage({ command, data })`
-- `globalState` para histórico e preferências
-- `SecretStorage` para senhas de conexão
+Workspace Cargo com dois crates:
+- `draco-core` — pool Postgres, túnel SSH, queries de introspecção/DDL/stats,
+  storage local (TOML/XDG via `directories`) e segredos. **Sem dependência de
+  nenhum toolkit gráfico** — deve compilar e ser testável isoladamente.
+- `draco-gtk` — frontend GTK4/libadwaita, binário `draco`.
+
+Bridging async → GTK (ver `draco-gtk/src/main.rs`): um runtime `tokio`
+multi-thread roda numa thread própria (`draco-tokio`); o loop GTK fica na
+main thread. Trabalho que precisa do reactor tokio (`tokio-postgres`, `russh`)
+é disparado com `runtime_handle.spawn(...)` e o `JoinHandle` é aguardado
+dentro de `glib::MainContext::default().spawn_local(...)` na thread GTK —
+nunca se bloqueia uma thread na outra.
 
 ## Regras de UI — obrigatórias
 
-A UI deve parecer **nativa do VS Code**:
-- Usar **somente** variáveis CSS `--vscode-*` para cores, fontes e bordas
-- Ícones via **codicons** (`$(icon-name)` em botões, `vscode-icon` em webview)
-- **Sem bibliotecas de UI externas** (Bootstrap, Tailwind, Material, etc.)
-- Fonte: `var(--vscode-font-family)`, tamanho `var(--vscode-font-size)`
-- Inputs: `--vscode-input-background`, `--vscode-input-foreground`, `--vscode-input-border`
-- Botões primários: `--vscode-button-background`, `--vscode-button-foreground`
-- Listas/grids: `--vscode-list-hoverBackground`, zebra com `--vscode-list-oddRowsBackground`
-- Tema sincronizado automaticamente (light/dark via variáveis)
+A UI deve parecer **nativa do GNOME/Lyra**:
+- **Somente** widgets GTK4/libadwaita — tema `libadwaita` ativo (claro/escuro
+  automático), sem CSS custom hardcoded fora do necessário
+- **Sem bibliotecas de UI externas** (Electron, web frameworks, CSS frameworks)
+- Ícones simbólicos do tema do sistema (`-symbolic`)
+- Editor SQL: `GtkSourceView5` (highlighting + completion nativos)
+- Grids/listas: `gtk::ColumnView` + `gio::ListStore` (virtualizado)
+- Visualizações custom (gauges do dashboard, ERD): `gtk::DrawingArea` + `cairo`,
+  seguindo o precedente de `vega-gtk/src/ui/sparkline.rs`
 
-## Webview — regras de escape em template literals
+## Segredos e logs
 
-Para evitar SyntaxError em template literals de HTML injetado na webview:
-- `\\n` não `\n` dentro de strings em `<script>`
-- `/\x3c/g` não `/</g` em expressões regex
-- Unicode escapes para caracteres especiais em blocos `<script>`
+- Senhas de conexão, SSH e jump host: `oo7` (Secret Service). Nunca gravar em
+  disco em texto plano nem logar.
+- Log via `tracing`, nível controlado por `DRACO_LOG`. Conteúdo de query e
+  credenciais nunca aparecem em log.
 
-## Issues e Milestones
+## Progresso da reescrita
 
-Todas as issues estão em https://github.com/britors/Draco/issues
+A matriz de paridade funcional (o que já foi portado da versão Electron, o
+que falta) fica em
+[`docs/migration/rust-gtk-parity.md`](docs/migration/rust-gtk-parity.md).
+Atualize a linha do módulo correspondente ao terminar de portar uma
+superfície.
 
-- **v0.1 Foundation** (#2–#7): boilerplate, conexões, SecretStorage, driver pg
-- **v0.2 Database Explorer** (#8–#14): TreeView, preview de tabela
-- **v0.3 Query Editor** (#15–#19): Monaco, execução, abas, histórico, autocomplete
-- **v0.4 Schema Inspection** (#20–#23): DDL, índices, FKs, exportação
-- **v0.5 Prisma Integration** (#24–#28): schema.prisma, migrations, db pull
-- **v0.6 Polish** (#29–#32): EXPLAIN, configurações, notificações, README
+## Escopo confirmado
 
-## Diferenças em relação ao SQL Runner
-
-| | SQL Runner | Draco |
-|---|---|---|
-| Banco | Multi (MSSQL, PG, Oracle) | Multi-DB focus |
-| Driver | CLI externo (psql) | node-postgres nativo |
-| Conexões | Lidas de appsettings.json | Gerenciadas na UI + SecretStorage |
-| Foco | Scaffold + queries | Exploração + Draco Parser |
+- Só Linux (GTK4/libadwaita via OBS + AUR) — sem build Windows. Nenhum app do
+  ecossistema Lyra OS sustenta Windows hoje.
+- v1 mira paridade ampla com a versão Electron anterior (dashboard, ERD,
+  editores de tabela/função, roles, pg_cron, activity/locks, stats — ver
+  matriz de paridade), não um MVP deliberadamente reduzido.

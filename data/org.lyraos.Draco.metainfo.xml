@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.lyraos.Draco</id>
+  <name>Draco</name>
+  <name xml:lang="pt-BR">Draco</name>
+  <summary>Explore, query and administer PostgreSQL databases</summary>
+  <summary xml:lang="pt-BR">Explore, consulte e administre bancos de dados PostgreSQL</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="org.lyraos">
+    <name>Lyra OS</name>
+  </developer>
+
+  <description>
+    <p>
+      Draco is the database client of the Lyra OS ecosystem: a schema explorer, SQL
+      editor and administration tool for PostgreSQL. It works on any modern Linux
+      distribution, with GTK4/libadwaita giving it native visual integration with
+      GNOME and Lyra.
+    </p>
+    <p xml:lang="pt-BR">
+      Draco é o cliente de banco de dados do ecossistema Lyra OS: um explorador de
+      esquemas, editor SQL e ferramenta de administração para PostgreSQL. Funciona
+      em qualquer distribuição Linux moderna, com integração visual nativa ao GNOME
+      e ao Lyra via GTK4/libadwaita.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Schema explorer with tables, views, functions, sequences and extensions</li>
+      <li>SQL editor with syntax highlighting and schema-aware autocomplete</li>
+      <li>DDL, index, constraint and foreign-key inspection</li>
+      <li>Connections over SSH tunnels, including jump hosts</li>
+      <li>No password or passphrase is stored by Draco itself — handled by the
+      Secret Service / GNOME Keyring already integrated into the system</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">org.lyraos.Draco.desktop</launchable>
+
+  <url type="homepage">https://github.com/britors/Draco</url>
+  <url type="bugtracker">https://github.com/britors/Draco/issues</url>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="0.1.0" date="2026-07-27">
+      <description>
+        <p>Start of the Rust/GTK4/libadwaita rewrite. Replaces the previous Electron/TypeScript implementation.</p>
+      </description>
+    </release>
+  </releases>
+
+  <provides>
+    <binary>draco</binary>
+  </provides>
+</component>

@@ -1,0 +1,33 @@
+name: Publish to OBS
+
+# Só avisa o OBS pra tentar rebuildar quando uma tag é criada — não é publicação de
+# verdade. Mesmo padrão usado no Beam e no Vega (ver .github/workflows/*.yml desses
+# repos): o serviço server-side do OBS (tar_scm/obs_scm) roda num sandbox sem acesso
+# à rede na instância pública api.opensuse.org, então esse trigger tende a falhar —
+# por isso continue-on-error e o pulo silencioso se o secret não estiver configurado.
+#
+# O fluxo real de publicação no pacote home:rodrigosbrito:lyra/draco é manual: gerar
+# fontes + vendor.tar.zst localmente (`cargo vendor`, `git archive`) e subir via
+# `osc` a cada release — ver packaging/obs/draco.spec.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch: {}
+
+jobs:
+  trigger-obs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar rebuild no OBS (best-effort)
+        continue-on-error: true
+        env:
+          OBS_TOKEN: ${{ secrets.OBS_TOKEN_LYRA_DRACO }}
+        run: |
+          if [ -z "$OBS_TOKEN" ]; then
+            echo "OBS_TOKEN_LYRA_DRACO não configurado, pulando." >&2
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Token $OBS_TOKEN" \
+            -X POST "https://api.opensuse.org/trigger/runservice?project=home:rodrigosbrito:lyra&package=draco"
