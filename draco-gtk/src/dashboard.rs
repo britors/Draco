@@ -10,7 +10,6 @@ use adw::prelude::*;
 use draco_core::error::CoreError;
 use draco_core::manager::ConnectionManager;
 use draco_core::postgres::queries::{self, BloatRow, DashboardData, DbStats, SeqScanRow, TopTable, UnusedIndexRow};
-use draco_core::secrets;
 use gtk::glib;
 use tokio::sync::Mutex;
 
@@ -31,10 +30,7 @@ impl DashboardView {
         let task_manager = manager.clone();
         let handle = runtime.spawn(async move {
             let mut mgr = task_manager.lock().await;
-            if mgr.get_driver(&task_id).is_none() {
-                let password = secrets::get_password(&task_id).await.unwrap_or_default();
-                mgr.connect(&task_id, &password, 30_000, None, None).await?;
-            }
+            crate::connection_runtime::ensure_connected(&mut mgr, &task_id).await?;
             let driver = mgr.get_driver(&task_id).ok_or(CoreError::NotConnected)?;
             let dashboard = queries::get_dashboard(driver).await?;
             let stats = queries::get_db_stats(driver).await?;

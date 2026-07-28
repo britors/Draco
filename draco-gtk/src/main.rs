@@ -1,6 +1,8 @@
 mod admin;
+mod backup_restore;
 mod confirm;
 mod connection_dialog;
+mod connection_runtime;
 mod dashboard;
 mod erd;
 mod explorer;
@@ -20,7 +22,8 @@ use gtk::prelude::*;
 const APP_ID: &str = "org.lyraos.Draco";
 
 fn register_icon_resources() {
-    gio::resources_register_include!("icons.gresource").expect("failed to register embedded Draco icons");
+    gio::resources_register_include!("icons.gresource")
+        .expect("failed to register embedded Draco icons");
     gtk::Window::set_default_icon_name(APP_ID);
 
     if let Some(display) = gtk::gdk::Display::default() {

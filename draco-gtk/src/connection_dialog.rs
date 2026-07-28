@@ -5,6 +5,7 @@
 
 use adw::prelude::*;
 use draco_core::connection::{validate_connection, DbConnection, DbConnectionDraft};
+use draco_core::postgres::test_connection_with_ssh;
 use draco_core::{secrets, store};
 use gtk::glib;
 use gtk::glib::clone;
@@ -80,6 +81,7 @@ pub fn open(
     ssh_group.add(&jump_expander);
 
     let error_label = gtk::Label::builder().css_classes(["error"]).wrap(true).visible(false).build();
+    let test_status = gtk::Label::builder().wrap(true).visible(false).build();
 
     let content = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -90,6 +92,7 @@ pub fn open(
         .margin_end(12)
         .build();
     content.append(&error_label);
+    content.append(&test_status);
     content.append(&conn_group);
     content.append(&ssh_group);
 
@@ -105,18 +108,151 @@ pub fn open(
     let toolbar_view = adw::ToolbarView::new();
     let header = adw::HeaderBar::new();
     let save_btn = gtk::Button::builder().label("Save").css_classes(["suggested-action"]).build();
+    let test_btn = gtk::Button::builder().label("Test Connection").build();
     let cancel_btn = gtk::Button::builder().label("Cancel").build();
     header.pack_start(&cancel_btn);
+    header.pack_end(&test_btn);
     header.pack_end(&save_btn);
     toolbar_view.add_top_bar(&header);
     toolbar_view.set_content(Some(&scroller));
     dialog.set_child(Some(&toolbar_view));
+
+    let label_row_for_test = label_row.clone();
+    let host_row_for_test = host_row.clone();
+    let port_row_for_test = port_row.clone();
+    let database_row_for_test = database_row.clone();
+    let user_row_for_test = user_row.clone();
+    let ssl_row_for_test = ssl_row.clone();
+    let ssh_enabled_row_for_test = ssh_enabled_row.clone();
+    let ssh_host_row_for_test = ssh_host_row.clone();
+    let ssh_port_row_for_test = ssh_port_row.clone();
+    let ssh_user_row_for_test = ssh_user_row.clone();
+    let ssh_key_row_for_test = ssh_key_row.clone();
+    let jump_host_row_for_test = jump_host_row.clone();
+    let jump_port_row_for_test = jump_port_row.clone();
+    let jump_user_row_for_test = jump_user_row.clone();
+    let jump_key_row_for_test = jump_key_row.clone();
+    let password_row_for_test = password_row.clone();
+    let ssh_password_row_for_test = ssh_password_row.clone();
+    let jump_password_row_for_test = jump_password_row.clone();
+    let base_for_test = base.clone();
 
     cancel_btn.connect_clicked(clone!(
         #[weak]
         dialog,
         move |_| {
             dialog.close();
+        }
+    ));
+
+    test_btn.connect_clicked(clone!(
+        #[strong]
+        runtime,
+        #[strong]
+        base_for_test,
+        #[strong]
+        test_status,
+        #[strong]
+        error_label,
+        move |btn| {
+            let draft = DbConnectionDraft {
+                label: label_row_for_test.text().to_string(),
+                host: host_row_for_test.text().to_string(),
+                port: port_row_for_test.value() as u32,
+                database: database_row_for_test.text().to_string(),
+                user: user_row_for_test.text().to_string(),
+                ssl: ssl_row_for_test.is_active(),
+            };
+            let errors = validate_connection(&draft);
+            if !errors.is_empty() {
+                error_label.set_label(&errors.join(", "));
+                error_label.set_visible(true);
+                test_status.set_visible(false);
+                return;
+            }
+
+            let non_empty = |s: glib::GString| -> Option<String> {
+                let s = s.to_string();
+                (!s.is_empty()).then_some(s)
+            };
+            let conn = DbConnection {
+                id: base_for_test.id.clone(),
+                label: draft.label,
+                host: draft.host,
+                port: draft.port as u16,
+                database: draft.database,
+                user: draft.user,
+                ssl: draft.ssl,
+                ssh_enabled: ssh_enabled_row_for_test.is_active(),
+                ssh_host: non_empty(ssh_host_row_for_test.text()),
+                ssh_port: Some(ssh_port_row_for_test.value() as u16),
+                ssh_user: non_empty(ssh_user_row_for_test.text()),
+                ssh_key_path: non_empty(ssh_key_row_for_test.text()),
+                ssh_jump_host: non_empty(jump_host_row_for_test.text()),
+                ssh_jump_port: Some(jump_port_row_for_test.value() as u16),
+                ssh_jump_user: non_empty(jump_user_row_for_test.text()),
+                ssh_jump_key_path: non_empty(jump_key_row_for_test.text()),
+                favorite: base_for_test.favorite,
+            };
+            let mut password = password_row_for_test.text().to_string();
+            let mut ssh_password = ssh_password_row_for_test.text().to_string();
+            let mut jump_password = jump_password_row_for_test.text().to_string();
+            let id = conn.id.clone();
+
+            btn.set_sensitive(false);
+            error_label.set_visible(false);
+            test_status.remove_css_class("success");
+            test_status.remove_css_class("error");
+            test_status.set_label("Testing connection…");
+            test_status.set_visible(true);
+            let test_btn = btn.clone();
+            let test_status_for_task = test_status.clone();
+            let error_label_for_task = error_label.clone();
+            let handle = runtime.spawn(async move {
+                if password.is_empty() && !id.is_empty() {
+                    password = secrets::get_password(&id).await.map_err(|err| {
+                        draco_core::error::CoreError::Other(format!("Secret Service error while reading the database password: {err}"))
+                    })?;
+                }
+                if ssh_password.is_empty() && !id.is_empty() {
+                    ssh_password = secrets::get_ssh_password(&id).await.map_err(|err| {
+                        draco_core::error::CoreError::Other(format!("Secret Service error while reading the SSH password: {err}"))
+                    })?;
+                }
+                if jump_password.is_empty() && !id.is_empty() {
+                    jump_password = secrets::get_jump_ssh_password(&id).await.map_err(|err| {
+                        draco_core::error::CoreError::Other(format!("Secret Service error while reading the jump-host password: {err}"))
+                    })?;
+                }
+                test_connection_with_ssh(
+                    &conn,
+                    &password,
+                    (!ssh_password.is_empty()).then_some(ssh_password.as_str()),
+                    (!jump_password.is_empty()).then_some(jump_password.as_str()),
+                )
+                .await
+            });
+            glib::MainContext::default().spawn_local(async move {
+                test_btn.set_sensitive(true);
+                match handle.await {
+                    Ok(Ok(())) => {
+                        test_status_for_task.add_css_class("success");
+                        test_status_for_task.set_label("Connection successful");
+                    }
+                    Ok(Err(err)) => {
+                        test_status_for_task.add_css_class("error");
+                        test_status_for_task.set_label("Connection failed");
+                        error_label_for_task.set_label(&err.to_string());
+                        error_label_for_task.set_visible(true);
+                    }
+                    Err(err) => {
+                        test_status_for_task.add_css_class("error");
+                        test_status_for_task.set_label("Connection test task failed");
+                        error_label_for_task.set_label(&err.to_string());
+                        error_label_for_task.set_visible(true);
+                    }
+                }
+            });
         }
     ));
 
@@ -184,20 +320,35 @@ pub fn open(
         let save_btn = btn.clone();
         let dialog_for_task = dialog.clone();
         let on_saved_for_task = on_saved.clone();
+        let error_label_for_task = error_label.clone();
         let handle = runtime.spawn(async move {
-            let _ = secrets::store_password(&id, &password).await;
+            secrets::store_password(&id, &password).await?;
             if !ssh_password.is_empty() {
-                let _ = secrets::store_ssh_password(&id, &ssh_password).await;
+                secrets::store_ssh_password(&id, &ssh_password).await?;
             }
             if !jump_password.is_empty() {
-                let _ = secrets::store_jump_ssh_password(&id, &jump_password).await;
+                secrets::store_jump_ssh_password(&id, &jump_password).await?;
             }
+            Ok::<_, draco_core::error::CoreError>(())
         });
         glib::MainContext::default().spawn_local(async move {
-            let _ = handle.await;
-            save_btn.set_sensitive(true);
-            dialog_for_task.close();
-            on_saved_for_task(saved_for_task);
+            match handle.await {
+                Ok(Ok(())) => {
+                    save_btn.set_sensitive(true);
+                    dialog_for_task.close();
+                    on_saved_for_task(saved_for_task);
+                }
+                Ok(Err(err)) => {
+                    save_btn.set_sensitive(true);
+                    error_label_for_task.set_label(&format!("Failed to store credentials in Secret Service: {err}"));
+                    error_label_for_task.set_visible(true);
+                }
+                Err(err) => {
+                    save_btn.set_sensitive(true);
+                    error_label_for_task.set_label(&format!("Credential storage task failed: {err}"));
+                    error_label_for_task.set_visible(true);
+                }
+            }
         });
         }
     ));

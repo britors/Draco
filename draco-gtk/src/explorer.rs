@@ -34,6 +34,8 @@ type OnOpenAdmin = Rc<dyn Fn(String)>;
 type OnOpenErd = Rc<dyn Fn(String, String)>;
 /// The connection being edited — fired by a connection row's "Edit Connection" action.
 type OnEditConnection = Rc<dyn Fn(DbConnection)>;
+/// The connection's backup/restore dialog — fired by a connection row's options menu.
+type OnBackupRestore = Rc<dyn Fn(DbConnection)>;
 
 /// Bundles every "open something in a tab/dialog" callback the Explorer's rows can fire, so
 /// adding a new one doesn't mean threading another parameter through every builder function.
@@ -46,6 +48,7 @@ struct Callbacks {
     on_open_admin: OnOpenAdmin,
     on_open_erd: OnOpenErd,
     on_edit_connection: OnEditConnection,
+    on_backup_restore: OnBackupRestore,
 }
 
 pub struct Explorer {
@@ -63,6 +66,7 @@ impl Explorer {
         on_open_admin: impl Fn(String) + 'static,
         on_open_erd: impl Fn(String, String) + 'static,
         on_edit_connection: impl Fn(DbConnection) + 'static,
+        on_backup_restore: impl Fn(DbConnection) + 'static,
     ) -> Self {
         let list_box = gtk::ListBox::builder()
             .selection_mode(gtk::SelectionMode::None)
@@ -77,31 +81,56 @@ impl Explorer {
             on_open_admin: Rc::new(on_open_admin),
             on_open_erd: Rc::new(on_open_erd),
             on_edit_connection: Rc::new(on_edit_connection),
+            on_backup_restore: Rc::new(on_backup_restore),
         };
-        Self { list_box, callbacks }
+        Self {
+            list_box,
+            callbacks,
+        }
     }
 
     pub fn widget(&self) -> &gtk::ListBox {
         &self.list_box
     }
 
-    pub fn set_connections(&self, connections: Vec<DbConnection>, runtime: tokio::runtime::Handle, manager: SharedManager) {
+    pub fn set_connections(
+        &self,
+        connections: Vec<DbConnection>,
+        runtime: tokio::runtime::Handle,
+        manager: SharedManager,
+    ) {
         while let Some(child) = self.list_box.first_child() {
             self.list_box.remove(&child);
         }
         for conn in connections {
-            self.list_box.append(&build_connection_row(conn, runtime.clone(), manager.clone(), self.callbacks.clone(), self.list_box.clone()));
+            self.list_box.append(&build_connection_row(
+                conn,
+                runtime.clone(),
+                manager.clone(),
+                self.callbacks.clone(),
+                self.list_box.clone(),
+            ));
         }
     }
 }
 
-fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, manager: SharedManager, callbacks: Callbacks, list_box: gtk::ListBox) -> adw::ExpanderRow {
+fn build_connection_row(
+    conn: DbConnection,
+    runtime: tokio::runtime::Handle,
+    manager: SharedManager,
+    callbacks: Callbacks,
+    list_box: gtk::ListBox,
+) -> adw::ExpanderRow {
+    let connection_details = format!("{}@{}:{}/{}", conn.user, conn.host, conn.port, conn.database);
     let row = adw::ExpanderRow::builder()
         .title(glib::markup_escape_text(&conn.label))
-        .subtitle(format!("{}@{}:{}/{}", conn.user, conn.host, conn.port, conn.database))
+        .subtitle(&connection_details)
         .enable_expansion(false)
         .build();
-    let status_icon = gtk::Image::builder().icon_name("drive-harddisk-symbolic").css_classes(["error"]).build();
+    let status_icon = gtk::Image::builder()
+        .icon_name("drive-harddisk-symbolic")
+        .css_classes(["error"])
+        .build();
     row.add_prefix(&status_icon);
 
     // Before connecting: just a "Connect" action, no expand arrow and no other actions — there's
@@ -152,11 +181,27 @@ fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, man
         }
     ));
 
-    let more_btn = gtk::MenuButton::builder().icon_name("view-more-symbolic").tooltip_text("Connection options").valign(gtk::Align::Center).css_classes(["flat"]).build();
+    let more_btn = gtk::MenuButton::builder()
+        .icon_name("view-more-symbolic")
+        .tooltip_text("Connection options")
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
     let more_popover = gtk::Popover::new();
-    let more_box = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(2).margin_top(6).margin_bottom(6).margin_start(6).margin_end(6).build();
+    let more_box = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(2)
+        .margin_top(6)
+        .margin_bottom(6)
+        .margin_start(6)
+        .margin_end(6)
+        .build();
 
-    let edit_btn = gtk::Button::builder().label("Edit Connection").halign(gtk::Align::Start).css_classes(["flat"]).build();
+    let edit_btn = gtk::Button::builder()
+        .label("Edit Connection")
+        .halign(gtk::Align::Start)
+        .css_classes(["flat"])
+        .build();
     more_box.append(&edit_btn);
     edit_btn.connect_clicked(clone!(
         #[weak]
@@ -171,7 +216,30 @@ fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, man
         }
     ));
 
-    let delete_btn = gtk::Button::builder().label("Delete Connection").halign(gtk::Align::Start).css_classes(["flat"]).build();
+    let backup_restore_btn = gtk::Button::builder()
+        .label("Backup / Restore…")
+        .halign(gtk::Align::Start)
+        .css_classes(["flat"])
+        .build();
+    more_box.append(&backup_restore_btn);
+    backup_restore_btn.connect_clicked(clone!(
+        #[weak]
+        more_popover,
+        #[strong]
+        callbacks,
+        #[strong]
+        conn,
+        move |_| {
+            more_popover.popdown();
+            (callbacks.on_backup_restore)(conn.clone());
+        }
+    ));
+
+    let delete_btn = gtk::Button::builder()
+        .label("Delete Connection")
+        .halign(gtk::Align::Start)
+        .css_classes(["flat"])
+        .build();
     more_box.append(&delete_btn);
     let id_for_delete = conn.id.clone();
     let label_for_delete = conn.label.clone();
@@ -236,16 +304,15 @@ fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, man
         admin_btn,
         #[strong]
         status_icon,
+        #[strong]
+        connection_details,
         move |btn| {
             btn.set_sensitive(false);
             let task_id = id.clone();
             let task_manager = manager.clone();
             let handle = runtime.spawn(async move {
                 let mut mgr = task_manager.lock().await;
-                if mgr.get_driver(&task_id).is_none() {
-                    let password = secrets::get_password(&task_id).await.unwrap_or_default();
-                    mgr.connect(&task_id, &password, 30_000, None, None).await?;
-                }
+                crate::connection_runtime::ensure_connected(&mut mgr, &task_id).await?;
                 Ok::<_, draco_core::error::CoreError>(())
             });
 
@@ -254,6 +321,7 @@ fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, man
             let dashboard_btn = dashboard_btn.clone();
             let admin_btn = admin_btn.clone();
             let status_icon = status_icon.clone();
+            let connection_details = connection_details.clone();
             glib::MainContext::default().spawn_local(async move {
                 match handle.await {
                     Ok(Ok(())) => {
@@ -264,12 +332,18 @@ fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, man
                         admin_btn.set_visible(true);
                         status_icon.remove_css_class("error");
                         status_icon.add_css_class("success");
+                        status_icon.set_tooltip_text(Some("Connected"));
+                        row.set_subtitle(&connection_details);
                     }
                     Ok(Err(err)) => {
                         btn.set_tooltip_text(Some(&format!("Failed to connect: {err}")));
+                        status_icon.set_tooltip_text(Some(&format!("Connection failed: {err}")));
+                        row.set_subtitle(&format!("Connection failed: {err}"));
                         btn.set_sensitive(true);
                     }
                     Err(_) => {
+                        status_icon.set_tooltip_text(Some("Connection task failed"));
+                        row.set_subtitle("Connection task failed");
                         btn.set_sensitive(true);
                     }
                 }
@@ -303,11 +377,10 @@ fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, man
             let task_manager = manager.clone();
             let handle = runtime.spawn(async move {
                 let mut mgr = task_manager.lock().await;
-                if mgr.get_driver(&task_id).is_none() {
-                    let password = secrets::get_password(&task_id).await.unwrap_or_default();
-                    mgr.connect(&task_id, &password, 30_000, None, None).await?;
-                }
-                let driver = mgr.get_driver(&task_id).ok_or(draco_core::error::CoreError::NotConnected)?;
+                crate::connection_runtime::ensure_connected(&mut mgr, &task_id).await?;
+                let driver = mgr
+                    .get_driver(&task_id)
+                    .ok_or(draco_core::error::CoreError::NotConnected)?;
                 queries::get_schemas(driver).await
             });
 
@@ -321,7 +394,8 @@ fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, man
                 match handle.await {
                     Ok(Ok(schemas)) => {
                         if schemas.is_empty() {
-                            row_for_task.add_row(&adw::ActionRow::builder().title("No schemas").build());
+                            row_for_task
+                                .add_row(&adw::ActionRow::builder().title("No schemas").build());
                         }
                         for schema in schemas {
                             row_for_task.add_row(&build_schema_row(
@@ -334,7 +408,11 @@ fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, man
                         }
                     }
                     Ok(Err(err)) => {
-                        row_for_task.add_row(&adw::ActionRow::builder().title(format!("Failed to connect: {err}")).build());
+                        row_for_task.add_row(
+                            &adw::ActionRow::builder()
+                                .title(format!("Failed to connect: {err}"))
+                                .build(),
+                        );
                     }
                     Err(_) => {}
                 }
@@ -345,14 +423,32 @@ fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, man
     row
 }
 
-fn build_schema_row(conn_id: String, schema: SchemaInfo, runtime: tokio::runtime::Handle, manager: SharedManager, callbacks: Callbacks) -> adw::ExpanderRow {
-    let row = adw::ExpanderRow::builder().title(glib::markup_escape_text(&schema.name)).build();
+fn build_schema_row(
+    conn_id: String,
+    schema: SchemaInfo,
+    runtime: tokio::runtime::Handle,
+    manager: SharedManager,
+    callbacks: Callbacks,
+) -> adw::ExpanderRow {
+    let row = adw::ExpanderRow::builder()
+        .title(glib::markup_escape_text(&schema.name))
+        .build();
     row.add_prefix(&gtk::Image::from_icon_name("folder-symbolic"));
 
-    let erd_btn = gtk::Button::builder().icon_name("network-workgroup-symbolic").tooltip_text("Entity-Relationship Diagram").valign(gtk::Align::Center).css_classes(["flat"]).build();
+    let erd_btn = gtk::Button::builder()
+        .icon_name("network-workgroup-symbolic")
+        .tooltip_text("Entity-Relationship Diagram")
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
     row.add_suffix(&erd_btn);
 
-    let new_table_btn = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("New table").valign(gtk::Align::Center).css_classes(["flat"]).build();
+    let new_table_btn = gtk::Button::builder()
+        .icon_name("list-add-symbolic")
+        .tooltip_text("New table")
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
     row.add_suffix(&new_table_btn);
 
     let loaded = Rc::new(Cell::new(false));
@@ -408,7 +504,9 @@ fn build_schema_row(conn_id: String, schema: SchemaInfo, runtime: tokio::runtime
             let task_manager = manager.clone();
             let handle = runtime.spawn(async move {
                 let mgr = task_manager.lock().await;
-                let driver = mgr.get_driver(&task_id).ok_or(draco_core::error::CoreError::NotConnected)?;
+                let driver = mgr
+                    .get_driver(&task_id)
+                    .ok_or(draco_core::error::CoreError::NotConnected)?;
                 let tables = queries::get_tables(driver, &task_schema).await?;
                 let functions = queries::get_functions(driver, &task_schema).await?;
                 Ok::<_, draco_core::error::CoreError>((tables, functions))
@@ -422,7 +520,8 @@ fn build_schema_row(conn_id: String, schema: SchemaInfo, runtime: tokio::runtime
                 match handle.await {
                     Ok(Ok((tables, functions))) => {
                         if tables.is_empty() {
-                            row_for_task.add_row(&adw::ActionRow::builder().title("No tables").build());
+                            row_for_task
+                                .add_row(&adw::ActionRow::builder().title("No tables").build());
                         }
                         for table in tables {
                             row_for_task.add_row(&build_table_row(
@@ -440,7 +539,11 @@ fn build_schema_row(conn_id: String, schema: SchemaInfo, runtime: tokio::runtime
                         ));
                     }
                     Ok(Err(err)) => {
-                        row_for_task.add_row(&adw::ActionRow::builder().title(format!("Failed to load tables: {err}")).build());
+                        row_for_task.add_row(
+                            &adw::ActionRow::builder()
+                                .title(format!("Failed to load tables: {err}"))
+                                .build(),
+                        );
                     }
                     Err(_) => {}
                 }
@@ -460,7 +563,12 @@ fn build_functions_row(
     let row = adw::ExpanderRow::builder().title("Functions").build();
     row.add_prefix(&gtk::Image::from_icon_name("system-run-symbolic"));
 
-    let new_btn = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("New function").valign(gtk::Align::Center).css_classes(["flat"]).build();
+    let new_btn = gtk::Button::builder()
+        .icon_name("list-add-symbolic")
+        .tooltip_text("New function")
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
     row.add_suffix(&new_btn);
     new_btn.connect_clicked(clone!(
         #[strong]
@@ -482,7 +590,12 @@ fn build_functions_row(
             .title(glib::markup_escape_text(&func.name))
             .subtitle(format!("→ {}", func.return_type))
             .build();
-        let edit_btn = gtk::Button::builder().icon_name("document-edit-symbolic").tooltip_text("Edit function").valign(gtk::Align::Center).css_classes(["flat"]).build();
+        let edit_btn = gtk::Button::builder()
+            .icon_name("document-edit-symbolic")
+            .tooltip_text("Edit function")
+            .valign(gtk::Align::Center)
+            .css_classes(["flat"])
+            .build();
         func_row.add_suffix(&edit_btn);
         edit_btn.connect_clicked(clone!(
             #[strong]
@@ -505,9 +618,21 @@ fn build_functions_row(
 
 /// A leaf row — no inline column expansion. Columns live in the table detail tab (the "View
 /// details" button below), reached in one click without cluttering the tree.
-fn build_table_row(conn_id: String, schema: String, table: TableInfo, on_open_table: OnOpenTable) -> adw::ActionRow {
-    let icon_name = if table.kind == TableKind::View { "view-list-symbolic" } else { "view-grid-symbolic" };
-    let row = adw::ActionRow::builder().title(glib::markup_escape_text(&table.name)).activatable(true).build();
+fn build_table_row(
+    conn_id: String,
+    schema: String,
+    table: TableInfo,
+    on_open_table: OnOpenTable,
+) -> adw::ActionRow {
+    let icon_name = if table.kind == TableKind::View {
+        "view-list-symbolic"
+    } else {
+        "view-grid-symbolic"
+    };
+    let row = adw::ActionRow::builder()
+        .title(glib::markup_escape_text(&table.name))
+        .activatable(true)
+        .build();
     row.add_prefix(&gtk::Image::from_icon_name(icon_name));
 
     let details_btn = gtk::Button::builder()

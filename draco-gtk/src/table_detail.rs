@@ -2,12 +2,12 @@
 //! the Explorer's "View details" button on a table row.
 
 use std::sync::Arc;
+use std::rc::Rc;
 
 use adw::prelude::*;
 use draco_core::error::CoreError;
 use draco_core::manager::ConnectionManager;
 use draco_core::postgres::queries::{self, ConstraintInfo, FkDirection, FkMapEntry, IndexInfo, TableDetail, TableDetailColumn};
-use draco_core::secrets;
 use gtk::glib;
 use gtk::glib::clone;
 use sourceview5::prelude::*;
@@ -25,9 +25,16 @@ pub struct TableDetailView {
 }
 
 impl TableDetailView {
-    pub fn new(conn_id: String, schema: String, table: String, runtime: tokio::runtime::Handle, manager: SharedManager) -> Self {
+    pub fn new_with_navigation(
+        conn_id: String,
+        schema: String,
+        table: String,
+        runtime: tokio::runtime::Handle,
+        manager: SharedManager,
+        on_open_table: Rc<dyn Fn(String, String, String)>,
+    ) -> Self {
         let root = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).build();
-        load(root.clone(), conn_id, schema, table, runtime, manager);
+        load(root.clone(), conn_id, schema, table, runtime, manager, on_open_table);
         Self { root }
     }
 
@@ -36,7 +43,15 @@ impl TableDetailView {
     }
 }
 
-fn load(root: gtk::Box, conn_id: String, schema: String, table: String, runtime: tokio::runtime::Handle, manager: SharedManager) {
+fn load(
+    root: gtk::Box,
+    conn_id: String,
+    schema: String,
+    table: String,
+    runtime: tokio::runtime::Handle,
+    manager: SharedManager,
+    on_open_table: Rc<dyn Fn(String, String, String)>,
+) {
     while let Some(child) = root.first_child() {
         root.remove(&child);
     }
@@ -60,7 +75,7 @@ fn load(root: gtk::Box, conn_id: String, schema: String, table: String, runtime:
     glib::MainContext::default().spawn_local(async move {
         root_for_task.remove(&spinner);
         match handle.await {
-            Ok(Ok((detail, ddl))) => populate(&root_for_task, conn_id, schema, table, detail, ddl, runtime, manager),
+            Ok(Ok((detail, ddl))) => populate(&root_for_task, conn_id, schema, table, detail, ddl, runtime, manager, on_open_table),
             Ok(Err(err)) => {
                 root_for_task.append(&adw::StatusPage::builder().icon_name("dialog-error-symbolic").title("Failed to load table").description(err.to_string()).build());
             }
@@ -70,7 +85,17 @@ fn load(root: gtk::Box, conn_id: String, schema: String, table: String, runtime:
 }
 
 #[allow(clippy::too_many_arguments)]
-fn populate(root: &gtk::Box, conn_id: String, schema: String, table: String, detail: TableDetail, ddl: String, runtime: tokio::runtime::Handle, manager: SharedManager) {
+fn populate(
+    root: &gtk::Box,
+    conn_id: String,
+    schema: String,
+    table: String,
+    detail: TableDetail,
+    ddl: String,
+    runtime: tokio::runtime::Handle,
+    manager: SharedManager,
+    on_open_table: Rc<dyn Fn(String, String, String)>,
+) {
     let scroller = gtk::ScrolledWindow::builder().vexpand(true).build();
     let content = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -103,6 +128,8 @@ fn populate(root: &gtk::Box, conn_id: String, schema: String, table: String, det
         #[strong]
         manager,
         #[strong]
+        on_open_table,
+        #[strong]
         root_owned,
         move |btn| {
             let Some(parent) = btn.root() else { return };
@@ -126,8 +153,10 @@ fn populate(root: &gtk::Box, conn_id: String, schema: String, table: String, det
                     #[strong]
                     manager,
                     #[strong]
+                    on_open_table,
+                    #[strong]
                     root_owned,
-                    move || load(root_owned.clone(), conn_id.clone(), schema.clone(), table.clone(), runtime.clone(), manager.clone())
+                    move || load(root_owned.clone(), conn_id.clone(), schema.clone(), table.clone(), runtime.clone(), manager.clone(), on_open_table.clone())
                 ),
             );
         }
@@ -181,10 +210,7 @@ fn populate(root: &gtk::Box, conn_id: String, schema: String, table: String, det
                         let task_manager = manager.clone();
                         let handle = runtime.spawn(async move {
                             let mut mgr = task_manager.lock().await;
-                            if mgr.get_driver(&task_conn_id).is_none() {
-                                let password = secrets::get_password(&task_conn_id).await.unwrap_or_default();
-                                mgr.connect(&task_conn_id, &password, 30_000, None, None).await?;
-                            }
+                            crate::connection_runtime::ensure_connected(&mut mgr, &task_conn_id).await?;
                             let driver = mgr.get_driver(&task_conn_id).ok_or(CoreError::NotConnected)?;
                             queries::run_vacuum(driver, &task_schema, &task_table, op).await
                         });
@@ -245,7 +271,7 @@ fn populate(root: &gtk::Box, conn_id: String, schema: String, table: String, det
 
     if !detail.fk_map.is_empty() {
         content.append(&section_label("Foreign Keys"));
-        content.append(&fk_map_group(&detail.fk_map));
+        content.append(&fk_map_group(&detail.fk_map, &conn_id, &on_open_table));
     }
 
     scroller.set_child(Some(&content));
@@ -334,7 +360,7 @@ fn constraints_group(constraints: &[ConstraintInfo]) -> adw::PreferencesGroup {
     group
 }
 
-fn fk_map_group(fk_map: &[FkMapEntry]) -> adw::PreferencesGroup {
+fn fk_map_group(fk_map: &[FkMapEntry], conn_id: &str, on_open_table: &Rc<dyn Fn(String, String, String)>) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::new();
     for fk in fk_map {
         let (title, subtitle) = match fk.direction {
@@ -347,7 +373,13 @@ fn fk_map_group(fk_map: &[FkMapEntry]) -> adw::PreferencesGroup {
                 format!("incoming · {}", fk.constraint_name),
             ),
         };
-        let row = adw::ActionRow::builder().title(title).subtitle(subtitle).build();
+        let target_schema = fk.foreign_schema.clone();
+        let target_table = fk.foreign_table.clone();
+        let conn_id = conn_id.to_string();
+        let on_open_table = on_open_table.clone();
+        let row = adw::ActionRow::builder().title(title).subtitle(subtitle).activatable(true).build();
+        row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+        row.connect_activated(move |_| (on_open_table)(conn_id.clone(), target_schema.clone(), target_table.clone()));
         group.add(&row);
     }
     group

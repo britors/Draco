@@ -7,7 +7,7 @@ repository.workspace = true
 description = "Postgres connection engine, introspection queries and local storage for Draco, independent of any GUI toolkit"
 
 [dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "process", "io-util"] }
 tokio-postgres = "0.7"
 deadpool-postgres = "0.14"
 tokio-postgres-rustls = "0.13"

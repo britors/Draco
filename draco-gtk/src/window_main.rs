@@ -16,6 +16,7 @@ use gtk::glib::clone;
 use tokio::sync::Mutex;
 
 use crate::admin::AdminView;
+use crate::backup_restore;
 use crate::connection_dialog;
 use crate::dashboard::DashboardView;
 use crate::erd::ErdView;
@@ -29,11 +30,40 @@ use crate::table_detail::TableDetailView;
 /// Registry of `(tab page, its QueryEditor's run action)` — see the `query_run_registry` comment
 /// at its construction site in `build` for why this exists.
 type QueryRunRegistry = Rc<RefCell<Vec<(adw::TabPage, Rc<dyn Fn(bool)>)>>>;
+type OpenTable = Rc<dyn Fn(String, String, String)>;
+type OpenTableCell = Rc<RefCell<Option<OpenTable>>>;
 
 pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     let manager: Arc<Mutex<ConnectionManager>> = Arc::new(Mutex::new(ConnectionManager::new()));
 
     let tab_view = adw::TabView::new();
+
+    let open_table_cell: OpenTableCell = Rc::new(RefCell::new(None));
+    let open_table: OpenTable = Rc::new(clone!(
+        #[weak]
+        tab_view,
+        #[strong]
+        runtime,
+        #[strong]
+        manager,
+        #[strong]
+        open_table_cell,
+        move |conn_id, schema, table| {
+            let navigation = open_table_cell.borrow().clone().unwrap_or_else(|| Rc::new(|_, _, _| {}));
+            let view = TableDetailView::new_with_navigation(
+                conn_id,
+                schema.clone(),
+                table.clone(),
+                runtime.clone(),
+                manager.clone(),
+                navigation,
+            );
+            let page = tab_view.append(view.widget());
+            page.set_title(&format!("{schema}.{table}"));
+            tab_view.set_selected_page(&page);
+        }
+    ));
+    *open_table_cell.borrow_mut() = Some(open_table.clone());
 
     // F8 (run) / F10 (explain) need to reach whichever query tab is currently selected — a
     // widget-local key controller on the query editor's own root turned out not to reliably see
@@ -57,16 +87,9 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     let explorer = Rc::new(Explorer::new(
         clone!(
             #[strong]
-            runtime,
-            #[strong]
-            manager,
-            #[weak]
-            tab_view,
+            open_table,
             move |conn_id, schema, table| {
-                let view = TableDetailView::new(conn_id, schema.clone(), table.clone(), runtime.clone(), manager.clone());
-                let page = tab_view.append(view.widget());
-                page.set_title(&format!("{schema}.{table}"));
-                tab_view.set_selected_page(&page);
+                (open_table)(conn_id, schema, table);
             }
         ),
         clone!(
@@ -91,8 +114,16 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             #[weak]
             tab_view,
             move |conn_id, schema, func_name: Option<String>| {
-                let title = func_name.clone().unwrap_or_else(|| "New Function".to_string());
-                let editor = FunctionEditor::new(conn_id, schema, func_name, runtime.clone(), manager.clone());
+                let title = func_name
+                    .clone()
+                    .unwrap_or_else(|| "New Function".to_string());
+                let editor = FunctionEditor::new(
+                    conn_id,
+                    schema,
+                    func_name,
+                    runtime.clone(),
+                    manager.clone(),
+                );
                 let page = tab_view.append(editor.widget());
                 page.set_title(&title);
                 tab_view.set_selected_page(&page);
@@ -108,7 +139,9 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             #[strong]
             explorer_cell,
             move |conn_id: String, schema: String| {
-                let Some(parent) = app_for_new_table.active_window() else { return };
+                let Some(parent) = app_for_new_table.active_window() else {
+                    return;
+                };
                 table_creator::open(
                     &parent,
                     conn_id,
@@ -154,8 +187,10 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             manager,
             #[weak]
             tab_view,
+            #[strong]
+            open_table,
             move |conn_id, schema: String| {
-                let view = ErdView::new(conn_id, schema.clone(), runtime.clone(), manager.clone());
+                let view = ErdView::new(conn_id, schema.clone(), runtime.clone(), manager.clone(), open_table.clone());
                 let page = tab_view.append(view.widget());
                 page.set_title(&format!("ERD: {schema}"));
                 tab_view.set_selected_page(&page);
@@ -171,7 +206,9 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             #[strong]
             explorer_cell,
             move |conn: DbConnection| {
-                let Some(parent) = app_for_new_table.active_window() else { return };
+                let Some(parent) = app_for_new_table.active_window() else {
+                    return;
+                };
                 connection_dialog::open(
                     &parent,
                     runtime.clone(),
@@ -192,6 +229,20 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
                 );
             }
         ),
+        clone!(
+            #[strong]
+            runtime,
+            #[strong]
+            manager,
+            #[strong]
+            app_for_new_table,
+            move |conn: DbConnection| {
+                let Some(parent) = app_for_new_table.active_window() else {
+                    return;
+                };
+                backup_restore::open(&parent, conn, runtime.clone(), manager.clone());
+            }
+        ),
     ));
     *explorer_cell.borrow_mut() = Some(explorer.clone());
 
@@ -204,15 +255,24 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     sidebar_header.set_title_widget(Some(&adw::WindowTitle::new("Conexões", "")));
     sidebar_header.pack_end(&add_btn);
 
-    let sidebar_scroller = gtk::ScrolledWindow::builder().child(explorer.widget()).vexpand(true).build();
+    let sidebar_scroller = gtk::ScrolledWindow::builder()
+        .child(explorer.widget())
+        .vexpand(true)
+        .build();
     let sidebar_toolbar = adw::ToolbarView::new();
     sidebar_toolbar.add_top_bar(&sidebar_header);
     sidebar_toolbar.set_content(Some(&sidebar_scroller));
-    let sidebar_page = adw::NavigationPage::builder().title("Explorer").child(&sidebar_toolbar).build();
+    let sidebar_page = adw::NavigationPage::builder()
+        .title("Explorer")
+        .child(&sidebar_toolbar)
+        .build();
 
     // Without this, AdwTabBar hides itself (and its close button) whenever only one tab is
     // open, so a lone tab can't be closed except via keyboard shortcut.
-    let tab_bar = adw::TabBar::builder().view(&tab_view).autohide(false).build();
+    let tab_bar = adw::TabBar::builder()
+        .view(&tab_view)
+        .autohide(false)
+        .build();
 
     let new_query_btn = gtk::Button::from_icon_name("tab-new-symbolic");
     new_query_btn.set_tooltip_text(Some("New Query"));
@@ -224,7 +284,9 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     content_header.pack_start(&new_query_btn);
     content_header.pack_start(&search_btn);
 
-    let tabs_box = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
+    let tabs_box = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .build();
     tabs_box.append(&tab_bar);
     tabs_box.append(&tab_view);
 
@@ -232,7 +294,9 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     // straight from its exact gresource path rather than through icon-theme name lookup — the
     // themed lookup (`add_resource_path` + `icon_name(APP_ID)`) rendered a broken-image glyph
     // here, and this sidesteps that resolution step entirely.
-    let logo_image = gtk::Image::from_resource("/org/lyraos/Draco/icons/hicolor/scalable/apps/org.lyraos.Draco.svg");
+    let logo_image = gtk::Image::from_resource(
+        "/org/lyraos/Draco/icons/hicolor/scalable/apps/org.lyraos.Draco.svg",
+    );
     logo_image.set_pixel_size(128);
     let empty_state = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -243,7 +307,12 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         .hexpand(true)
         .build();
     empty_state.append(&logo_image);
-    empty_state.append(&gtk::Label::builder().label("Draco").css_classes(["title-1"]).build());
+    empty_state.append(
+        &gtk::Label::builder()
+            .label("Draco")
+            .css_classes(["title-1"])
+            .build(),
+    );
     empty_state.append(
         &gtk::Label::builder()
             .label("Open a query, or explore a table from the sidebar")
@@ -251,7 +320,9 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             .build(),
     );
 
-    let content_stack = gtk::Stack::builder().transition_type(gtk::StackTransitionType::Crossfade).build();
+    let content_stack = gtk::Stack::builder()
+        .transition_type(gtk::StackTransitionType::Crossfade)
+        .build();
     content_stack.add_named(&empty_state, Some("empty"));
     content_stack.add_named(&tabs_box, Some("tabs"));
     content_stack.set_visible_child_name("empty");
@@ -262,7 +333,11 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             #[strong]
             content_stack,
             move |view, _| {
-                content_stack.set_visible_child_name(if view.n_pages() > 0 { "tabs" } else { "empty" });
+                content_stack.set_visible_child_name(if view.n_pages() > 0 {
+                    "tabs"
+                } else {
+                    "empty"
+                });
             }
         ),
     );
@@ -270,7 +345,10 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     let content_toolbar = adw::ToolbarView::new();
     content_toolbar.add_top_bar(&content_header);
     content_toolbar.set_content(Some(&content_stack));
-    let content_page = adw::NavigationPage::builder().title("Draco").child(&content_toolbar).build();
+    let content_page = adw::NavigationPage::builder()
+        .title("Draco")
+        .child(&content_toolbar)
+        .build();
 
     // Every call opens an independent tab (its own buffer, connection selection and results
     // grid) in the same outer `AdwTabView` as table/dashboard/admin tabs — numbered so several
@@ -294,7 +372,9 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             let n = query_tab_count.get() + 1;
             query_tab_count.set(n);
             page.set_title(&format!("Query {n}"));
-            query_run_registry.borrow_mut().push((page.clone(), editor.run_action()));
+            query_run_registry
+                .borrow_mut()
+                .push((page.clone(), editor.run_action()));
             tab_view.set_selected_page(&page);
         }
     );
@@ -355,8 +435,8 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         runtime,
         #[strong]
         manager,
-        #[weak]
-        tab_view,
+        #[strong]
+        open_table,
         move || {
             let connections = store::list_connections();
             search::open(
@@ -365,18 +445,9 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
                 runtime.clone(),
                 manager.clone(),
                 clone!(
-                    #[weak]
-                    tab_view,
                     #[strong]
-                    runtime,
-                    #[strong]
-                    manager,
-                    move |conn_id, schema, table| {
-                        let view = TableDetailView::new(conn_id, schema.clone(), table.clone(), runtime.clone(), manager.clone());
-                        let page = tab_view.append(view.widget());
-                        page.set_title(&format!("{schema}.{table}"));
-                        tab_view.set_selected_page(&page);
-                    }
+                    open_table,
+                    move |conn_id, schema, table| (open_table)(conn_id, schema, table)
                 ),
             );
         }
@@ -413,14 +484,15 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         query_run_registry,
         move |_, _| {
             if let Some(page) = tab_view.selected_page() {
-                if let Some((_, run)) = query_run_registry.borrow().iter().find(|(p, _)| *p == page) {
+                if let Some((_, run)) = query_run_registry.borrow().iter().find(|(p, _)| *p == page)
+                {
                     run(false);
                 }
             }
         }
     ));
     window.add_action(&run_query_action);
-    app.set_accels_for_action("win.run-query", &["F8"]);
+    app.set_accels_for_action("win.run-query", &["F8", "<Primary>Return"]);
 
     let explain_query_action = gio::SimpleAction::new("explain-query", None);
     explain_query_action.connect_activate(clone!(
@@ -430,7 +502,8 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         query_run_registry,
         move |_, _| {
             if let Some(page) = tab_view.selected_page() {
-                if let Some((_, run)) = query_run_registry.borrow().iter().find(|(p, _)| *p == page) {
+                if let Some((_, run)) = query_run_registry.borrow().iter().find(|(p, _)| *p == page)
+                {
                     run(true);
                 }
             }
@@ -442,7 +515,11 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     window.present();
 }
 
-fn refresh_connections(explorer: &Rc<Explorer>, manager: &Arc<Mutex<ConnectionManager>>, runtime: &tokio::runtime::Handle) {
+fn refresh_connections(
+    explorer: &Rc<Explorer>,
+    manager: &Arc<Mutex<ConnectionManager>>,
+    runtime: &tokio::runtime::Handle,
+) {
     let connections = store::list_connections();
     if let Ok(mut mgr) = manager.try_lock() {
         mgr.sync_connections(connections.clone());

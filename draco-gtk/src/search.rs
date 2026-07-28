@@ -9,7 +9,6 @@ use draco_core::connection::DbConnection;
 use draco_core::error::CoreError;
 use draco_core::manager::ConnectionManager;
 use draco_core::postgres::queries::{self, SearchKind, SearchResult};
-use draco_core::secrets;
 use gtk::glib;
 use gtk::glib::clone;
 use tokio::sync::Mutex;
@@ -63,10 +62,7 @@ pub fn open(
         let task_manager = manager.clone();
         let handle = runtime.spawn(async move {
             let mut mgr = task_manager.lock().await;
-            if mgr.get_driver(&conn_id).is_none() {
-                let password = secrets::get_password(&conn_id).await.unwrap_or_default();
-                mgr.connect(&conn_id, &password, 30_000, None, None).await?;
-            }
+            crate::connection_runtime::ensure_connected(&mut mgr, &conn_id).await?;
             let driver = mgr.get_driver(&conn_id).ok_or(CoreError::NotConnected)?;
             queries::global_search(driver, &term).await
         });

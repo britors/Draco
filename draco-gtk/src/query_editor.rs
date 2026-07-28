@@ -3,6 +3,9 @@
 //! (auto-recorded, capped at 50 by `draco-core::store`) and named snippets — both local TOML,
 //! read/written synchronously on the GTK thread like every other `store::*` call in this app.
 
+use std::cell::RefCell;
+use std::io::Write;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -10,14 +13,13 @@ use adw::prelude::*;
 use draco_core::connection::DbConnection;
 use draco_core::manager::ConnectionManager;
 use draco_core::postgres::queries;
-use draco_core::secrets;
 use draco_core::store;
-use gtk::glib;
+use gtk::{gio, glib};
 use gtk::glib::clone;
 use sourceview5::prelude::*;
-use tokio::sync::Mutex;
+use tokio::sync::{watch, Mutex};
 
-use crate::results_grid::ResultsGrid;
+use crate::results_grid::{ExportSnapshot, ResultsGrid};
 
 type SharedManager = Arc<Mutex<ConnectionManager>>;
 
@@ -32,6 +34,150 @@ fn first_line(sql: &str) -> String {
     } else {
         line.to_string()
     }
+}
+
+async fn wait_for_cancel(mut receiver: watch::Receiver<bool>) {
+    while !*receiver.borrow() {
+        if receiver.changed().await.is_err() {
+            return;
+        }
+    }
+}
+
+fn refresh_completion_words(
+    conn: Option<DbConnection>,
+    runtime: &tokio::runtime::Handle,
+    manager: &SharedManager,
+    completion_buffer: &sourceview5::Buffer,
+) {
+    let Some(conn) = conn else {
+        completion_buffer.set_text("");
+        return;
+    };
+    let conn_id = conn.id.clone();
+    let task_manager = manager.clone();
+    let handle = runtime.spawn(async move {
+        let mgr = task_manager.lock().await;
+        let driver = mgr.get_driver(&conn_id).ok_or(draco_core::error::CoreError::NotConnected)?;
+        queries::get_completion_data(driver).await
+    });
+    let completion_buffer = completion_buffer.clone();
+    glib::MainContext::default().spawn_local(async move {
+        let Ok(Ok(data)) = handle.await else {
+            return;
+        };
+        let mut words = String::new();
+        for schema in data.schemas {
+            words.push_str(&schema);
+            words.push(' ');
+        }
+        for table in data.tables {
+            words.push_str(&table.name);
+            words.push(' ');
+            words.push_str(&table.schema);
+            words.push(' ');
+            words.push_str(&format!("{}.{}", table.schema, table.name));
+            words.push(' ');
+        }
+        for column in data.columns {
+            words.push_str(&column.name);
+            words.push(' ');
+            words.push_str(&format!("{}.{}", column.table, column.name));
+            words.push(' ');
+            words.push_str(&format!("{}.{}.{}", column.schema, column.table, column.name));
+            words.push(' ');
+        }
+        for function in data.functions {
+            words.push_str(&function.name);
+            words.push(' ');
+            words.push_str(&function.schema);
+            words.push(' ');
+            words.push_str(&format!("{}.{}", function.schema, function.name));
+            words.push(' ');
+        }
+        completion_buffer.set_text(&words);
+    });
+}
+
+#[derive(Clone, Copy)]
+enum ExportFormat {
+    Csv,
+    Json,
+}
+
+fn csv_field(value: &serde_json::Value) -> String {
+    let raw = match value {
+        serde_json::Value::Null => String::new(),
+        serde_json::Value::String(value) => value.clone(),
+        other => other.to_string(),
+    };
+    if raw.contains(',') || raw.contains('"') || raw.contains('\n') || raw.contains('\r') {
+        format!("\"{}\"", raw.replace('"', "\"\""))
+    } else {
+        raw
+    }
+}
+
+fn write_export(path: PathBuf, snapshot: ExportSnapshot, format: ExportFormat) -> std::io::Result<()> {
+    let mut file = std::fs::File::create(path)?;
+    match format {
+        ExportFormat::Csv => {
+            let header = snapshot.columns.iter().map(|column| csv_field(&serde_json::Value::String(column.clone()))).collect::<Vec<_>>().join(",");
+            writeln!(file, "{header}")?;
+            for row in snapshot.rows {
+                let line = snapshot.columns.iter().map(|column| csv_field(row.get(column).unwrap_or(&serde_json::Value::Null))).collect::<Vec<_>>().join(",");
+                writeln!(file, "{line}")?;
+            }
+        }
+        ExportFormat::Json => {
+            serde_json::to_writer_pretty(&mut file, &snapshot.rows).map_err(std::io::Error::other)?;
+            writeln!(file)?;
+        }
+    }
+    Ok(())
+}
+
+fn export_results(
+    results: &Rc<ResultsGrid>,
+    format: ExportFormat,
+    runtime: &tokio::runtime::Handle,
+    status_label: &gtk::Label,
+    source_btn: &gtk::Button,
+) {
+    if !results.has_rows() {
+        status_label.set_label("No results to export");
+        return;
+    }
+    let Some(window) = source_btn.root().and_downcast::<gtk::Window>() else {
+        status_label.set_label("Cannot open export dialog");
+        return;
+    };
+    let (title, accept_label, initial_name) = match format {
+        ExportFormat::Csv => ("Export results as CSV", "Export", "query-results.csv"),
+        ExportFormat::Json => ("Export results as JSON", "Export", "query-results.json"),
+    };
+    let dialog = gtk::FileDialog::builder().title(title).accept_label(accept_label).initial_name(initial_name).build();
+    let snapshot = results.export_snapshot();
+    let runtime = runtime.clone();
+    let status_label = status_label.clone();
+    dialog.save(Some(&window), None::<&gio::Cancellable>, move |result| {
+        let Ok(file) = result else {
+            status_label.set_label("Export cancelled");
+            return;
+        };
+        let Some(path) = file.path() else {
+            status_label.set_label("Export failed: invalid destination");
+            return;
+        };
+        let handle = runtime.spawn_blocking(move || write_export(path, snapshot, format));
+        glib::MainContext::default().spawn_local(async move {
+            match handle.await {
+                Ok(Ok(())) => status_label.set_label("Results exported successfully"),
+                Ok(Err(err)) => status_label.set_label(&format!("Export failed: {err}")),
+                Err(err) => status_label.set_label(&format!("Export failed: {err}")),
+            }
+        });
+    });
 }
 
 /// Rebuilt from scratch every time the popover opens (`connect_show`) — same "wholesale replace"
@@ -197,10 +343,21 @@ fn run_sql(
     status_label: &gtk::Label,
     run_btn: &gtk::Button,
     explain_btn: &gtk::Button,
+    cancel_btn: &gtk::Button,
+    cancel_state: &Rc<RefCell<Option<watch::Sender<bool>>>>,
+    export_csv_btn: &gtk::Button,
+    export_json_btn: &gtk::Button,
 ) {
     run_btn.set_sensitive(false);
     explain_btn.set_sensitive(false);
+    export_csv_btn.set_sensitive(false);
+    export_json_btn.set_sensitive(false);
+    cancel_btn.set_visible(true);
+    cancel_btn.set_sensitive(true);
     status_label.set_label("Running…");
+
+    let (cancel_sender, cancel_receiver) = watch::channel(false);
+    *cancel_state.borrow_mut() = Some(cancel_sender);
 
     let conn_id = conn.id.clone();
     let conn_label = conn.label.clone();
@@ -208,13 +365,15 @@ fn run_sql(
     let sql_for_task = sql.clone();
     let started = std::time::Instant::now();
     let handle = runtime.spawn(async move {
-        let mut mgr = task_manager.lock().await;
-        if mgr.get_driver(&conn_id).is_none() {
-            let password = secrets::get_password(&conn_id).await.unwrap_or_default();
-            mgr.connect(&conn_id, &password, 30_000, None, None).await?;
-        }
+        let mgr = task_manager.lock().await;
         let driver = mgr.get_driver(&conn_id).ok_or(draco_core::error::CoreError::NotConnected)?;
-        queries::execute_query(driver, &sql_for_task).await
+        tokio::select! {
+            result = queries::execute_query(driver, &sql_for_task) => result,
+            _ = wait_for_cancel(cancel_receiver) => {
+                driver.cancel_active().await?;
+                Err(draco_core::error::CoreError::Other("Query cancelled".to_string()))
+            }
+        }
     });
 
     let conn_id_for_history = conn.id.clone();
@@ -222,12 +381,18 @@ fn run_sql(
     let status_label_for_task = status_label.clone();
     let run_btn_for_task = run_btn.clone();
     let explain_btn_for_task = explain_btn.clone();
+    let cancel_btn_for_task = cancel_btn.clone();
+    let cancel_state_for_task = cancel_state.clone();
+    let export_csv_btn_for_task = export_csv_btn.clone();
+    let export_json_btn_for_task = export_json_btn.clone();
     glib::MainContext::default().spawn_local(async move {
         let elapsed = started.elapsed();
         match handle.await {
             Ok(Ok(result)) => {
                 let row_count = result.rows.len();
                 results_for_task.set_data(&result.columns, result.rows);
+                export_csv_btn_for_task.set_sensitive(true);
+                export_json_btn_for_task.set_sensitive(true);
                 status_label_for_task.set_label(&format!("{row_count} rows in {:.2}s", elapsed.as_secs_f64()));
                 if record_history {
                     let _ = store::add_history(store::HistoryEntry {
@@ -243,14 +408,28 @@ fn run_sql(
             }
             Ok(Err(err)) => {
                 results_for_task.clear();
-                status_label_for_task.set_label(&format!("Error: {err}"));
+                export_csv_btn_for_task.set_sensitive(false);
+                export_json_btn_for_task.set_sensitive(false);
+                if matches!(err, draco_core::error::CoreError::NotConnected) {
+                    status_label_for_task.set_label("Connection is not open. Click Connect first.");
+                } else if err.to_string() == "Query cancelled" {
+                    status_label_for_task.set_label("Cancelled");
+                } else {
+                    status_label_for_task.set_label(&format!("Error: {err}"));
+                }
             }
             Err(_) => {
+                results_for_task.clear();
+                export_csv_btn_for_task.set_sensitive(false);
+                export_json_btn_for_task.set_sensitive(false);
                 status_label_for_task.set_label("Cancelled");
             }
         }
         run_btn_for_task.set_sensitive(true);
         explain_btn_for_task.set_sensitive(true);
+        cancel_btn_for_task.set_sensitive(false);
+        cancel_btn_for_task.set_visible(false);
+        cancel_state_for_task.borrow_mut().take();
     });
 }
 
@@ -279,11 +458,41 @@ impl QueryEditor {
         view.set_bottom_margin(6);
         let editor_scroller = gtk::ScrolledWindow::builder().child(&view).vexpand(true).build();
 
+        let completion_words = sourceview5::CompletionWords::builder()
+            .title("Database objects")
+            .minimum_word_size(2)
+            .build();
+        view.completion().add_provider(&completion_words);
+        completion_words.register(&buffer);
+        let completion_buffer = sourceview5::Buffer::new(None);
+        completion_words.register(&completion_buffer);
+
         let connections: Rc<Vec<DbConnection>> = Rc::new(connections);
 
         let labels: Vec<&str> = connections.iter().map(|c| c.label.as_str()).collect();
         let conn_model = gtk::StringList::new(&labels);
         let conn_dropdown = gtk::DropDown::builder().model(&conn_model).build();
+        if let Some(conn) = connections.first() {
+            refresh_completion_words(Some(conn.clone()), &runtime, &manager, &completion_buffer);
+        }
+        conn_dropdown.connect_selected_notify(clone!(
+            #[strong]
+            connections,
+            #[strong]
+            runtime,
+            #[strong]
+            manager,
+            #[strong]
+            completion_buffer,
+            move |dropdown| {
+                refresh_completion_words(
+                    connections.get(dropdown.selected() as usize).cloned(),
+                    &runtime,
+                    &manager,
+                    &completion_buffer,
+                );
+            }
+        ));
 
         let run_btn = gtk::Button::builder()
             .icon_name("media-playback-start-symbolic")
@@ -292,6 +501,24 @@ impl QueryEditor {
             .build();
 
         let explain_btn = gtk::Button::builder().icon_name("view-list-symbolic").tooltip_text("Explain plan (F10)").css_classes(["flat"]).build();
+
+        let cancel_btn = gtk::Button::builder()
+            .icon_name("media-playback-stop-symbolic")
+            .tooltip_text("Cancel query")
+            .css_classes(["destructive-action"])
+            .visible(false)
+            .sensitive(false)
+            .build();
+        let cancel_state: Rc<RefCell<Option<watch::Sender<bool>>>> = Rc::new(RefCell::new(None));
+        cancel_btn.connect_clicked(clone!(
+            #[strong]
+            cancel_state,
+            move |_| {
+                if let Some(sender) = cancel_state.borrow().as_ref() {
+                    let _ = sender.send(true);
+                }
+            }
+        ));
 
         let history_popover = gtk::Popover::new();
         history_popover.connect_show(clone!(
@@ -326,6 +553,7 @@ impl QueryEditor {
         toolbar.append(&conn_dropdown);
         toolbar.append(&run_btn);
         toolbar.append(&explain_btn);
+        toolbar.append(&cancel_btn);
         toolbar.append(&history_btn);
         toolbar.append(&snippets_btn);
         toolbar.append(&status_label);
@@ -333,10 +561,50 @@ impl QueryEditor {
         let results = Rc::new(ResultsGrid::new());
         let results_scroller = gtk::ScrolledWindow::builder().child(results.widget()).vexpand(true).build();
 
+        let export_csv_btn = gtk::Button::builder()
+            .label("Export CSV")
+            .icon_name("document-save-symbolic")
+            .tooltip_text("Export complete results as CSV")
+            .css_classes(["flat"])
+            .sensitive(false)
+            .build();
+        let export_json_btn = gtk::Button::builder()
+            .label("Export JSON")
+            .icon_name("document-save-symbolic")
+            .tooltip_text("Export complete results as JSON")
+            .css_classes(["flat"])
+            .sensitive(false)
+            .build();
+        export_csv_btn.connect_clicked(clone!(
+            #[strong]
+            results,
+            #[strong]
+            runtime,
+            #[strong]
+            status_label,
+            move |button| export_results(&results, ExportFormat::Csv, &runtime, &status_label, button)
+        ));
+        export_json_btn.connect_clicked(clone!(
+            #[strong]
+            results,
+            #[strong]
+            runtime,
+            #[strong]
+            status_label,
+            move |button| export_results(&results, ExportFormat::Json, &runtime, &status_label, button)
+        ));
+        let results_toolbar = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(6).margin_top(6).margin_start(6).margin_end(6).build();
+        results_toolbar.append(&gtk::Label::builder().label("Results").hexpand(true).xalign(0.0).build());
+        results_toolbar.append(&export_csv_btn);
+        results_toolbar.append(&export_json_btn);
+        let results_panel = gtk::Box::builder().orientation(gtk::Orientation::Vertical).vexpand(true).build();
+        results_panel.append(&results_toolbar);
+        results_panel.append(&results_scroller);
+
         let paned = gtk::Paned::builder()
             .orientation(gtk::Orientation::Vertical)
             .start_child(&editor_scroller)
-            .end_child(&results_scroller)
+            .end_child(&results_panel)
             .resize_start_child(true)
             .resize_end_child(true)
             .position(280)
@@ -366,11 +634,22 @@ impl QueryEditor {
             #[strong]
             explain_btn,
             #[strong]
+            cancel_btn,
+            #[strong]
+            cancel_state,
+            #[strong]
+            export_csv_btn,
+            #[strong]
+            export_json_btn,
+            #[strong]
             runtime,
             #[strong]
             manager,
             move |explain: bool| {
                 let selected = conn_dropdown.selected();
+                if !run_btn.is_sensitive() {
+                    return;
+                }
                 let Some(conn) = connections.get(selected as usize) else {
                     status_label.set_label("No connection selected");
                     return;
@@ -381,7 +660,21 @@ impl QueryEditor {
                     return;
                 }
                 let sql = if explain { format!("EXPLAIN {sql}") } else { sql };
-                run_sql(sql, conn, !explain, &runtime, &manager, &results, &status_label, &run_btn, &explain_btn);
+                run_sql(
+                    sql,
+                    conn,
+                    !explain,
+                    &runtime,
+                    &manager,
+                    &results,
+                    &status_label,
+                    &run_btn,
+                    &explain_btn,
+                    &cancel_btn,
+                    &cancel_state,
+                    &export_csv_btn,
+                    &export_json_btn,
+                );
             }
         ));
 

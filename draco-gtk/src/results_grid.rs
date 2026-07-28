@@ -6,10 +6,19 @@
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use std::cell::RefCell;
+
+#[derive(Debug, Clone)]
+pub struct ExportSnapshot {
+    pub columns: Vec<String>,
+    pub rows: Vec<serde_json::Map<String, serde_json::Value>>,
+}
 
 pub struct ResultsGrid {
     column_view: gtk::ColumnView,
     store: gio::ListStore,
+    export_columns: RefCell<Vec<String>>,
+    export_rows: RefCell<Vec<serde_json::Map<String, serde_json::Value>>>,
 }
 
 impl ResultsGrid {
@@ -22,7 +31,12 @@ impl ResultsGrid {
             .show_column_separators(true)
             .vexpand(true)
             .build();
-        Self { column_view, store }
+        Self {
+            column_view,
+            store,
+            export_columns: RefCell::new(Vec::new()),
+            export_rows: RefCell::new(Vec::new()),
+        }
     }
 
     pub fn widget(&self) -> &gtk::ColumnView {
@@ -36,10 +50,14 @@ impl ResultsGrid {
             self.column_view.remove_column(&col);
         }
         self.store.remove_all();
+        self.export_columns.borrow_mut().clear();
+        self.export_rows.borrow_mut().clear();
     }
 
     pub fn set_data(&self, columns: &[String], rows: Vec<serde_json::Map<String, serde_json::Value>>) {
         self.clear();
+        *self.export_columns.borrow_mut() = columns.to_vec();
+        *self.export_rows.borrow_mut() = rows.clone();
 
         for col_name in columns {
             let factory = gtk::SignalListItemFactory::new();
@@ -66,6 +84,17 @@ impl ResultsGrid {
         for row in rows {
             self.store.append(&glib::BoxedAnyObject::new(row));
         }
+    }
+
+    pub fn export_snapshot(&self) -> ExportSnapshot {
+        ExportSnapshot {
+            columns: self.export_columns.borrow().clone(),
+            rows: self.export_rows.borrow().clone(),
+        }
+    }
+
+    pub fn has_rows(&self) -> bool {
+        !self.export_rows.borrow().is_empty()
     }
 }
 

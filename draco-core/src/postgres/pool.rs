@@ -11,6 +11,14 @@ pub struct PostgresDriver {
     pool: Pool,
     app_name: String,
     tunnel: Option<SshTunnel>,
+    external_host: String,
+    external_port: u16,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ExternalTarget {
+    pub host: String,
+    pub port: u16,
 }
 
 impl PostgresDriver {
@@ -45,7 +53,9 @@ impl PostgresDriver {
             .connect_timeout(std::time::Duration::from_secs(10))
             .options(format!("-c statement_timeout={statement_timeout_ms}"));
 
-        let manager_config = ManagerConfig { recycling_method: RecyclingMethod::Fast };
+        let manager_config = ManagerConfig {
+            recycling_method: RecyclingMethod::Fast,
+        };
         let manager = if conn.ssl {
             Manager::from_config(pg_config, tls::make_connector()?, manager_config)
         } else {
@@ -62,7 +72,13 @@ impl PostgresDriver {
         let client = pool.get().await?;
         drop(client);
 
-        Ok(Self { pool, app_name: app_name.to_string(), tunnel })
+        Ok(Self {
+            pool,
+            app_name: app_name.to_string(),
+            tunnel,
+            external_host: host,
+            external_port: port,
+        })
     }
 
     pub async fn disconnect(mut self) {
@@ -100,10 +116,34 @@ impl PostgresDriver {
     pub fn is_connected(&self) -> bool {
         !self.pool.is_closed()
     }
+
+    /// Returns the endpoint that command-line PostgreSQL tools must use. For an SSH
+    /// connection this is the local listener kept alive by this driver.
+    pub(crate) fn external_target(&self) -> ExternalTarget {
+        match &self.tunnel {
+            Some(tunnel) => ExternalTarget {
+                host: "127.0.0.1".to_string(),
+                port: tunnel.local_port,
+            },
+            None => ExternalTarget {
+                host: self.external_host.clone(),
+                port: self.external_port,
+            },
+        }
+    }
 }
 
 pub async fn test_connection(conn: &DbConnection, password: &str) -> Result<()> {
-    let driver = PostgresDriver::connect(conn, password, 30_000, "draco-test", None, None).await?;
+    test_connection_with_ssh(conn, password, None, None).await
+}
+
+pub async fn test_connection_with_ssh(
+    conn: &DbConnection,
+    password: &str,
+    ssh_password: Option<&str>,
+    jump_password: Option<&str>,
+) -> Result<()> {
+    let driver = PostgresDriver::connect(conn, password, 30_000, "draco-test", ssh_password, jump_password).await?;
     driver.disconnect().await;
     Ok(())
 }
