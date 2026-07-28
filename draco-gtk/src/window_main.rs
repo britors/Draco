@@ -1,11 +1,13 @@
 //! Main window: `AdwNavigationSplitView` with the connection/schema Explorer sidebar and a
 //! content pane (query editor and friends land here from M3 onward).
 
+use std::cell::Cell;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use adw::prelude::*;
+use draco_core::connection::DbConnection;
 use draco_core::manager::ConnectionManager;
 use draco_core::store;
 use gtk::gio;
@@ -24,10 +26,29 @@ use crate::search;
 use crate::table_creator;
 use crate::table_detail::TableDetailView;
 
+/// Registry of `(tab page, its QueryEditor's run action)` — see the `query_run_registry` comment
+/// at its construction site in `build` for why this exists.
+type QueryRunRegistry = Rc<RefCell<Vec<(adw::TabPage, Rc<dyn Fn(bool)>)>>>;
+
 pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     let manager: Arc<Mutex<ConnectionManager>> = Arc::new(Mutex::new(ConnectionManager::new()));
 
     let tab_view = adw::TabView::new();
+
+    // F8 (run) / F10 (explain) need to reach whichever query tab is currently selected — a
+    // widget-local key controller on the query editor's own root turned out not to reliably see
+    // those keys while the GtkSourceView had focus, so instead each QueryEditor registers its
+    // `run_action` here (keyed by its `AdwTabPage`, cleaned up on `page-detached`) and the two
+    // window-level actions below (mirroring `win.search`/`win.new-query`) look up whichever entry
+    // matches `tab_view.selected_page()` at the moment the accelerator fires.
+    let query_run_registry: QueryRunRegistry = Rc::new(RefCell::new(Vec::new()));
+    tab_view.connect_page_detached(clone!(
+        #[strong]
+        query_run_registry,
+        move |_, page, _| {
+            query_run_registry.borrow_mut().retain(|(p, _)| p != page);
+        }
+    ));
 
     let app_for_new_table = app.clone();
     // Filled in right after `Explorer::new` returns, below — lets callbacks constructed here
@@ -140,6 +161,37 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
                 tab_view.set_selected_page(&page);
             }
         ),
+        clone!(
+            #[strong]
+            runtime,
+            #[strong]
+            manager,
+            #[strong]
+            app_for_new_table,
+            #[strong]
+            explorer_cell,
+            move |conn: DbConnection| {
+                let Some(parent) = app_for_new_table.active_window() else { return };
+                connection_dialog::open(
+                    &parent,
+                    runtime.clone(),
+                    Some(conn),
+                    clone!(
+                        #[strong]
+                        runtime,
+                        #[strong]
+                        manager,
+                        #[strong]
+                        explorer_cell,
+                        move |_saved| {
+                            if let Some(explorer) = explorer_cell.borrow().clone() {
+                                refresh_connections(&explorer, &manager, &runtime);
+                            }
+                        }
+                    ),
+                );
+            }
+        ),
     ));
     *explorer_cell.borrow_mut() = Some(explorer.clone());
 
@@ -149,7 +201,7 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     add_btn.set_tooltip_text(Some("Add Connection"));
 
     let sidebar_header = adw::HeaderBar::new();
-    sidebar_header.set_title_widget(Some(&adw::WindowTitle::new("Draco", "")));
+    sidebar_header.set_title_widget(Some(&adw::WindowTitle::new("Conexões", "")));
     sidebar_header.pack_end(&add_btn);
 
     let sidebar_scroller = gtk::ScrolledWindow::builder().child(explorer.widget()).vexpand(true).build();
@@ -158,7 +210,9 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     sidebar_toolbar.set_content(Some(&sidebar_scroller));
     let sidebar_page = adw::NavigationPage::builder().title("Explorer").child(&sidebar_toolbar).build();
 
-    let tab_bar = adw::TabBar::builder().view(&tab_view).build();
+    // Without this, AdwTabBar hides itself (and its close button) whenever only one tab is
+    // open, so a lone tab can't be closed except via keyboard shortcut.
+    let tab_bar = adw::TabBar::builder().view(&tab_view).autohide(false).build();
 
     let new_query_btn = gtk::Button::from_icon_name("tab-new-symbolic");
     new_query_btn.set_tooltip_text(Some("New Query"));
@@ -218,6 +272,10 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     content_toolbar.set_content(Some(&content_stack));
     let content_page = adw::NavigationPage::builder().title("Draco").child(&content_toolbar).build();
 
+    // Every call opens an independent tab (its own buffer, connection selection and results
+    // grid) in the same outer `AdwTabView` as table/dashboard/admin tabs — numbered so several
+    // open at once stay distinguishable in the tab bar instead of all reading "Query".
+    let query_tab_count: Rc<Cell<u32>> = Rc::new(Cell::new(0));
     let open_new_query = clone!(
         #[strong]
         runtime,
@@ -225,11 +283,18 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         manager,
         #[weak]
         tab_view,
+        #[strong]
+        query_tab_count,
+        #[strong]
+        query_run_registry,
         move || {
             let connections = store::list_connections();
             let editor = QueryEditor::new(connections, runtime.clone(), manager.clone());
             let page = tab_view.append(editor.widget());
-            page.set_title("Query");
+            let n = query_tab_count.get() + 1;
+            query_tab_count.set(n);
+            page.set_title(&format!("Query {n}"));
+            query_run_registry.borrow_mut().push((page.clone(), editor.run_action()));
             tab_view.set_selected_page(&page);
         }
     );
@@ -339,6 +404,40 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     ));
     window.add_action(&new_query_action);
     app.set_accels_for_action("win.new-query", &["<Primary>t"]);
+
+    let run_query_action = gio::SimpleAction::new("run-query", None);
+    run_query_action.connect_activate(clone!(
+        #[strong]
+        tab_view,
+        #[strong]
+        query_run_registry,
+        move |_, _| {
+            if let Some(page) = tab_view.selected_page() {
+                if let Some((_, run)) = query_run_registry.borrow().iter().find(|(p, _)| *p == page) {
+                    run(false);
+                }
+            }
+        }
+    ));
+    window.add_action(&run_query_action);
+    app.set_accels_for_action("win.run-query", &["F8"]);
+
+    let explain_query_action = gio::SimpleAction::new("explain-query", None);
+    explain_query_action.connect_activate(clone!(
+        #[strong]
+        tab_view,
+        #[strong]
+        query_run_registry,
+        move |_, _| {
+            if let Some(page) = tab_view.selected_page() {
+                if let Some((_, run)) = query_run_registry.borrow().iter().find(|(p, _)| *p == page) {
+                    run(true);
+                }
+            }
+        }
+    ));
+    window.add_action(&explain_query_action);
+    app.set_accels_for_action("win.explain-query", &["F10"]);
 
     window.present();
 }

@@ -105,6 +105,12 @@ pub fn add_history(mut entry: HistoryEntry) -> Result<()> {
     write_toml("history.toml", &file)
 }
 
+pub fn delete_history_entry(id: &str) -> Result<()> {
+    let mut file = HistoryFile { entries: list_history() };
+    file.entries.retain(|e| e.id != id);
+    write_toml("history.toml", &file)
+}
+
 pub fn clear_history() -> Result<()> {
     write_toml("history.toml", &HistoryFile::default())
 }

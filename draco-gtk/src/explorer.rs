@@ -12,10 +12,12 @@ use adw::prelude::*;
 use draco_core::connection::DbConnection;
 use draco_core::manager::ConnectionManager;
 use draco_core::postgres::queries::{self, FunctionInfo, SchemaInfo, TableInfo, TableKind};
-use draco_core::secrets;
+use draco_core::{secrets, store};
 use gtk::glib;
 use gtk::glib::clone;
 use tokio::sync::Mutex;
+
+use crate::confirm::confirm_destructive;
 
 type SharedManager = Arc<Mutex<ConnectionManager>>;
 /// `(connection id, schema, table)` — fired by a table row's "View details" button.
@@ -30,6 +32,8 @@ type OnNewTable = Rc<dyn Fn(String, String)>;
 type OnOpenAdmin = Rc<dyn Fn(String)>;
 /// `(connection id, schema)` — fired by a schema row's "ERD" button.
 type OnOpenErd = Rc<dyn Fn(String, String)>;
+/// The connection being edited — fired by a connection row's "Edit Connection" action.
+type OnEditConnection = Rc<dyn Fn(DbConnection)>;
 
 /// Bundles every "open something in a tab/dialog" callback the Explorer's rows can fire, so
 /// adding a new one doesn't mean threading another parameter through every builder function.
@@ -41,6 +45,7 @@ struct Callbacks {
     on_new_table: OnNewTable,
     on_open_admin: OnOpenAdmin,
     on_open_erd: OnOpenErd,
+    on_edit_connection: OnEditConnection,
 }
 
 pub struct Explorer {
@@ -57,6 +62,7 @@ impl Explorer {
         on_new_table: impl Fn(String, String) + 'static,
         on_open_admin: impl Fn(String) + 'static,
         on_open_erd: impl Fn(String, String) + 'static,
+        on_edit_connection: impl Fn(DbConnection) + 'static,
     ) -> Self {
         let list_box = gtk::ListBox::builder()
             .selection_mode(gtk::SelectionMode::None)
@@ -70,6 +76,7 @@ impl Explorer {
             on_new_table: Rc::new(on_new_table),
             on_open_admin: Rc::new(on_open_admin),
             on_open_erd: Rc::new(on_open_erd),
+            on_edit_connection: Rc::new(on_edit_connection),
         };
         Self { list_box, callbacks }
     }
@@ -83,23 +90,36 @@ impl Explorer {
             self.list_box.remove(&child);
         }
         for conn in connections {
-            self.list_box.append(&build_connection_row(conn, runtime.clone(), manager.clone(), self.callbacks.clone()));
+            self.list_box.append(&build_connection_row(conn, runtime.clone(), manager.clone(), self.callbacks.clone(), self.list_box.clone()));
         }
     }
 }
 
-fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, manager: SharedManager, callbacks: Callbacks) -> adw::ExpanderRow {
+fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, manager: SharedManager, callbacks: Callbacks, list_box: gtk::ListBox) -> adw::ExpanderRow {
     let row = adw::ExpanderRow::builder()
         .title(glib::markup_escape_text(&conn.label))
         .subtitle(format!("{}@{}:{}/{}", conn.user, conn.host, conn.port, conn.database))
+        .enable_expansion(false)
         .build();
-    row.add_prefix(&gtk::Image::from_icon_name("network-server-symbolic"));
+    let status_icon = gtk::Image::builder().icon_name("drive-harddisk-symbolic").css_classes(["error"]).build();
+    row.add_prefix(&status_icon);
+
+    // Before connecting: just a "Connect" action, no expand arrow and no other actions — there's
+    // nothing to browse/administer yet. All of that appears only once the connection succeeds.
+    let connect_btn = gtk::Button::builder()
+        .icon_name("network-wired-symbolic")
+        .tooltip_text("Connect")
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
+    row.add_suffix(&connect_btn);
 
     let dashboard_btn = gtk::Button::builder()
-        .icon_name("speedometer-symbolic")
+        .icon_name("org.gnome.SystemMonitor-symbolic")
         .tooltip_text("Connection dashboard")
         .valign(gtk::Align::Center)
         .css_classes(["flat"])
+        .visible(false)
         .build();
     row.add_suffix(&dashboard_btn);
     let id_for_dashboard = conn.id.clone();
@@ -118,6 +138,7 @@ fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, man
         .tooltip_text("Administration (roles, jobs, activity, extensions)")
         .valign(gtk::Align::Center)
         .css_classes(["flat"])
+        .visible(false)
         .build();
     row.add_suffix(&admin_btn);
     let id_for_admin = conn.id.clone();
@@ -131,8 +152,130 @@ fn build_connection_row(conn: DbConnection, runtime: tokio::runtime::Handle, man
         }
     ));
 
+    let more_btn = gtk::MenuButton::builder().icon_name("view-more-symbolic").tooltip_text("Connection options").valign(gtk::Align::Center).css_classes(["flat"]).build();
+    let more_popover = gtk::Popover::new();
+    let more_box = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(2).margin_top(6).margin_bottom(6).margin_start(6).margin_end(6).build();
+
+    let edit_btn = gtk::Button::builder().label("Edit Connection").halign(gtk::Align::Start).css_classes(["flat"]).build();
+    more_box.append(&edit_btn);
+    edit_btn.connect_clicked(clone!(
+        #[weak]
+        more_popover,
+        #[strong]
+        callbacks,
+        #[strong]
+        conn,
+        move |_| {
+            more_popover.popdown();
+            (callbacks.on_edit_connection)(conn.clone());
+        }
+    ));
+
+    let delete_btn = gtk::Button::builder().label("Delete Connection").halign(gtk::Align::Start).css_classes(["flat"]).build();
+    more_box.append(&delete_btn);
+    let id_for_delete = conn.id.clone();
+    let label_for_delete = conn.label.clone();
+    delete_btn.connect_clicked(clone!(
+        #[weak]
+        more_popover,
+        #[weak]
+        row,
+        #[strong]
+        list_box,
+        #[strong]
+        id_for_delete,
+        #[strong]
+        label_for_delete,
+        #[strong]
+        runtime,
+        move |btn| {
+            more_popover.popdown();
+            let Some(parent) = btn.root() else { return };
+            let id = id_for_delete.clone();
+            let label = label_for_delete.clone();
+            let list_box = list_box.clone();
+            let row = row.clone();
+            let runtime = runtime.clone();
+            confirm_destructive(
+                &parent,
+                "Delete connection?",
+                &format!("This permanently removes the saved connection \u{201c}{label}\u{201d} (its stored password is also removed). This cannot be undone."),
+                "Delete Connection",
+                move || {
+                    let _ = store::delete_connection(&id);
+                    list_box.remove(&row);
+                    // Best-effort: the connection is already gone from the list either way, so
+                    // this doesn't block the UI or surface its own errors.
+                    runtime.spawn(async move {
+                        let _ = secrets::remove_password(&id).await;
+                    });
+                },
+            );
+        }
+    ));
+
+    more_popover.set_child(Some(&more_box));
+    more_btn.set_popover(Some(&more_popover));
+    row.add_suffix(&more_btn);
+
     let loaded = Rc::new(Cell::new(false));
     let id = conn.id;
+
+    connect_btn.connect_clicked(clone!(
+        #[weak]
+        row,
+        #[strong]
+        runtime,
+        #[strong]
+        manager,
+        #[strong]
+        id,
+        #[strong]
+        dashboard_btn,
+        #[strong]
+        admin_btn,
+        #[strong]
+        status_icon,
+        move |btn| {
+            btn.set_sensitive(false);
+            let task_id = id.clone();
+            let task_manager = manager.clone();
+            let handle = runtime.spawn(async move {
+                let mut mgr = task_manager.lock().await;
+                if mgr.get_driver(&task_id).is_none() {
+                    let password = secrets::get_password(&task_id).await.unwrap_or_default();
+                    mgr.connect(&task_id, &password, 30_000, None, None).await?;
+                }
+                Ok::<_, draco_core::error::CoreError>(())
+            });
+
+            let btn = btn.clone();
+            let row = row.clone();
+            let dashboard_btn = dashboard_btn.clone();
+            let admin_btn = admin_btn.clone();
+            let status_icon = status_icon.clone();
+            glib::MainContext::default().spawn_local(async move {
+                match handle.await {
+                    Ok(Ok(())) => {
+                        row.set_enable_expansion(true);
+                        row.set_expanded(true);
+                        btn.set_visible(false);
+                        dashboard_btn.set_visible(true);
+                        admin_btn.set_visible(true);
+                        status_icon.remove_css_class("error");
+                        status_icon.add_css_class("success");
+                    }
+                    Ok(Err(err)) => {
+                        btn.set_tooltip_text(Some(&format!("Failed to connect: {err}")));
+                        btn.set_sensitive(true);
+                    }
+                    Err(_) => {
+                        btn.set_sensitive(true);
+                    }
+                }
+            });
+        }
+    ));
 
     row.connect_expanded_notify(clone!(
         #[weak]

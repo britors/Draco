@@ -39,7 +39,7 @@ draco-core/     # pool Postgres, túnel SSH, queries, storage local, segredos �
                 # sem dependência de nenhum toolkit gráfico
 draco-gtk/      # frontend GTK4/libadwaita (binário `draco`)
 data/           # .desktop, metainfo AppStream, ícones
-packaging/obs/  # spec RPM para o OBS (home:rodrigosbrito:lyra/draco)
+packaging/obs/  # spec RPM para o OBS (home:rodrigosbrito:lyra/postgres-draco)
 aur/            # PKGBUILD
 docs/migration/ # matriz de paridade funcional da reescrita Rust/GTK
 ```

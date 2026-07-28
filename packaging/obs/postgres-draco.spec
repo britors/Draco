@@ -1,5 +1,5 @@
 #
-# spec file for package draco
+# spec file for package postgres-draco
 #
 # Copyright (c) 2026 Rodrigo Brito
 #
@@ -9,7 +9,7 @@
 # (at your option) any later version.
 #
 
-Name:           draco
+Name:           postgres-draco
 Version:        0.1.0
 Release:        0
 Summary:        Cliente de banco de dados do ecossistema Lyra OS

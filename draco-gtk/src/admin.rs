@@ -6,11 +6,13 @@ use std::sync::Arc;
 
 use adw::prelude::*;
 use draco_core::manager::ConnectionManager;
-use draco_core::postgres::queries::{self, ActivityRow, CronJob, ExtensionInfo, LockRow, RoleInfo, SequenceInfo};
+use draco_core::postgres::queries::{self, ActivityRow, CronJob, ExtensionInfo, LockRow, NewRole, RoleInfo, SequenceInfo};
 use draco_core::secrets;
 use gtk::glib;
 use gtk::glib::clone;
 use tokio::sync::Mutex;
+
+use crate::confirm::confirm_destructive;
 
 type SharedManager = Arc<Mutex<ConnectionManager>>;
 
@@ -60,6 +62,8 @@ impl AdminView {
         scroller.set_child(Some(&content));
 
         let roles_section = Section::new("Roles");
+        let new_role_btn = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("New role").css_classes(["flat"]).valign(gtk::Align::Center).build();
+        roles_section.widget().set_header_suffix(Some(&new_role_btn));
         let jobs_section = Section::new("Scheduled Jobs (pg_cron)");
         let activity_section = Section::new("Activity");
         let locks_section = Section::new("Locks");
@@ -74,6 +78,17 @@ impl AdminView {
         content.append(sequences_section.widget());
 
         let ctx = Ctx { conn_id, runtime, manager };
+
+        new_role_btn.connect_clicked(clone!(
+            #[strong]
+            ctx,
+            #[strong]
+            roles_section,
+            move |btn| {
+                let Some(parent) = btn.root() else { return };
+                open_new_role_dialog(&parent, ctx.clone(), roles_section.clone());
+            }
+        ));
 
         refresh_roles(ctx.clone(), roles_section);
         refresh_jobs(ctx.clone(), jobs_section);
@@ -176,6 +191,94 @@ fn lock_row(r: &LockRow) -> adw::ActionRow {
         .build()
 }
 
+fn open_new_role_dialog(parent: &impl IsA<gtk::Widget>, ctx: Ctx, section: Section) {
+    let name_row = adw::EntryRow::builder().title("Role name").build();
+    let password_row = adw::PasswordEntryRow::builder().title("Password (optional)").build();
+    let login_row = adw::SwitchRow::builder().title("Can login").subtitle("LOGIN").active(true).build();
+    let createdb_row = adw::SwitchRow::builder().title("Create databases").subtitle("CREATEDB").build();
+    let createrole_row = adw::SwitchRow::builder().title("Create roles").subtitle("CREATEROLE").build();
+    let superuser_row = adw::SwitchRow::builder().title("Superuser").subtitle("SUPERUSER").build();
+
+    let group = adw::PreferencesGroup::new();
+    group.add(&name_row);
+    group.add(&password_row);
+    group.add(&login_row);
+    group.add(&createdb_row);
+    group.add(&createrole_row);
+    group.add(&superuser_row);
+
+    let error_label = gtk::Label::builder().css_classes(["error"]).wrap(true).visible(false).build();
+
+    let content = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).margin_top(12).margin_bottom(12).margin_start(12).margin_end(12).build();
+    content.append(&error_label);
+    content.append(&group);
+
+    let scroller = gtk::ScrolledWindow::builder().child(&content).propagate_natural_height(true).min_content_width(420).build();
+
+    let dialog = adw::Dialog::builder().title("New Role").content_width(460).content_height(520).build();
+    let toolbar_view = adw::ToolbarView::new();
+    let header = adw::HeaderBar::new();
+    let create_btn = gtk::Button::builder().label("Create").css_classes(["suggested-action"]).build();
+    let cancel_btn = gtk::Button::builder().label("Cancel").build();
+    header.pack_start(&cancel_btn);
+    header.pack_end(&create_btn);
+    toolbar_view.add_top_bar(&header);
+    toolbar_view.set_content(Some(&scroller));
+    dialog.set_child(Some(&toolbar_view));
+
+    cancel_btn.connect_clicked(clone!(
+        #[weak]
+        dialog,
+        move |_| {
+            dialog.close();
+        }
+    ));
+
+    let dialog_for_create = dialog.clone();
+    create_btn.connect_clicked(move |btn| {
+        let name = name_row.text().to_string();
+        if name.trim().is_empty() {
+            error_label.set_label("Role name is required");
+            error_label.set_visible(true);
+            return;
+        }
+        let password = password_row.text().to_string();
+        let new_role = NewRole {
+            name: name.trim().to_string(),
+            password: if password.is_empty() { None } else { Some(password) },
+            login: login_row.is_active(),
+            createdb: createdb_row.is_active(),
+            createrole: createrole_row.is_active(),
+            superuser: superuser_row.is_active(),
+        };
+
+        btn.set_sensitive(false);
+        let handle = spawn_query!(ctx, |d| queries::create_role(d, &new_role).await);
+
+        let dialog = dialog_for_create.clone();
+        let error_label = error_label.clone();
+        let btn = btn.clone();
+        let ctx_for_refresh = ctx.clone();
+        let section = section.clone();
+        glib::MainContext::default().spawn_local(async move {
+            match handle.await {
+                Ok(Ok(())) => {
+                    dialog.close();
+                    refresh_roles(ctx_for_refresh, section);
+                }
+                Ok(Err(err)) => {
+                    error_label.set_label(&format!("Failed to create role: {err}"));
+                    error_label.set_visible(true);
+                }
+                Err(_) => {}
+            }
+            btn.set_sensitive(true);
+        });
+    });
+
+    dialog.present(Some(parent));
+}
+
 fn refresh_roles(ctx: Ctx, section: Section) {
     let handle = spawn_query!(ctx, |d| queries::get_roles(d).await);
     glib::MainContext::default().spawn_local(async move {
@@ -207,15 +310,24 @@ fn role_row(r: &RoleInfo, ctx: &Ctx, section: &Section) -> adw::ActionRow {
         section,
         #[strong]
         name,
-        move |_| {
-            let name = name.clone();
-            let handle = spawn_query!(ctx, |d| queries::drop_role(d, &name).await);
+        move |btn| {
+            let Some(parent) = btn.root() else { return };
             let ctx = ctx.clone();
             let section = section.clone();
-            glib::MainContext::default().spawn_local(async move {
-                let _ = handle.await;
-                refresh_roles(ctx, section);
-            });
+            let name = name.clone();
+            confirm_destructive(
+                &parent,
+                "Drop role?",
+                &format!("This permanently removes the role \u{201c}{name}\u{201d}. This cannot be undone."),
+                "Drop Role",
+                move || {
+                    let handle = spawn_query!(ctx, |d| queries::drop_role(d, &name).await);
+                    glib::MainContext::default().spawn_local(async move {
+                        let _ = handle.await;
+                        refresh_roles(ctx, section);
+                    });
+                },
+            );
         }
     ));
     row
@@ -253,15 +365,31 @@ fn extension_row(e: &ExtensionInfo, installed: bool, ctx: &Ctx, section: &Sectio
         section,
         #[strong]
         name,
-        move |_| {
-            let name = name.clone();
-            let handle = if installed { spawn_query!(ctx, |d| queries::ext_drop(d, &name).await) } else { spawn_query!(ctx, |d| queries::ext_install(d, &name).await) };
-            let ctx = ctx.clone();
-            let section = section.clone();
-            glib::MainContext::default().spawn_local(async move {
-                let _ = handle.await;
-                refresh_extensions(ctx, section);
-            });
+        move |btn| {
+            let run = {
+                let ctx = ctx.clone();
+                let section = section.clone();
+                let name = name.clone();
+                move || {
+                    let handle = if installed { spawn_query!(ctx, |d| queries::ext_drop(d, &name).await) } else { spawn_query!(ctx, |d| queries::ext_install(d, &name).await) };
+                    glib::MainContext::default().spawn_local(async move {
+                        let _ = handle.await;
+                        refresh_extensions(ctx, section);
+                    });
+                }
+            };
+            if installed {
+                let Some(parent) = btn.root() else { return };
+                confirm_destructive(
+                    &parent,
+                    "Drop extension?",
+                    &format!("This permanently removes the extension \u{201c}{name}\u{201d} and everything it provides from this database. This cannot be undone."),
+                    "Drop Extension",
+                    run,
+                );
+            } else {
+                run();
+            }
         }
     ));
     row
@@ -347,19 +475,31 @@ fn job_row(j: &CronJob, ctx: &Ctx, section: &Section) -> adw::ActionRow {
 
     let delete_btn = gtk::Button::builder().icon_name("user-trash-symbolic").tooltip_text("Delete job").valign(gtk::Align::Center).css_classes(["flat"]).build();
     row.add_suffix(&delete_btn);
+    let job_name = j.jobname.clone().unwrap_or_else(|| job_id.to_string());
     delete_btn.connect_clicked(clone!(
         #[strong]
         ctx,
         #[strong]
         section,
-        move |_| {
-            let handle = spawn_query!(ctx, |d| queries::delete_job(d, job_id).await);
+        #[strong]
+        job_name,
+        move |btn| {
+            let Some(parent) = btn.root() else { return };
             let ctx = ctx.clone();
             let section = section.clone();
-            glib::MainContext::default().spawn_local(async move {
-                let _ = handle.await;
-                refresh_jobs(ctx, section);
-            });
+            confirm_destructive(
+                &parent,
+                "Delete scheduled job?",
+                &format!("This permanently removes the job \u{201c}{job_name}\u{201d}. This cannot be undone."),
+                "Delete Job",
+                move || {
+                    let handle = spawn_query!(ctx, |d| queries::delete_job(d, job_id).await);
+                    glib::MainContext::default().spawn_local(async move {
+                        let _ = handle.await;
+                        refresh_jobs(ctx, section);
+                    });
+                },
+            );
         }
     ));
 

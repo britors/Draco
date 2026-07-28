@@ -77,6 +77,14 @@ impl PostgresDriver {
         Ok(client.query(sql, params).await?)
     }
 
+    /// Runs semicolon-separated statements as a single simple-query batch (used for multi-step
+    /// DDL like `ALTER TABLE`, wrapped in `BEGIN`/`COMMIT` by the caller so it's atomic).
+    pub async fn batch_execute(&self, sql: &str) -> Result<()> {
+        let client = self.pool.get().await?;
+        client.batch_execute(sql).await?;
+        Ok(())
+    }
+
     /// `pg_cancel_backend()` for whatever this driver's own connections are currently running —
     /// used to implement the query editor's Cancel button.
     pub async fn cancel_active(&self) -> Result<()> {

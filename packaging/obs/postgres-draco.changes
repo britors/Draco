@@ -1,0 +1,15 @@
+-------------------------------------------------------------------
+Tue Jul 28 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
+
+- Renomeado o pacote de "draco" para "postgres-draco": o nome "draco"
+  já é usado pelo projeto "graphics" (biblioteca de compressão 3D do
+  Google) e por outro pacote não relacionado ("Draco Desktop
+  Environment"). Binário, ícone e app ID (org.lyraos.Draco) continuam
+  inalterados.
+
+-------------------------------------------------------------------
+Mon Jul 27 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
+
+- Reescrita completa em Rust + GTK4/libadwaita, substituindo a
+  implementação anterior em Electron/TypeScript. Empacotamento passa
+  a ser só Linux (RPM via OBS, AUR), sem instalador Windows.

@@ -136,8 +136,11 @@ pub fn open(parent: &impl IsA<gtk::Widget>, conn_id: String, schemas: Vec<String
     let preview_view = sourceview5::View::with_buffer(&preview_buffer);
     preview_view.set_monospace(true);
     preview_view.set_editable(false);
-    let preview_scroller = gtk::ScrolledWindow::builder().child(&preview_view).min_content_height(120).build();
-    let refresh_preview_btn = gtk::Button::builder().label("Refresh Preview").build();
+    preview_view.set_top_margin(6);
+    preview_view.set_left_margin(6);
+    preview_view.set_bottom_margin(6);
+    let preview_scroller = gtk::ScrolledWindow::builder().child(&preview_view).min_content_height(120).max_content_height(160).build();
+    let refresh_preview_btn = gtk::Button::builder().label("Refresh Preview").halign(gtk::Align::Start).build();
 
     let error_label = gtk::Label::builder().css_classes(["error"]).wrap(true).visible(false).build();
 
@@ -147,10 +150,15 @@ pub fn open(parent: &impl IsA<gtk::Widget>, conn_id: String, schemas: Vec<String
     content.append(&gtk::Label::builder().label("Columns").xalign(0.0).css_classes(["heading"]).build());
     content.append(&columns_list);
     content.append(&add_col_btn);
-    content.append(&refresh_preview_btn);
-    content.append(&preview_scroller);
 
-    let scroller = gtk::ScrolledWindow::builder().child(&content).propagate_natural_height(true).min_content_width(560).build();
+    let scroller = gtk::ScrolledWindow::builder().child(&content).vexpand(true).min_content_width(560).build();
+
+    // Pinned to the bottom via `add_bottom_bar` (outside the scroller above) so the generated SQL
+    // stays visible no matter how far the column list is scrolled.
+    let preview_box = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).margin_top(6).margin_bottom(12).margin_start(12).margin_end(12).build();
+    preview_box.append(&gtk::Label::builder().label("SQL Preview").xalign(0.0).css_classes(["heading"]).build());
+    preview_box.append(&refresh_preview_btn);
+    preview_box.append(&preview_scroller);
 
     let dialog = adw::Dialog::builder().title("New Table").content_width(600).content_height(680).build();
     let toolbar_view = adw::ToolbarView::new();
@@ -161,6 +169,7 @@ pub fn open(parent: &impl IsA<gtk::Widget>, conn_id: String, schemas: Vec<String
     header.pack_end(&create_btn);
     toolbar_view.add_top_bar(&header);
     toolbar_view.set_content(Some(&scroller));
+    toolbar_view.add_bottom_bar(&preview_box);
     dialog.set_child(Some(&toolbar_view));
 
     cancel_btn.connect_clicked(clone!(

@@ -1,4 +1,5 @@
 mod admin;
+mod confirm;
 mod connection_dialog;
 mod dashboard;
 mod erd;
@@ -9,6 +10,7 @@ mod results_grid;
 mod search;
 mod table_creator;
 mod table_detail;
+mod table_editor;
 mod window_main;
 
 use gtk::gio;

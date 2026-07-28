@@ -7,9 +7,16 @@ use adw::prelude::*;
 use draco_core::error::CoreError;
 use draco_core::manager::ConnectionManager;
 use draco_core::postgres::queries::{self, ConstraintInfo, FkDirection, FkMapEntry, IndexInfo, TableDetail, TableDetailColumn};
+use draco_core::secrets;
 use gtk::glib;
+use gtk::glib::clone;
 use sourceview5::prelude::*;
 use tokio::sync::Mutex;
+
+use crate::confirm::confirm_destructive;
+use crate::table_editor;
+
+const VACUUM_OPS: &[&str] = &["VACUUM", "ANALYZE", "VACUUM ANALYZE", "VACUUM FULL"];
 
 type SharedManager = Arc<Mutex<ConnectionManager>>;
 
@@ -20,34 +27,7 @@ pub struct TableDetailView {
 impl TableDetailView {
     pub fn new(conn_id: String, schema: String, table: String, runtime: tokio::runtime::Handle, manager: SharedManager) -> Self {
         let root = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(12).build();
-
-        let spinner = gtk::Spinner::builder().spinning(true).margin_top(24).margin_bottom(24).halign(gtk::Align::Center).build();
-        root.append(&spinner);
-
-        let task_conn_id = conn_id.clone();
-        let task_schema = schema.clone();
-        let task_table = table.clone();
-        let task_manager = manager.clone();
-        let handle = runtime.spawn(async move {
-            let mgr = task_manager.lock().await;
-            let driver = mgr.get_driver(&task_conn_id).ok_or(CoreError::NotConnected)?;
-            let detail = queries::get_table_detail(driver, &task_schema, &task_table).await?;
-            let ddl = queries::get_table_ddl(driver, &task_schema, &task_table).await?;
-            Ok::<_, CoreError>((detail, ddl))
-        });
-
-        let root_for_task = root.clone();
-        glib::MainContext::default().spawn_local(async move {
-            root_for_task.remove(&spinner);
-            match handle.await {
-                Ok(Ok((detail, ddl))) => populate(&root_for_task, &schema, &table, detail, ddl),
-                Ok(Err(err)) => {
-                    root_for_task.append(&adw::StatusPage::builder().icon_name("dialog-error-symbolic").title("Failed to load table").description(err.to_string()).build());
-                }
-                Err(_) => {}
-            }
-        });
-
+        load(root.clone(), conn_id, schema, table, runtime, manager);
         Self { root }
     }
 
@@ -56,7 +36,41 @@ impl TableDetailView {
     }
 }
 
-fn populate(root: &gtk::Box, schema: &str, table: &str, detail: TableDetail, ddl: String) {
+fn load(root: gtk::Box, conn_id: String, schema: String, table: String, runtime: tokio::runtime::Handle, manager: SharedManager) {
+    while let Some(child) = root.first_child() {
+        root.remove(&child);
+    }
+
+    let spinner = gtk::Spinner::builder().spinning(true).margin_top(24).margin_bottom(24).halign(gtk::Align::Center).build();
+    root.append(&spinner);
+
+    let task_conn_id = conn_id.clone();
+    let task_schema = schema.clone();
+    let task_table = table.clone();
+    let task_manager = manager.clone();
+    let handle = runtime.spawn(async move {
+        let mgr = task_manager.lock().await;
+        let driver = mgr.get_driver(&task_conn_id).ok_or(CoreError::NotConnected)?;
+        let detail = queries::get_table_detail(driver, &task_schema, &task_table).await?;
+        let ddl = queries::get_table_ddl(driver, &task_schema, &task_table).await?;
+        Ok::<_, CoreError>((detail, ddl))
+    });
+
+    let root_for_task = root.clone();
+    glib::MainContext::default().spawn_local(async move {
+        root_for_task.remove(&spinner);
+        match handle.await {
+            Ok(Ok((detail, ddl))) => populate(&root_for_task, conn_id, schema, table, detail, ddl, runtime, manager),
+            Ok(Err(err)) => {
+                root_for_task.append(&adw::StatusPage::builder().icon_name("dialog-error-symbolic").title("Failed to load table").description(err.to_string()).build());
+            }
+            Err(_) => {}
+        }
+    });
+}
+
+#[allow(clippy::too_many_arguments)]
+fn populate(root: &gtk::Box, conn_id: String, schema: String, table: String, detail: TableDetail, ddl: String, runtime: tokio::runtime::Handle, manager: SharedManager) {
     let scroller = gtk::ScrolledWindow::builder().vexpand(true).build();
     let content = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -67,14 +81,154 @@ fn populate(root: &gtk::Box, schema: &str, table: &str, detail: TableDetail, ddl
         .margin_end(12)
         .build();
 
+    let root_owned = root.clone();
+    let header_box = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(12).build();
     let header = adw::PreferencesGroup::builder()
         .title(format!("{schema}.{table}"))
         .description(format!("~{} rows (estimate)", detail.row_estimate))
+        .hexpand(true)
         .build();
-    content.append(&header);
+    let edit_btn = gtk::Button::builder().label("Edit").valign(gtk::Align::Center).build();
+    edit_btn.connect_clicked(clone!(
+        #[strong]
+        conn_id,
+        #[strong]
+        schema,
+        #[strong]
+        table,
+        #[strong]
+        detail,
+        #[strong]
+        runtime,
+        #[strong]
+        manager,
+        #[strong]
+        root_owned,
+        move |btn| {
+            let Some(parent) = btn.root() else { return };
+            table_editor::open(
+                &parent,
+                conn_id.clone(),
+                schema.clone(),
+                table.clone(),
+                detail.clone(),
+                runtime.clone(),
+                manager.clone(),
+                clone!(
+                    #[strong]
+                    conn_id,
+                    #[strong]
+                    schema,
+                    #[strong]
+                    table,
+                    #[strong]
+                    runtime,
+                    #[strong]
+                    manager,
+                    #[strong]
+                    root_owned,
+                    move || load(root_owned.clone(), conn_id.clone(), schema.clone(), table.clone(), runtime.clone(), manager.clone())
+                ),
+            );
+        }
+    ));
+    let maintenance_status = gtk::Label::builder().wrap(true).xalign(0.0).visible(false).build();
 
-    content.append(&section_label("DDL"));
-    content.append(&ddl_view(&ddl));
+    let maintenance_btn = gtk::MenuButton::builder()
+        .icon_name("org.gnome.Settings-symbolic")
+        .tooltip_text("Maintenance (VACUUM / ANALYZE)")
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
+    let maintenance_popover = gtk::Popover::new();
+    let maintenance_popover_box = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(2).margin_top(6).margin_bottom(6).margin_start(6).margin_end(6).build();
+    for op in VACUUM_OPS {
+        let op_btn = gtk::Button::builder().label(*op).css_classes(["flat"]).build();
+        maintenance_popover_box.append(&op_btn);
+        op_btn.connect_clicked(clone!(
+            #[weak]
+            maintenance_popover,
+            #[strong]
+            conn_id,
+            #[strong]
+            schema,
+            #[strong]
+            table,
+            #[strong]
+            runtime,
+            #[strong]
+            manager,
+            #[strong]
+            maintenance_status,
+            move |op_btn| {
+                maintenance_popover.popdown();
+
+                let run = {
+                    let conn_id = conn_id.clone();
+                    let schema = schema.clone();
+                    let table = table.clone();
+                    let runtime = runtime.clone();
+                    let manager = manager.clone();
+                    let maintenance_status = maintenance_status.clone();
+                    move || {
+                        maintenance_status.remove_css_class("error");
+                        maintenance_status.set_label(&format!("Running {op}…"));
+                        maintenance_status.set_visible(true);
+
+                        let task_schema = schema.clone();
+                        let task_table = table.clone();
+                        let task_conn_id = conn_id.clone();
+                        let task_manager = manager.clone();
+                        let handle = runtime.spawn(async move {
+                            let mut mgr = task_manager.lock().await;
+                            if mgr.get_driver(&task_conn_id).is_none() {
+                                let password = secrets::get_password(&task_conn_id).await.unwrap_or_default();
+                                mgr.connect(&task_conn_id, &password, 30_000, None, None).await?;
+                            }
+                            let driver = mgr.get_driver(&task_conn_id).ok_or(CoreError::NotConnected)?;
+                            queries::run_vacuum(driver, &task_schema, &task_table, op).await
+                        });
+
+                        let maintenance_status = maintenance_status.clone();
+                        glib::MainContext::default().spawn_local(async move {
+                            match handle.await {
+                                Ok(Ok(())) => maintenance_status.set_label(&format!("{op} completed on \"{schema}\".\"{table}\".")),
+                                Ok(Err(err)) => {
+                                    maintenance_status.add_css_class("error");
+                                    maintenance_status.set_label(&format!("{op} failed: {err}"));
+                                }
+                                Err(_) => {}
+                            }
+                        });
+                    }
+                };
+
+                if *op == "VACUUM FULL" {
+                    let Some(parent) = op_btn.root() else { return };
+                    confirm_destructive(
+                        &parent,
+                        "Run VACUUM FULL?",
+                        &format!(
+                            "VACUUM FULL rewrites \"{schema}\".\"{table}\" on disk and holds an ACCESS EXCLUSIVE lock for the \
+                             duration — every other read or write against this table blocks until it finishes."
+                        ),
+                        "Run VACUUM FULL",
+                        run,
+                    );
+                } else {
+                    run();
+                }
+            }
+        ));
+    }
+    maintenance_popover.set_child(Some(&maintenance_popover_box));
+    maintenance_btn.set_popover(Some(&maintenance_popover));
+
+    header_box.append(&header);
+    header_box.append(&maintenance_btn);
+    header_box.append(&edit_btn);
+    content.append(&header_box);
+    content.append(&maintenance_status);
 
     content.append(&section_label("Columns"));
     content.append(&columns_group(&detail.columns));
@@ -96,6 +250,13 @@ fn populate(root: &gtk::Box, schema: &str, table: &str, detail: TableDetail, ddl
 
     scroller.set_child(Some(&content));
     root.append(&scroller);
+
+    // Pinned below the scrollable columns/indexes/constraints/FKs (not inside `scroller`) so the
+    // DDL stays visible at the bottom instead of pushing those objects further down the page.
+    let ddl_box = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).margin_top(8).margin_bottom(12).margin_start(12).margin_end(12).build();
+    ddl_box.append(&section_label("DDL"));
+    ddl_box.append(&ddl_view(&ddl));
+    root.append(&ddl_box);
 }
 
 fn section_label(text: &str) -> gtk::Label {

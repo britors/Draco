@@ -14,11 +14,11 @@ decisão que o aprovou.
 | Milestone | Módulo | Superfície obrigatória | Estado |
 |---|---|---|---|
 | M1 | Núcleo de dados (`draco-core`) | pool Postgres (`tokio-postgres`+`deadpool`, TLS via `rustls`), túnel SSH (`russh`, com jump host e known_hosts TOFU), introspecção/DDL/dashboard/stats/roles/jobs/activity/locks/extensions (`postgres::queries`), storage local (TOML/XDG), segredos (`oo7`), parser `schema.draco` | implementado |
-| M2 | Conexões | criar/editar, túnel SSH e jump host | implementado (falta: testar antes de salvar, excluir, indicador de status, favoritos) |
+| M2 | Conexões | criar/editar, excluir (menu "⋮" na linha do host, confirmação destrutiva, também remove a senha do Secret Service), túnel SSH e jump host | implementado (falta: testar antes de salvar, indicador de status inline pro sucesso do teste, favoritos) |
 | M2 | Explorer | árvore conexão → schema → tabela (leaf, sem colunas inline — ver M4), expansão lazy | implementado (falta: sequências/extensões no próprio Explorer, filtro/busca inline, badge de contagem de linhas) |
-| M3 | Editor SQL | GtkSourceView5 (highlighting/scheme dependem de dados do sistema — ver nota), seletor de conexão, execução | implementado (falta: abas múltiplas, autocomplete, cancelamento, atalho Ctrl+Enter) |
+| M3 | Editor SQL | GtkSourceView5 (highlighting/scheme dependem de dados do sistema — ver nota), seletor de conexão, execução, abas múltiplas numeradas ("Query 1", "Query 2", ...), atalhos `F8` (rodar) e `F10` (explain plan, sempre `EXPLAIN` puro — nunca `ANALYZE`, que executaria de fato um DML) | implementado (falta: autocomplete, cancelamento, atalho `Ctrl+Enter` como alternativa ao F8) |
 | M3 | Resultados | grid (`ColumnView`, colunas dinâmicas por query) | implementado (falta: detalhe de linha, export CSV/JSON) |
-| M3 | Histórico e Snippets | histórico de queries (máx. 50), snippets nomeados | pendente (`draco-core::store` já tem as funções; falta UI) |
+| M3 | Histórico e Snippets | histórico de queries (máx. 50) e snippets nomeados, ambos em popover no toolbar do Editor SQL; clicar carrega no buffer, snippet salva a conexão de origem | implementado (falta: renomear snippet — `store::rename_snippet` já existe) |
 | M4 | DDL Viewer | DDL completo somente leitura (GtkSourceView5 read-only) | implementado |
 | M4 | Índices e Constraints | listagem, tamanho, tipo, definição | implementado |
 | M4 | Mapa de FKs | FKs de saída/entrada | implementado (falta: clicar para navegar até a tabela referenciada) |
@@ -26,17 +26,17 @@ decisão que o aprovou.
 | M5 | Dashboard de Conexão | gauges custom (`cairo`) para cache hit/uso de conexões/rollback rate, info de servidor/banco, KPIs, top 10 tabelas com barra proporcional | implementado (falta: abrir automaticamente ao conectar) |
 | M5 | Stats do Banco | bloat de tabela, índices não usados, hot spots de seq scan — dobrado na mesma aba do dashboard | implementado |
 | M6 | Criador de Tabela | formulário visual, colunas dinâmicas (tipo/null/PK/unique/default), preview de `CREATE TABLE` (botão "Refresh Preview", não totalmente live) | implementado (falta: FK inline, "nova schema" — hoje só cria na schema já aberta) |
-| M6 | Editor de Tabela (`ALTER`) | — | **pendente** (não iniciado nesta passada) |
+| M6 | Editor de Tabela (`ALTER`) | renomear tabela, adicionar/remover/renomear coluna, mudar tipo/nullable/default (`table_editor.rs`, aberto pelo botão "Edit" no Detalhe de Tabela), preview do SQL, aplicação atômica (`BEGIN`/`COMMIT`), confirmação obrigatória (`adw::AlertDialog`) para `DROP COLUMN`/`ALTER COLUMN TYPE` | implementado (compila e passa `cargo clippy`/`cargo test`; falta: mudar PRIMARY KEY, e validar o fluxo completo contra um Postgres real — a geração de SQL tem testes unitários, mas a execução em si (`alter_table`/`batch_execute`) ainda não rodou contra um banco) |
 | M6 | Editor de Função | GtkSourceView5, Save, Validate (BEGIN/ROLLBACK), Test | implementado |
 | M7 | Roles | listar, excluir, atributos (superuser/createdb/createrole/login) | implementado (falta: formulário de criação — `create_role` já existe em `draco-core`) |
 | M7 | Jobs (pg_cron) | listar, pausar/retomar (switch), excluir; detecta pg_cron ausente | implementado (falta: criar/editar job, histórico de execução — `create_job`/`update_job`/`get_job_runs` já existem) |
 | M7 | Activity & Locks | sessões (`pg_stat_activity`) com cancelar, locks bloqueados/bloqueantes | implementado |
 | M7 | Sequences | listar, next value | implementado (falta: reset value — `seq_set_val` já existe) |
 | M7 | Extension Manager | instaladas + até 30 disponíveis, instalar/remover um clique | implementado |
-| M7 | VACUUM/ANALYZE | — | **pendente** (não iniciado; `run_vacuum` já existe em `draco-core`) |
+| M7 | VACUUM/ANALYZE | por tabela: VACUUM, ANALYZE, VACUUM ANALYZE, VACUUM FULL — botão de manutenção (`edit-clear-all-symbolic`) no header do Detalhe de Tabela, popover com as 4 opções, confirmação obrigatória (`adw::AlertDialog`) só para VACUUM FULL (lock exclusivo) | implementado (falta: validar contra Postgres real; não expõe VACUUM em nível de banco/schema, só por tabela) |
 | M8 | ERD | diagrama de FKs (`cairo`+`GestureDrag`, sem precedente nos apps irmãos), arrastar tabela, pan do canvas | implementado (falta: zoom) |
 | M8 | Busca Global | `Ctrl+P` entre tabelas/views/colunas/funções, clique abre o detalhe da tabela | implementado |
-| M8 | Atalhos e Preferências | `Ctrl+P` (busca), `Ctrl+T` (nova query); tema já é automático via `libadwaita` | implementado (parcial — faltam os demais atalhos do README antigo: `Ctrl+Enter`/`F8` rodar, `Ctrl+Shift+S` snippet, etc.; sem tela de preferências/configurações persistidas ainda) |
+| M8 | Atalhos e Preferências | `Ctrl+P` (busca), `Ctrl+T` (nova query), `F8` (rodar) e `F10` (explain plan, escopo do Editor SQL); tema já é automático via `libadwaita` | implementado (parcial — falta `Ctrl+Enter` como alternativa ao F8, `Ctrl+Shift+S` snippet direto do teclado (hoje só via popover), etc.; sem tela de preferências/configurações persistidas ainda) |
 
 ## Nota de ambiente: dados do GtkSourceView5
 
@@ -70,7 +70,9 @@ Draco Electron publicava um instalador `.exe` (NSIS); nenhum dos apps do
 ecossistema Lyra OS (Vega, Beam, Sulafat, Chord) sustenta build Windows hoje,
 e GTK4/libadwaita via MSYS2 exigiria infraestrutura de CI/empacotamento sem
 precedente pra copiar. O rewrite é só Linux, empacotado via OBS
-(`home:rodrigosbrito:lyra/draco`) e AUR.
+(`home:rodrigosbrito:lyra/postgres-draco`) e AUR (`postgres-draco`) — nome de
+pacote diferente do app porque "draco" simples já é usado pelo projeto
+"graphics" do openSUSE e pelo `extra/draco` oficial do Arch.
 
 ## Critérios transversais por módulo
 
@@ -85,3 +87,10 @@ precedente pra copiar. O rewrite é só Linux, empacotado via OBS
       inequívoca;
 - [ ] nenhuma senha, passphrase ou conteúdo de query é escrito em log
       (`tracing`, nível `DRACO_LOG`).
+
+O Editor de Tabela (M6) foi o primeiro módulo a implementar o critério de
+"confirmação inequívoca" acima, via `adw::AlertDialog` antes de `DROP COLUMN`/
+`ALTER COLUMN TYPE`. O mesmo padrão (`confirm_destructive` em `admin.rs`) foi
+retrofitado em seguida para drop de role, drop de extension e delete de job —
+única mutação destrutiva ainda sem esse diálogo: `drop_table` (Explorer/M4,
+sem UI de exclusão de tabela ainda).
