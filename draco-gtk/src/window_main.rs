@@ -24,6 +24,7 @@ use crate::explorer::Explorer;
 use crate::function_editor::FunctionEditor;
 use crate::query_editor::QueryEditor;
 use crate::search;
+use crate::object_creator;
 use crate::table_creator;
 use crate::table_detail::TableDetailView;
 
@@ -158,6 +159,76 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
                         move || {
                             // Reloads every connection's tree from scratch (simplest correct way
                             // to surface the new table) — this does collapse any expanded rows.
+                            if let Some(explorer) = explorer_cell.borrow().clone() {
+                                refresh_connections(&explorer, &manager, &runtime);
+                            }
+                        }
+                    ),
+                );
+            }
+        ),
+        clone!(
+            #[strong]
+            runtime,
+            #[strong]
+            manager,
+            #[strong]
+            app_for_new_table,
+            #[strong]
+            explorer_cell,
+            move |conn_id: String, schema: String| {
+                let Some(parent) = app_for_new_table.active_window() else {
+                    return;
+                };
+                object_creator::open_sequence(
+                    &parent,
+                    conn_id,
+                    schema,
+                    runtime.clone(),
+                    manager.clone(),
+                    clone!(
+                        #[strong]
+                        runtime,
+                        #[strong]
+                        manager,
+                        #[strong]
+                        explorer_cell,
+                        move || {
+                            if let Some(explorer) = explorer_cell.borrow().clone() {
+                                refresh_connections(&explorer, &manager, &runtime);
+                            }
+                        }
+                    ),
+                );
+            }
+        ),
+        clone!(
+            #[strong]
+            runtime,
+            #[strong]
+            manager,
+            #[strong]
+            app_for_new_table,
+            #[strong]
+            explorer_cell,
+            move |conn_id: String, schema: String| {
+                let Some(parent) = app_for_new_table.active_window() else {
+                    return;
+                };
+                object_creator::open_trigger(
+                    &parent,
+                    conn_id,
+                    schema,
+                    runtime.clone(),
+                    manager.clone(),
+                    clone!(
+                        #[strong]
+                        runtime,
+                        #[strong]
+                        manager,
+                        #[strong]
+                        explorer_cell,
+                        move || {
                             if let Some(explorer) = explorer_cell.borrow().clone() {
                                 refresh_connections(&explorer, &manager, &runtime);
                             }

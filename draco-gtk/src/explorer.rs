@@ -11,7 +11,7 @@ use std::sync::Arc;
 use adw::prelude::*;
 use draco_core::connection::DbConnection;
 use draco_core::manager::ConnectionManager;
-use draco_core::postgres::queries::{self, FunctionInfo, SchemaInfo, TableInfo, TableKind};
+use draco_core::postgres::queries::{self, FunctionInfo, SchemaInfo, SequenceInfo, TableInfo, TableKind, TriggerInfo};
 use draco_core::{secrets, store};
 use gtk::glib;
 use gtk::glib::clone;
@@ -28,6 +28,10 @@ type OnOpenDashboard = Rc<dyn Fn(String)>;
 type OnOpenFunction = Rc<dyn Fn(String, String, Option<String>)>;
 /// `(connection id, schema)` — fired by a schema row's "New Table" button.
 type OnNewTable = Rc<dyn Fn(String, String)>;
+/// `(connection id, schema)` — fired by a sequence row's "New Sequence" button.
+type OnNewSequence = Rc<dyn Fn(String, String)>;
+/// `(connection id, schema)` — fired by a trigger row's "New Trigger" button.
+type OnNewTrigger = Rc<dyn Fn(String, String)>;
 /// `(connection id)` — fired by a connection row's "Admin" button.
 type OnOpenAdmin = Rc<dyn Fn(String)>;
 /// `(connection id, schema)` — fired by a schema row's "ERD" button.
@@ -45,6 +49,8 @@ struct Callbacks {
     on_open_dashboard: OnOpenDashboard,
     on_open_function: OnOpenFunction,
     on_new_table: OnNewTable,
+    on_new_sequence: OnNewSequence,
+    on_new_trigger: OnNewTrigger,
     on_open_admin: OnOpenAdmin,
     on_open_erd: OnOpenErd,
     on_edit_connection: OnEditConnection,
@@ -63,6 +69,8 @@ impl Explorer {
         on_open_dashboard: impl Fn(String) + 'static,
         on_open_function: impl Fn(String, String, Option<String>) + 'static,
         on_new_table: impl Fn(String, String) + 'static,
+        on_new_sequence: impl Fn(String, String) + 'static,
+        on_new_trigger: impl Fn(String, String) + 'static,
         on_open_admin: impl Fn(String) + 'static,
         on_open_erd: impl Fn(String, String) + 'static,
         on_edit_connection: impl Fn(DbConnection) + 'static,
@@ -78,6 +86,8 @@ impl Explorer {
             on_open_dashboard: Rc::new(on_open_dashboard),
             on_open_function: Rc::new(on_open_function),
             on_new_table: Rc::new(on_new_table),
+            on_new_sequence: Rc::new(on_new_sequence),
+            on_new_trigger: Rc::new(on_new_trigger),
             on_open_admin: Rc::new(on_open_admin),
             on_open_erd: Rc::new(on_open_erd),
             on_edit_connection: Rc::new(on_edit_connection),
@@ -509,7 +519,9 @@ fn build_schema_row(
                     .ok_or(draco_core::error::CoreError::NotConnected)?;
                 let tables = queries::get_tables(driver, &task_schema).await?;
                 let functions = queries::get_functions(driver, &task_schema).await?;
-                Ok::<_, draco_core::error::CoreError>((tables, functions))
+                let sequences = queries::get_sequences(driver, &task_schema).await?;
+                let triggers = queries::get_triggers(driver, &task_schema).await?;
+                Ok::<_, draco_core::error::CoreError>((tables, functions, sequences, triggers))
             });
 
             let row_for_task = row.clone();
@@ -518,24 +530,22 @@ fn build_schema_row(
             let callbacks_for_task = callbacks.clone();
             glib::MainContext::default().spawn_local(async move {
                 match handle.await {
-                    Ok(Ok((tables, functions))) => {
-                        if tables.is_empty() {
-                            row_for_task
-                                .add_row(&adw::ActionRow::builder().title("No tables").build());
-                        }
-                        for table in tables {
-                            row_for_task.add_row(&build_table_row(
-                                conn_id_for_task.clone(),
-                                schema_for_task.clone(),
-                                table,
-                                callbacks_for_task.on_open_table.clone(),
-                            ));
-                        }
-                        row_for_task.add_row(&build_functions_row(
+                    Ok(Ok((tables, functions, sequences, triggers))) => {
+                        row_for_task.add_row(&build_tables_row(
+                            conn_id_for_task.clone(),
+                            schema_for_task.clone(),
+                            tables,
+                            callbacks_for_task.on_open_table.clone(),
+                        ));
+                        row_for_task.add_row(&build_objects_row(
                             conn_id_for_task.clone(),
                             schema_for_task.clone(),
                             functions,
+                            sequences,
+                            triggers,
                             callbacks_for_task.on_open_function.clone(),
+                            callbacks_for_task.on_new_sequence.clone(),
+                            callbacks_for_task.on_new_trigger.clone(),
                         ));
                     }
                     Ok(Err(err)) => {
@@ -551,6 +561,95 @@ fn build_schema_row(
         }
     ));
 
+    row
+}
+
+fn build_tables_row(conn_id: String, schema: String, tables: Vec<TableInfo>, on_open_table: OnOpenTable) -> adw::ExpanderRow {
+    let row = adw::ExpanderRow::builder().title("Tables").build();
+    row.add_prefix(&gtk::Image::from_icon_name("view-grid-symbolic"));
+    if tables.is_empty() {
+        row.add_row(&adw::ActionRow::builder().title("No tables").build());
+    } else {
+        for table in tables {
+            row.add_row(&build_table_row(conn_id.clone(), schema.clone(), table, on_open_table.clone()));
+        }
+    }
+    row
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_objects_row(
+    conn_id: String,
+    schema: String,
+    functions: Vec<FunctionInfo>,
+    sequences: Vec<SequenceInfo>,
+    triggers: Vec<TriggerInfo>,
+    on_open_function: OnOpenFunction,
+    on_new_sequence: OnNewSequence,
+    on_new_trigger: OnNewTrigger,
+) -> adw::ExpanderRow {
+    let row = adw::ExpanderRow::builder().title("Database objects").build();
+    row.add_prefix(&gtk::Image::from_icon_name("applications-system-symbolic"));
+    row.add_row(&build_functions_row(conn_id.clone(), schema.clone(), functions, on_open_function));
+
+    let sequences_row = adw::ExpanderRow::builder().title("Sequences").build();
+    sequences_row.add_prefix(&gtk::Image::from_icon_name("view-sort-ascending-symbolic"));
+    let new_sequence_btn = gtk::Button::builder()
+        .icon_name("list-add-symbolic")
+        .tooltip_text("New sequence")
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
+    sequences_row.add_suffix(&new_sequence_btn);
+    new_sequence_btn.connect_clicked(clone!(
+        #[strong]
+        conn_id,
+        #[strong]
+        schema,
+        #[strong]
+        on_new_sequence,
+        move |_| on_new_sequence(conn_id.clone(), schema.clone())
+    ));
+    if sequences.is_empty() {
+        sequences_row.add_row(&adw::ActionRow::builder().title("No sequences").build());
+    } else {
+        for sequence in sequences {
+            sequences_row.add_row(&adw::ActionRow::builder().title(glib::markup_escape_text(&sequence.name)).build());
+        }
+    }
+    row.add_row(&sequences_row);
+
+    let triggers_row = adw::ExpanderRow::builder().title("Triggers").build();
+    triggers_row.add_prefix(&gtk::Image::from_icon_name("system-run-symbolic"));
+    let new_trigger_btn = gtk::Button::builder()
+        .icon_name("list-add-symbolic")
+        .tooltip_text("New trigger")
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
+    triggers_row.add_suffix(&new_trigger_btn);
+    new_trigger_btn.connect_clicked(clone!(
+        #[strong]
+        conn_id,
+        #[strong]
+        schema,
+        #[strong]
+        on_new_trigger,
+        move |_| on_new_trigger(conn_id.clone(), schema.clone())
+    ));
+    if triggers.is_empty() {
+        triggers_row.add_row(&adw::ActionRow::builder().title("No triggers").build());
+    } else {
+        for trigger in triggers {
+            triggers_row.add_row(
+                &adw::ActionRow::builder()
+                    .title(glib::markup_escape_text(&trigger.name))
+                    .subtitle(format!("{} · {}", trigger.table, trigger.definition))
+                    .build(),
+            );
+        }
+    }
+    row.add_row(&triggers_row);
     row
 }
 
