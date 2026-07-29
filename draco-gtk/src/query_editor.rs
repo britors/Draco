@@ -341,6 +341,112 @@ fn build_snippets_content(
     content.upcast()
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AiReviewFocus {
+    General,
+    Performance,
+    Security,
+    Readability,
+}
+
+impl AiReviewFocus {
+    const ALL: [Self; 4] = [Self::General, Self::Performance, Self::Security, Self::Readability];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::General => "Geral",
+            Self::Performance => "Performance",
+            Self::Security => "Segurança",
+            Self::Readability => "Legibilidade",
+        }
+    }
+
+    /// The instruction handed to the AI Assistant — narrows which angle it leads with, on top of
+    /// the tuning-advisor persona already set by `draco_core::assistant`'s system prompt (query
+    /// best practices, performance, security, indexing, EXPLAIN plans).
+    fn instruction(self) -> &'static str {
+        match self {
+            Self::General => "Faça uma revisão geral desta query: performance, segurança e boas práticas de escrita.",
+            Self::Performance => "Analise a performance desta query: rode EXPLAIN, avalie os índices existentes e sugira otimizações.",
+            Self::Security => "Analise a segurança desta query: risco de SQL injection, exposição de dados sensíveis e permissões necessárias.",
+            Self::Readability => "Avalie a legibilidade e as boas práticas de escrita desta query: nomenclatura, formatação e clareza.",
+        }
+    }
+}
+
+/// Modal for the toolbar's "Avaliar com IA" button: pick a focus (mutually exclusive, "Geral" by
+/// default) and optionally add a free-text note, then hand the assembled message to `on_evaluate`
+/// — the caller turns that into "open/refresh this connection's AI Assistant tab and send it".
+fn open_ai_review_dialog(parent: &impl IsA<gtk::Widget>, sql: String, on_evaluate: impl Fn(String) + 'static) {
+    let dialog = adw::Dialog::builder().title("Avaliar com IA").content_width(480).content_height(420).build();
+
+    let cancel_btn = gtk::Button::builder().label("Cancelar").build();
+    let evaluate_btn = gtk::Button::builder().label("Avaliar").css_classes(["suggested-action"]).build();
+    let header = adw::HeaderBar::builder().show_start_title_buttons(false).show_end_title_buttons(false).build();
+    header.pack_start(&cancel_btn);
+    header.pack_end(&evaluate_btn);
+
+    let content = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).margin_top(12).margin_bottom(12).margin_start(12).margin_end(12).build();
+    content.append(&gtk::Label::builder().label("Foco da análise").xalign(0.0).css_classes(["heading"]).build());
+
+    let focus_box = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(6).build();
+    let selected_focus: Rc<RefCell<AiReviewFocus>> = Rc::new(RefCell::new(AiReviewFocus::General));
+    let mut group_source: Option<gtk::ToggleButton> = None;
+    for focus in AiReviewFocus::ALL {
+        let toggle = gtk::ToggleButton::builder().label(focus.label()).active(focus == AiReviewFocus::General).build();
+        match &group_source {
+            Some(group) => toggle.set_group(Some(group)),
+            None => group_source = Some(toggle.clone()),
+        }
+        let selected_focus = selected_focus.clone();
+        toggle.connect_toggled(move |btn| {
+            if btn.is_active() {
+                *selected_focus.borrow_mut() = focus;
+            }
+        });
+        focus_box.append(&toggle);
+    }
+    content.append(&focus_box);
+
+    content.append(&gtk::Label::builder().label("Mensagem adicional (opcional)").xalign(0.0).css_classes(["heading"]).margin_top(6).build());
+    let message_view = gtk::TextView::builder().wrap_mode(gtk::WrapMode::WordChar).top_margin(6).bottom_margin(6).left_margin(8).right_margin(8).build();
+    let message_scroller = gtk::ScrolledWindow::builder().child(&message_view).min_content_height(100).vexpand(true).build();
+    message_scroller.add_css_class("card");
+    content.append(&message_scroller);
+
+    let toolbar = adw::ToolbarView::new();
+    toolbar.add_top_bar(&header);
+    toolbar.set_content(Some(&content));
+    dialog.set_child(Some(&toolbar));
+
+    cancel_btn.connect_clicked(clone!(
+        #[weak]
+        dialog,
+        move |_| {
+            dialog.close();
+        }
+    ));
+
+    evaluate_btn.connect_clicked(clone!(
+        #[weak]
+        dialog,
+        #[weak]
+        message_view,
+        move |_| {
+            let buffer = message_view.buffer();
+            let custom = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false).trim().to_string();
+            let mut message = format!("{}\n\n```sql\n{sql}\n```", selected_focus.borrow().instruction());
+            if !custom.is_empty() {
+                message.push_str(&format!("\n\n{custom}"));
+            }
+            dialog.close();
+            on_evaluate(message);
+        }
+    ));
+
+    dialog.present(Some(parent));
+}
+
 /// Runs `sql` against `conn`, showing the result in `results`/`status_label` — shared by the
 /// plain Run action and the `EXPLAIN`-wrapped one, so only the latter's history bookkeeping
 /// (`record_history`) differs.
@@ -464,7 +570,19 @@ impl QueryEditor {
     /// `initial` — `(connection id, SQL)` — pre-selects that connection and pre-fills the buffer,
     /// used by the Explorer table row's "Open SELECT * in New Query" shortcut. `None` behaves
     /// exactly like before: first connection selected, empty buffer.
-    pub fn new(connections: Vec<DbConnection>, runtime: tokio::runtime::Handle, manager: SharedManager, toasts: adw::ToastOverlay, initial: Option<(String, String)>) -> Self {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        connections: Vec<DbConnection>,
+        runtime: tokio::runtime::Handle,
+        manager: SharedManager,
+        toasts: adw::ToastOverlay,
+        initial: Option<(String, String)>,
+        on_evaluate_with_ai: impl Fn(String, String) + 'static,
+    ) -> Self {
+        // `Fn` (not `FnOnce`) since the button can be clicked more than once — wrapped in `Rc` so
+        // each click's closure (built fresh below and handed to the modal) can clone its own copy
+        // to move into the dialog's own one-shot submit handler.
+        let on_evaluate_with_ai: Rc<dyn Fn(String, String)> = Rc::new(on_evaluate_with_ai);
         let buffer = sourceview5::Buffer::new(None);
         if let Some(lang) = sourceview5::LanguageManager::default().language("sql") {
             buffer.set_language(Some(&lang));
@@ -577,6 +695,36 @@ impl QueryEditor {
 
         let status_label = gtk::Label::builder().xalign(0.0).css_classes(["dim-label"]).hexpand(true).build();
 
+        let ai_review_btn = gtk::Button::builder().icon_name("chat-message-new-symbolic").tooltip_text("Avaliar com IA (performance, segurança, legibilidade)").css_classes(["flat"]).build();
+        ai_review_btn.connect_clicked(clone!(
+            #[strong]
+            connections,
+            #[strong]
+            conn_dropdown,
+            #[strong]
+            buffer,
+            #[strong]
+            status_label,
+            #[strong]
+            on_evaluate_with_ai,
+            move |btn| {
+                let Some(conn) = connections.get(conn_dropdown.selected() as usize) else {
+                    status_label.set_label("No connection selected");
+                    return;
+                };
+                let (start, end) = buffer.bounds();
+                let sql = buffer.text(&start, &end, false).to_string();
+                if sql.trim().is_empty() {
+                    status_label.set_label("Write a query before evaluating it with AI");
+                    return;
+                }
+                let Some(parent) = btn.root().and_downcast::<gtk::Window>() else { return };
+                let conn_id = conn.id.clone();
+                let on_evaluate_with_ai = on_evaluate_with_ai.clone();
+                open_ai_review_dialog(&parent, sql, move |message| on_evaluate_with_ai(conn_id.clone(), message));
+            }
+        ));
+
         let toolbar = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(6)
@@ -591,6 +739,7 @@ impl QueryEditor {
         toolbar.append(&cancel_btn);
         toolbar.append(&history_btn);
         toolbar.append(&snippets_btn);
+        toolbar.append(&ai_review_btn);
         toolbar.append(&status_label);
 
         let results = Rc::new(ResultsGrid::new());

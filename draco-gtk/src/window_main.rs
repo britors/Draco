@@ -16,6 +16,7 @@ use gtk::glib::clone;
 use tokio::sync::Mutex;
 
 use crate::admin::AdminView;
+use crate::ai_assistant::AiAssistantView;
 use crate::backup_restore;
 use crate::connection_dialog;
 use crate::dashboard::DashboardView;
@@ -265,6 +266,20 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             manager,
             #[weak]
             tab_view,
+            move |conn_id| {
+                let view = AiAssistantView::new(conn_id, runtime.clone(), manager.clone());
+                let page = tab_view.append(view.widget());
+                page.set_title("Assistente de IA");
+                tab_view.set_selected_page(&page);
+            }
+        ),
+        clone!(
+            #[strong]
+            runtime,
+            #[strong]
+            manager,
+            #[weak]
+            tab_view,
             #[strong]
             open_table,
             move |conn_id, schema: String| {
@@ -350,7 +365,28 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             toast_overlay,
             move |conn_id: String, sql: String, title: String| {
                 let connections = store::list_connections();
-                let editor = QueryEditor::new(connections, runtime.clone(), manager.clone(), toast_overlay.clone(), Some((conn_id, sql)));
+                let editor = QueryEditor::new(
+                    connections,
+                    runtime.clone(),
+                    manager.clone(),
+                    toast_overlay.clone(),
+                    Some((conn_id, sql)),
+                    clone!(
+                        #[strong]
+                        runtime,
+                        #[strong]
+                        manager,
+                        #[strong]
+                        tab_view,
+                        move |conn_id: String, message: String| {
+                            let view = AiAssistantView::new(conn_id, runtime.clone(), manager.clone());
+                            let page = tab_view.append(view.widget());
+                            page.set_title("Assistente de IA");
+                            tab_view.set_selected_page(&page);
+                            view.send_message(&message);
+                        }
+                    ),
+                );
                 let page = tab_view.append(editor.widget());
                 page.set_title(&title);
                 query_run_registry.borrow_mut().push((page.clone(), editor.run_action()));
@@ -505,7 +541,28 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         toast_overlay,
         move || {
             let connections = store::list_connections();
-            let editor = QueryEditor::new(connections, runtime.clone(), manager.clone(), toast_overlay.clone(), None);
+            let editor = QueryEditor::new(
+                connections,
+                runtime.clone(),
+                manager.clone(),
+                toast_overlay.clone(),
+                None,
+                clone!(
+                    #[strong]
+                    runtime,
+                    #[strong]
+                    manager,
+                    #[strong]
+                    tab_view,
+                    move |conn_id: String, message: String| {
+                        let view = AiAssistantView::new(conn_id, runtime.clone(), manager.clone());
+                        let page = tab_view.append(view.widget());
+                        page.set_title("Assistente de IA");
+                        tab_view.set_selected_page(&page);
+                        view.send_message(&message);
+                    }
+                ),
+            );
             let page = tab_view.append(editor.widget());
             let n = query_tab_count.get() + 1;
             query_tab_count.set(n);
@@ -539,7 +596,7 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         .content(&toast_overlay)
         .build();
 
-    install_window_actions(&window);
+    install_window_actions(&window, runtime.clone());
 
     add_btn.connect_clicked(clone!(
         #[weak]
@@ -678,12 +735,14 @@ fn build_main_menu() -> gio::Menu {
     menu
 }
 
-fn install_window_actions(window: &adw::ApplicationWindow) {
+fn install_window_actions(window: &adw::ApplicationWindow, runtime: tokio::runtime::Handle) {
     let settings_action = gio::SimpleAction::new("settings", None);
     settings_action.connect_activate(clone!(
         #[weak]
         window,
-        move |_, _| settings::show(&window)
+        #[strong]
+        runtime,
+        move |_, _| settings::show(&window, runtime.clone())
     ));
     window.add_action(&settings_action);
 

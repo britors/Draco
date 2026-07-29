@@ -2,6 +2,7 @@
 //! introspection queries and local storage. No GTK/GUI dependency lives here —
 //! see `draco-gtk` for the frontend.
 
+pub mod assistant;
 pub mod connection;
 pub mod error;
 pub mod manager;

@@ -40,6 +40,8 @@ type OnNewSequence = Rc<dyn Fn(String, String)>;
 type OnNewTrigger = Rc<dyn Fn(String, String)>;
 /// `(connection id)` — fired by a connection row's "Admin" button.
 type OnOpenAdmin = Rc<dyn Fn(String)>;
+/// `(connection id)` — fired by a connection row's "AI Assistant" button.
+type OnOpenAssistant = Rc<dyn Fn(String)>;
 /// `(connection id, schema)` — fired by a schema row's "ERD" button.
 type OnOpenErd = Rc<dyn Fn(String, String)>;
 /// The connection being edited — fired by a connection row's "Edit Connection" action.
@@ -58,6 +60,7 @@ struct Callbacks {
     on_new_sequence: OnNewSequence,
     on_new_trigger: OnNewTrigger,
     on_open_admin: OnOpenAdmin,
+    on_open_assistant: OnOpenAssistant,
     on_open_erd: OnOpenErd,
     on_edit_connection: OnEditConnection,
     on_backup_restore: OnBackupRestore,
@@ -81,6 +84,7 @@ impl Explorer {
         on_new_sequence: impl Fn(String, String) + 'static,
         on_new_trigger: impl Fn(String, String) + 'static,
         on_open_admin: impl Fn(String) + 'static,
+        on_open_assistant: impl Fn(String) + 'static,
         on_open_erd: impl Fn(String, String) + 'static,
         on_edit_connection: impl Fn(DbConnection) + 'static,
         on_backup_restore: impl Fn(DbConnection) + 'static,
@@ -105,6 +109,7 @@ impl Explorer {
             on_new_sequence: Rc::new(on_new_sequence),
             on_new_trigger: Rc::new(on_new_trigger),
             on_open_admin: Rc::new(on_open_admin),
+            on_open_assistant: Rc::new(on_open_assistant),
             on_open_erd: Rc::new(on_open_erd),
             on_edit_connection: Rc::new(on_edit_connection),
             on_backup_restore: Rc::new(on_backup_restore),
@@ -177,44 +182,9 @@ fn build_connection_row(
     row.add_suffix(&connect_btn);
     let connected = Rc::new(Cell::new(false));
 
-    let dashboard_btn = gtk::Button::builder()
-        .icon_name("org.gnome.SystemMonitor-symbolic")
-        .tooltip_text("Connection dashboard")
-        .valign(gtk::Align::Center)
-        .css_classes(["flat"])
-        .visible(false)
-        .build();
-    row.add_suffix(&dashboard_btn);
-    let id_for_dashboard = conn.id.clone();
-    dashboard_btn.connect_clicked(clone!(
-        #[strong]
-        id_for_dashboard,
-        #[strong]
-        callbacks,
-        move |_| {
-            (callbacks.on_open_dashboard)(id_for_dashboard.clone());
-        }
-    ));
-
-    let admin_btn = gtk::Button::builder()
-        .icon_name("preferences-system-symbolic")
-        .tooltip_text("Administration (roles, jobs, activity, extensions)")
-        .valign(gtk::Align::Center)
-        .css_classes(["flat"])
-        .visible(false)
-        .build();
-    row.add_suffix(&admin_btn);
-    let id_for_admin = conn.id.clone();
-    admin_btn.connect_clicked(clone!(
-        #[strong]
-        id_for_admin,
-        #[strong]
-        callbacks,
-        move |_| {
-            (callbacks.on_open_admin)(id_for_admin.clone());
-        }
-    ));
-
+    // Everything past Connect/Disconnect (Dashboard/Admin/AI Assistant/Edit/Backup/Delete) lives
+    // in this one options menu now, so the row only ever shows two buttons — the per-row action
+    // buttons multiplied every time a new connection-scoped view was added.
     let more_btn = gtk::MenuButton::builder()
         .icon_name("view-more-symbolic")
         .tooltip_text("Connection options")
@@ -230,6 +200,73 @@ fn build_connection_row(
         .margin_start(6)
         .margin_end(6)
         .build();
+
+    // Disabled until connected — there's nothing to show yet (same gating the standalone buttons
+    // used to do via `.visible(false)`, now `.sensitive(false)` since these are menu rows).
+    let dashboard_btn = gtk::Button::builder()
+        .label("Dashboard")
+        .halign(gtk::Align::Start)
+        .css_classes(["flat"])
+        .sensitive(false)
+        .build();
+    more_box.append(&dashboard_btn);
+    let id_for_dashboard = conn.id.clone();
+    dashboard_btn.connect_clicked(clone!(
+        #[weak]
+        more_popover,
+        #[strong]
+        id_for_dashboard,
+        #[strong]
+        callbacks,
+        move |_| {
+            more_popover.popdown();
+            (callbacks.on_open_dashboard)(id_for_dashboard.clone());
+        }
+    ));
+
+    let admin_btn = gtk::Button::builder()
+        .label("Administration")
+        .halign(gtk::Align::Start)
+        .css_classes(["flat"])
+        .sensitive(false)
+        .build();
+    more_box.append(&admin_btn);
+    let id_for_admin = conn.id.clone();
+    admin_btn.connect_clicked(clone!(
+        #[weak]
+        more_popover,
+        #[strong]
+        id_for_admin,
+        #[strong]
+        callbacks,
+        move |_| {
+            more_popover.popdown();
+            (callbacks.on_open_admin)(id_for_admin.clone());
+        }
+    ));
+
+    let assistant_btn = gtk::Button::builder()
+        .label("AI Assistant")
+        .halign(gtk::Align::Start)
+        .css_classes(["flat"])
+        .sensitive(false)
+        .build();
+    more_box.append(&assistant_btn);
+    let id_for_assistant = conn.id.clone();
+    assistant_btn.connect_clicked(clone!(
+        #[weak]
+        more_popover,
+        #[strong]
+        id_for_assistant,
+        #[strong]
+        callbacks,
+        move |_| {
+            more_popover.popdown();
+            (callbacks.on_open_assistant)(id_for_assistant.clone());
+        }
+    ));
+
+    more_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
 
     let edit_btn = gtk::Button::builder()
         .label("Edit Connection")
@@ -337,6 +374,8 @@ fn build_connection_row(
         #[strong]
         admin_btn,
         #[strong]
+        assistant_btn,
+        #[strong]
         status_icon,
         #[strong]
         connection_details,
@@ -357,6 +396,7 @@ fn build_connection_row(
                 let row = row.clone();
                 let dashboard_btn = dashboard_btn.clone();
                 let admin_btn = admin_btn.clone();
+                let assistant_btn = assistant_btn.clone();
                 let status_icon = status_icon.clone();
                 let connection_details = connection_details.clone();
                 let connected = connected.clone();
@@ -367,8 +407,9 @@ fn build_connection_row(
                     // so reconnecting shows them instantly instead of refetching.
                     row.set_expanded(false);
                     row.set_enable_expansion(false);
-                    dashboard_btn.set_visible(false);
-                    admin_btn.set_visible(false);
+                    dashboard_btn.set_sensitive(false);
+                    admin_btn.set_sensitive(false);
+                    assistant_btn.set_sensitive(false);
                     status_icon.remove_css_class("success");
                     status_icon.add_css_class("error");
                     status_icon.set_tooltip_text(Some("Disconnected"));
@@ -390,6 +431,7 @@ fn build_connection_row(
             let row = row.clone();
             let dashboard_btn = dashboard_btn.clone();
             let admin_btn = admin_btn.clone();
+            let assistant_btn = assistant_btn.clone();
             let status_icon = status_icon.clone();
             let connection_details = connection_details.clone();
             let connected = connected.clone();
@@ -399,8 +441,9 @@ fn build_connection_row(
                         connected.set(true);
                         row.set_enable_expansion(true);
                         row.set_expanded(true);
-                        dashboard_btn.set_visible(true);
-                        admin_btn.set_visible(true);
+                        dashboard_btn.set_sensitive(true);
+                        admin_btn.set_sensitive(true);
+                        assistant_btn.set_sensitive(true);
                         status_icon.remove_css_class("error");
                         status_icon.add_css_class("success");
                         status_icon.set_tooltip_text(Some("Connected"));

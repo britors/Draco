@@ -1,4 +1,5 @@
 mod admin;
+mod ai_assistant;
 mod backup_restore;
 mod confirm;
 mod connection_dialog;

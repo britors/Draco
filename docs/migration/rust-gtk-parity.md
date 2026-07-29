@@ -37,6 +37,7 @@ decisão que o aprovou.
 | M8 | ERD | diagrama de FKs (`cairo`+`GestureDrag`, sem precedente nos apps irmãos), arrastar tabela, pan do canvas | implementado (falta: zoom) |
 | M8 | Busca Global | `Ctrl+P` entre tabelas/views/colunas/funções, clique abre o detalhe da tabela | implementado |
 | M8 | Atalhos e Preferências | `Ctrl+P` (busca), `Ctrl+T` (nova query), `F8` (rodar) e `F10` (explain plan, escopo do Editor SQL); tema já é automático via `libadwaita` | implementado (parcial — falta `Ctrl+Enter` como alternativa ao F8, `Ctrl+Shift+S` snippet direto do teclado (hoje só via popover), etc.; sem tela de preferências/configurações persistidas ainda) |
+| M10 | Assistente de IA | capacidade nova (não existia na versão Electron), inspirada no `vega-gtk::assistant`: aba por conexão (botão na linha do host, ao lado de Dashboard/Admin), Anthropic/OpenAI/Gemini, chave só no Secret Service (`oo7`, nunca `secret-tool` shell-out como no Vega), acesso **somente leitura** ao banco — `list_schemas`/`list_tables`/`describe_table`/`explain_query`/`run_select`/`get_performance_health` (`draco-core::assistant`), sem nenhuma ferramenta de escrita: índices/rewrites sugeridos são só texto para o usuário rodar manualmente no Editor SQL | implementado (falta: validar contra Postgres real e contra as três APIs de fato; sem anexos de arquivo/imagem, ao contrário do Vega — fora de escopo por ora; limite diário usa dia UTC, não o fuso local) |
 
 ## Nota de ambiente: dados do GtkSourceView5
 
