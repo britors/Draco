@@ -1,6 +1,6 @@
 # Maintainer: britors <rodrigo@w3ti.com.br>
 pkgname=postgres-draco
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="Database client of the Lyra OS ecosystem — schema explorer, SQL editor and administration for PostgreSQL"
 arch=('x86_64')

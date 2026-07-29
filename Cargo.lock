@@ -537,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "draco-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "deadpool-postgres",
@@ -560,7 +560,7 @@ dependencies = [
 
 [[package]]
 name = "draco-gtk"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "draco-core",
  "gettext-rs",
