@@ -36,26 +36,30 @@ struct Ctx {
     conn_id: String,
     runtime: tokio::runtime::Handle,
     manager: SharedManager,
+    toasts: adw::ToastOverlay,
 }
 
 pub struct AdminView {
     root: gtk::Box,
 }
 
-impl AdminView {
-    pub fn new(conn_id: String, runtime: tokio::runtime::Handle, manager: SharedManager) -> Self {
-        let root = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
+/// Wraps a single section's `PreferencesGroup` in its own scrollable `AdwViewStack` page, so each
+/// section (Roles, Jobs, ...) scrolls independently instead of everything sharing one long page.
+fn stack_page(section: &Section) -> gtk::ScrolledWindow {
+    let content = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .margin_top(12)
+        .margin_bottom(12)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+    content.append(section.widget());
+    gtk::ScrolledWindow::builder().child(&content).vexpand(true).build()
+}
 
-        let scroller = gtk::ScrolledWindow::builder().vexpand(true).build();
-        let content = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .spacing(18)
-            .margin_top(12)
-            .margin_bottom(12)
-            .margin_start(12)
-            .margin_end(12)
-            .build();
-        scroller.set_child(Some(&content));
+impl AdminView {
+    pub fn new(conn_id: String, runtime: tokio::runtime::Handle, manager: SharedManager, toasts: adw::ToastOverlay) -> Self {
+        let root = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
 
         let roles_section = Section::new("Roles");
         let new_role_btn = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("New role").css_classes(["flat"]).valign(gtk::Align::Center).build();
@@ -68,14 +72,27 @@ impl AdminView {
         let extensions_section = Section::new("Extensions");
         let sequences_section = Section::new("Sequences (public)");
 
-        content.append(roles_section.widget());
-        content.append(jobs_section.widget());
-        content.append(activity_section.widget());
-        content.append(locks_section.widget());
-        content.append(extensions_section.widget());
-        content.append(sequences_section.widget());
+        let stack = adw::ViewStack::new();
+        stack.add_titled_with_icon(&stack_page(&roles_section), Some("roles"), "Roles", "system-users-symbolic");
+        stack.add_titled_with_icon(&stack_page(&jobs_section), Some("jobs"), "Jobs", "alarm-symbolic");
+        stack.add_titled_with_icon(&stack_page(&activity_section), Some("activity"), "Activity", "utilities-system-monitor-symbolic");
+        stack.add_titled_with_icon(&stack_page(&locks_section), Some("locks"), "Locks", "changes-prevent-symbolic");
+        stack.add_titled_with_icon(&stack_page(&extensions_section), Some("extensions"), "Extensions", "application-x-addon-symbolic");
+        stack.add_titled_with_icon(&stack_page(&sequences_section), Some("sequences"), "Sequences", "view-list-ordered-symbolic");
 
-        let ctx = Ctx { conn_id, runtime, manager };
+        let switcher = adw::ViewSwitcher::builder().stack(&stack).policy(adw::ViewSwitcherPolicy::Wide).halign(gtk::Align::Center).build();
+        let switcher_bar = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .halign(gtk::Align::Center)
+            .margin_top(6)
+            .margin_bottom(6)
+            .build();
+        switcher_bar.append(&switcher);
+
+        root.append(&switcher_bar);
+        root.append(&stack);
+
+        let ctx = Ctx { conn_id, runtime, manager, toasts };
 
         new_role_btn.connect_clicked(clone!(
             #[strong]
@@ -105,7 +122,6 @@ impl AdminView {
         refresh_extensions(ctx.clone(), extensions_section);
         refresh_sequences(ctx.clone(), sequences_section);
 
-        root.append(&scroller);
         Self { root }
     }
 
@@ -287,7 +303,9 @@ fn open_new_role_dialog(parent: &impl IsA<gtk::Widget>, ctx: Ctx, section: Secti
             match handle.await {
                 Ok(Ok(())) => {
                     dialog.close();
+                    let toasts = ctx_for_refresh.toasts.clone();
                     refresh_roles(ctx_for_refresh, section);
+                    toasts.add_toast(adw::Toast::new("Role created"));
                 }
                 Ok(Err(err)) => {
                     error_label.set_label(&format!("Failed to create role: {err}"));
@@ -367,7 +385,11 @@ fn role_row(r: &RoleInfo, ctx: &Ctx, section: &Section) -> adw::ActionRow {
                     let handle = spawn_query!(ctx, |d| queries::drop_role(d, &name).await);
                     glib::MainContext::default().spawn_local(async move {
                         match handle.await {
-                            Ok(Ok(())) => refresh_roles(ctx, section),
+                            Ok(Ok(())) => {
+                                let toasts = ctx.toasts.clone();
+                                refresh_roles(ctx, section);
+                                toasts.add_toast(adw::Toast::new("Role dropped"));
+                            }
                             Ok(Err(err)) => section.set_rows(vec![adw::ActionRow::builder().title("Failed to drop role").subtitle(err.to_string()).build()]),
                             Err(_) => section.set_rows(vec![adw::ActionRow::builder().title("Role operation task failed").build()]),
                         }
@@ -453,7 +475,9 @@ fn open_edit_role_dialog(parent: &impl IsA<gtk::Widget>, ctx: Ctx, section: Sect
             match handle.await {
                 Ok(Ok(())) => {
                     dialog.close();
+                    let toasts = ctx.toasts.clone();
                     refresh_roles(ctx, section);
+                    toasts.add_toast(adw::Toast::new("Role updated"));
                 }
                 Ok(Err(err)) => {
                     error_label.set_label(&format!("Failed to update role: {err}"));
@@ -662,7 +686,11 @@ fn job_row(j: &CronJob, ctx: &Ctx, section: &Section) -> adw::ActionRow {
                     let handle = spawn_query!(ctx, |d| queries::delete_job(d, job_id).await);
                     glib::MainContext::default().spawn_local(async move {
                         match handle.await {
-                            Ok(Ok(())) => refresh_jobs(ctx, section),
+                            Ok(Ok(())) => {
+                                let toasts = ctx.toasts.clone();
+                                refresh_jobs(ctx, section);
+                                toasts.add_toast(adw::Toast::new("Scheduled job deleted"));
+                            }
                             Ok(Err(err)) => section.set_rows(vec![adw::ActionRow::builder().title("Failed to delete job").subtitle(err.to_string()).build()]),
                             Err(_) => section.set_rows(vec![adw::ActionRow::builder().title("Job operation task failed").build()]),
                         }

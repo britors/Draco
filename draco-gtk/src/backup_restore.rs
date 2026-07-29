@@ -40,13 +40,10 @@ pub fn open(
         .content_height(660)
         .build();
 
-    let stack = gtk::Stack::builder()
-        .transition_type(gtk::StackTransitionType::Crossfade)
-        .vexpand(true)
-        .build();
-    let switcher = gtk::StackSwitcher::builder()
+    let stack = adw::ViewStack::builder().vexpand(true).build();
+    let switcher = adw::ViewSwitcher::builder()
         .stack(&stack)
-        .halign(gtk::Align::Center)
+        .policy(adw::ViewSwitcherPolicy::Wide)
         .build();
 
     let (backup_page, backup_controls) = build_backup_page(
@@ -145,7 +142,7 @@ impl PageControls {
 
 fn build_backup_page(
     _parent: &impl IsA<gtk::Window>,
-    _stack: &gtk::Stack,
+    _stack: &adw::ViewStack,
     _dialog: &adw::Dialog,
     conn: DbConnection,
     runtime: tokio::runtime::Handle,
@@ -301,7 +298,7 @@ fn build_backup_page(
 
 fn build_restore_page(
     _parent: &impl IsA<gtk::Window>,
-    _stack: &gtk::Stack,
+    _stack: &adw::ViewStack,
     _dialog: &adw::Dialog,
     conn: DbConnection,
     runtime: tokio::runtime::Handle,

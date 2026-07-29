@@ -59,8 +59,23 @@ impl DashboardView {
     }
 }
 
+/// Splits the dashboard into an "Overview" tab (server info, gauges, KPIs, top tables) and a
+/// "Health" tab (bloat, unused indexes, seq-scan hot spots) via `AdwViewStack`, instead of one
+/// long scrolling page mixing both — same pill-switcher pattern as `admin::AdminView`.
 fn populate(root: &gtk::Box, dash: DashboardData, stats: DbStats) {
-    let scroller = gtk::ScrolledWindow::builder().vexpand(true).build();
+    let stack = adw::ViewStack::new();
+    stack.add_titled_with_icon(&overview_page(&dash), Some("overview"), "Overview", "view-grid-symbolic");
+    stack.add_titled_with_icon(&health_page(&stats), Some("health"), "Health", "dialog-warning-symbolic");
+
+    let switcher = adw::ViewSwitcher::builder().stack(&stack).policy(adw::ViewSwitcherPolicy::Wide).halign(gtk::Align::Center).build();
+    let switcher_bar = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).halign(gtk::Align::Center).margin_top(6).margin_bottom(6).build();
+    switcher_bar.append(&switcher);
+
+    root.append(&switcher_bar);
+    root.append(&stack);
+}
+
+fn scrolled_page(build: impl FnOnce(&gtk::Box)) -> gtk::ScrolledWindow {
     let content = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(18)
@@ -69,57 +84,67 @@ fn populate(root: &gtk::Box, dash: DashboardData, stats: DbStats) {
         .margin_start(12)
         .margin_end(12)
         .build();
+    build(&content);
+    gtk::ScrolledWindow::builder().child(&content).vexpand(true).build()
+}
 
-    // ── Server / database info ──────────────────────────────────────────────
-    let info_group = adw::PreferencesGroup::builder().title(&dash.db_name).description(format!("PostgreSQL {}", dash.pg_version)).build();
-    info_group.add(&info_row("Host", &format!("{}:{}", dash.host, dash.port)));
-    info_group.add(&info_row("Uptime", &dash.uptime));
-    info_group.add(&info_row("Size", &dash.db_size));
-    info_group.add(&info_row("Encoding / Collation", &format!("{} / {}", dash.encoding, dash.collation)));
-    content.append(&info_group);
+fn overview_page(dash: &DashboardData) -> gtk::ScrolledWindow {
+    scrolled_page(|content| {
+        // ── Server / database info ──────────────────────────────────────────
+        let info_group = adw::PreferencesGroup::builder().title(&dash.db_name).description(format!("PostgreSQL {}", dash.pg_version)).build();
+        info_group.add(&info_row("Host", &format!("{}:{}", dash.host, dash.port)));
+        info_group.add(&info_row("Uptime", &dash.uptime));
+        info_group.add(&info_row("Size", &dash.db_size));
+        info_group.add(&info_row("Encoding / Collation", &format!("{} / {}", dash.encoding, dash.collation)));
+        content.append(&info_group);
 
-    // ── Gauges ───────────────────────────────────────────────────────────────
-    let cache_hit: f64 = dash.cache_hit.parse().unwrap_or(0.0);
-    let conn_usage = if dash.max_conn > 0 { dash.total_conn as f64 / dash.max_conn as f64 * 100.0 } else { 0.0 };
-    let total_xact = dash.commits + dash.rollbacks;
-    let rollback_rate = if total_xact > 0 { dash.rollbacks as f64 / total_xact as f64 * 100.0 } else { 0.0 };
+        // ── Gauges ───────────────────────────────────────────────────────────
+        let cache_hit: f64 = dash.cache_hit.parse().unwrap_or(0.0);
+        let conn_usage = if dash.max_conn > 0 { dash.total_conn as f64 / dash.max_conn as f64 * 100.0 } else { 0.0 };
+        let total_xact = dash.commits + dash.rollbacks;
+        let rollback_rate = if total_xact > 0 { dash.rollbacks as f64 / total_xact as f64 * 100.0 } else { 0.0 };
 
-    let gauges = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(24).halign(gtk::Align::Center).build();
-    gauges.append(&arc_gauge(cache_hit, "Cache Hit", false));
-    gauges.append(&arc_gauge(conn_usage, "Connections", false));
-    gauges.append(&arc_gauge(rollback_rate, "Rollback Rate", true));
-    content.append(&gauges);
+        let gauges = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(24).halign(gtk::Align::Center).build();
+        gauges.append(&arc_gauge(cache_hit, "Cache Hit", false));
+        gauges.append(&arc_gauge(conn_usage, "Connections", false));
+        gauges.append(&arc_gauge(rollback_rate, "Rollback Rate", true));
+        content.append(&gauges);
 
-    // ── KPIs ─────────────────────────────────────────────────────────────────
-    let kpis = adw::PreferencesGroup::new();
-    kpis.add(&info_row("Active / Idle / Idle-in-TX", &format!("{} / {} / {}", dash.active_conn, dash.idle_conn, dash.idle_in_tx_conn)));
-    kpis.add(&info_row("Deadlocks", &dash.deadlocks.to_string()));
-    kpis.add(&info_row("Temp Files", &dash.temp_files.to_string()));
-    kpis.add(&info_row("Commits / Rollbacks", &format!("{} / {}", dash.commits, dash.rollbacks)));
-    content.append(&kpis);
+        // ── KPIs ─────────────────────────────────────────────────────────────
+        let kpis = adw::PreferencesGroup::new();
+        kpis.add(&info_row("Active / Idle / Idle-in-TX", &format!("{} / {} / {}", dash.active_conn, dash.idle_conn, dash.idle_in_tx_conn)));
+        kpis.add(&info_row("Deadlocks", &dash.deadlocks.to_string()));
+        kpis.add(&info_row("Temp Files", &dash.temp_files.to_string()));
+        kpis.add(&info_row("Commits / Rollbacks", &format!("{} / {}", dash.commits, dash.rollbacks)));
+        content.append(&kpis);
 
-    // ── Top tables ───────────────────────────────────────────────────────────
-    if !dash.top_tables.is_empty() {
-        content.append(&section_label("Top 10 Largest Tables"));
-        content.append(&top_tables_group(&dash.top_tables));
-    }
+        // ── Top tables ───────────────────────────────────────────────────────
+        if !dash.top_tables.is_empty() {
+            content.append(&section_label("Top 10 Largest Tables"));
+            content.append(&top_tables_group(&dash.top_tables));
+        }
+    })
+}
 
-    // ── Health ───────────────────────────────────────────────────────────────
-    if !stats.bloat.is_empty() {
-        content.append(&section_label("Table Bloat"));
-        content.append(&bloat_group(&stats.bloat));
-    }
-    if !stats.unused_idx.is_empty() {
-        content.append(&section_label("Unused Indexes"));
-        content.append(&unused_idx_group(&stats.unused_idx));
-    }
-    if !stats.seq_scans.is_empty() {
-        content.append(&section_label("Sequential Scan Hot Spots"));
-        content.append(&seq_scans_group(&stats.seq_scans));
-    }
-
-    scroller.set_child(Some(&content));
-    root.append(&scroller);
+fn health_page(stats: &DbStats) -> gtk::ScrolledWindow {
+    scrolled_page(|content| {
+        if stats.bloat.is_empty() && stats.unused_idx.is_empty() && stats.seq_scans.is_empty() {
+            content.append(&adw::StatusPage::builder().icon_name("emblem-ok-symbolic").title("No issues detected").description("Bloat, unused indexes and sequential-scan hot spots will show up here.").build());
+            return;
+        }
+        if !stats.bloat.is_empty() {
+            content.append(&section_label("Table Bloat"));
+            content.append(&bloat_group(&stats.bloat));
+        }
+        if !stats.unused_idx.is_empty() {
+            content.append(&section_label("Unused Indexes"));
+            content.append(&unused_idx_group(&stats.unused_idx));
+        }
+        if !stats.seq_scans.is_empty() {
+            content.append(&section_label("Sequential Scan Hot Spots"));
+            content.append(&seq_scans_group(&stats.seq_scans));
+        }
+    })
 }
 
 fn section_label(text: &str) -> gtk::Label {

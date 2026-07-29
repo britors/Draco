@@ -14,6 +14,7 @@ pub fn open(
     parent: &impl IsA<gtk::Widget>,
     runtime: tokio::runtime::Handle,
     initial: Option<DbConnection>,
+    toasts: adw::ToastOverlay,
     on_saved: impl Fn(DbConnection) + 'static,
 ) {
     let on_saved = std::rc::Rc::new(on_saved);
@@ -261,6 +262,8 @@ pub fn open(
         dialog,
         #[strong]
         on_saved,
+        #[strong]
+        toasts,
         move |btn| {
         let draft = DbConnectionDraft {
             label: label_row.text().to_string(),
@@ -321,6 +324,7 @@ pub fn open(
         let dialog_for_task = dialog.clone();
         let on_saved_for_task = on_saved.clone();
         let error_label_for_task = error_label.clone();
+        let toasts_for_task = toasts.clone();
         let handle = runtime.spawn(async move {
             secrets::store_password(&id, &password).await?;
             if !ssh_password.is_empty() {
@@ -337,6 +341,7 @@ pub fn open(
                     save_btn.set_sensitive(true);
                     dialog_for_task.close();
                     on_saved_for_task(saved_for_task);
+                    toasts_for_task.add_toast(adw::Toast::new("Connection saved"));
                 }
                 Ok(Err(err)) => {
                     save_btn.set_sensitive(true);

@@ -851,6 +851,13 @@ pub async fn drop_table(driver: &PostgresDriver, schema: &str, table: &str) -> R
     Ok(())
 }
 
+pub async fn truncate_table(driver: &PostgresDriver, schema: &str, table: &str) -> Result<()> {
+    driver
+        .query(&format!("TRUNCATE TABLE {}.{}", quote_ident(schema), quote_ident(table)), &[])
+        .await?;
+    Ok(())
+}
+
 // ── Alter table (ALTER TABLE editor) ────────────────────────────────────────────
 
 /// Desired end-state of one column as edited in the table editor form. `original_name` is
@@ -954,6 +961,13 @@ pub async fn run_vacuum(driver: &PostgresDriver, schema: &str, table: &str, op: 
     }
     driver
         .query(&format!("{op} {}.{}", quote_ident(schema), quote_ident(table)), &[])
+        .await?;
+    Ok(())
+}
+
+pub async fn reindex_table(driver: &PostgresDriver, schema: &str, table: &str) -> Result<()> {
+    driver
+        .query(&format!("REINDEX TABLE {}.{}", quote_ident(schema), quote_ident(table)), &[])
         .await?;
     Ok(())
 }

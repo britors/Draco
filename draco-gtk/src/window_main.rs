@@ -37,6 +37,10 @@ type OpenTableCell = Rc<RefCell<Option<OpenTable>>>;
 pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     let manager: Arc<Mutex<ConnectionManager>> = Arc::new(Mutex::new(ConnectionManager::new()));
 
+    // Wraps the whole window content so any view can surface a transient `AdwToast` — see the
+    // clones threaded into AdminView::new/QueryEditor::new/connection_dialog::open below.
+    let toast_overlay = adw::ToastOverlay::new();
+
     let tab_view = adw::TabView::new();
 
     let open_table_cell: OpenTableCell = Rc::new(RefCell::new(None));
@@ -244,8 +248,10 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             manager,
             #[weak]
             tab_view,
+            #[strong]
+            toast_overlay,
             move |conn_id| {
-                let view = AdminView::new(conn_id, runtime.clone(), manager.clone());
+                let view = AdminView::new(conn_id, runtime.clone(), manager.clone(), toast_overlay.clone());
                 let page = tab_view.append(view.widget());
                 page.set_title("Admin");
                 tab_view.set_selected_page(&page);
@@ -276,6 +282,8 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             app_for_new_table,
             #[strong]
             explorer_cell,
+            #[strong]
+            toast_overlay,
             move |conn: DbConnection| {
                 let Some(parent) = app_for_new_table.active_window() else {
                     return;
@@ -284,6 +292,7 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
                     &parent,
                     runtime.clone(),
                     Some(conn),
+                    toast_overlay.clone(),
                     clone!(
                         #[strong]
                         runtime,
@@ -314,6 +323,40 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
                 backup_restore::open(&parent, conn, runtime.clone(), manager.clone());
             }
         ),
+        clone!(
+            #[strong]
+            runtime,
+            #[strong]
+            manager,
+            #[strong]
+            explorer_cell,
+            move || {
+                if let Some(explorer) = explorer_cell.borrow().clone() {
+                    refresh_connections(&explorer, &manager, &runtime);
+                }
+            }
+        ),
+        clone!(
+            #[strong]
+            runtime,
+            #[strong]
+            manager,
+            #[weak]
+            tab_view,
+            #[strong]
+            query_run_registry,
+            #[strong]
+            toast_overlay,
+            move |conn_id: String, sql: String, title: String| {
+                let connections = store::list_connections();
+                let editor = QueryEditor::new(connections, runtime.clone(), manager.clone(), toast_overlay.clone(), Some((conn_id, sql)));
+                let page = tab_view.append(editor.widget());
+                page.set_title(&title);
+                query_run_registry.borrow_mut().push((page.clone(), editor.run_action()));
+                tab_view.set_selected_page(&page);
+            }
+        ),
+        toast_overlay.clone(),
     ));
     *explorer_cell.borrow_mut() = Some(explorer.clone());
 
@@ -354,6 +397,19 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     let content_header = adw::HeaderBar::new();
     content_header.pack_start(&new_query_btn);
     content_header.pack_start(&search_btn);
+
+    // Reflects the currently selected tab's title — every `page.set_title(...)` call above
+    // happens before the page is selected, so listening for selection changes alone is enough.
+    let content_title = adw::WindowTitle::new("Draco", "");
+    content_header.set_title_widget(Some(&content_title));
+    tab_view.connect_selected_page_notify(clone!(
+        #[strong]
+        content_title,
+        move |view| {
+            let title = view.selected_page().map(|page| page.title().to_string()).unwrap_or_else(|| "Draco".to_string());
+            content_title.set_title(&title);
+        }
+    ));
 
     let tabs_box = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -436,9 +492,11 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         query_tab_count,
         #[strong]
         query_run_registry,
+        #[strong]
+        toast_overlay,
         move || {
             let connections = store::list_connections();
-            let editor = QueryEditor::new(connections, runtime.clone(), manager.clone());
+            let editor = QueryEditor::new(connections, runtime.clone(), manager.clone(), toast_overlay.clone(), None);
             let page = tab_view.append(editor.widget());
             let n = query_tab_count.get() + 1;
             query_tab_count.set(n);
@@ -462,12 +520,14 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         .max_sidebar_width(420.0)
         .build();
 
+    toast_overlay.set_child(Some(&split_view));
+
     let window = adw::ApplicationWindow::builder()
         .application(app)
         .title("Draco")
         .default_width(1280)
         .default_height(820)
-        .content(&split_view)
+        .content(&toast_overlay)
         .build();
 
     add_btn.connect_clicked(clone!(
@@ -479,11 +539,14 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         manager,
         #[strong]
         explorer,
+        #[strong]
+        toast_overlay,
         move |_| {
             connection_dialog::open(
                 &window,
                 runtime.clone(),
                 None,
+                toast_overlay.clone(),
                 clone!(
                     #[strong]
                     runtime,

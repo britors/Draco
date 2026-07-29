@@ -141,15 +141,15 @@ fn export_results(
     results: &Rc<ResultsGrid>,
     format: ExportFormat,
     runtime: &tokio::runtime::Handle,
-    status_label: &gtk::Label,
+    toasts: &adw::ToastOverlay,
     source_btn: &gtk::Button,
 ) {
     if !results.has_rows() {
-        status_label.set_label("No results to export");
+        toasts.add_toast(adw::Toast::new("No results to export"));
         return;
     }
     let Some(window) = source_btn.root().and_downcast::<gtk::Window>() else {
-        status_label.set_label("Cannot open export dialog");
+        toasts.add_toast(adw::Toast::new("Cannot open export dialog"));
         return;
     };
     let (title, accept_label, initial_name) = match format {
@@ -159,22 +159,23 @@ fn export_results(
     let dialog = gtk::FileDialog::builder().title(title).accept_label(accept_label).initial_name(initial_name).build();
     let snapshot = results.export_snapshot();
     let runtime = runtime.clone();
-    let status_label = status_label.clone();
+    let toasts = toasts.clone();
     dialog.save(Some(&window), None::<&gio::Cancellable>, move |result| {
+        // User dismissed the file chooser — a normal no-op, not worth a toast.
         let Ok(file) = result else {
-            status_label.set_label("Export cancelled");
             return;
         };
         let Some(path) = file.path() else {
-            status_label.set_label("Export failed: invalid destination");
+            toasts.add_toast(adw::Toast::new("Export failed: invalid destination"));
             return;
         };
         let handle = runtime.spawn_blocking(move || write_export(path, snapshot, format));
+        let toasts = toasts.clone();
         glib::MainContext::default().spawn_local(async move {
             match handle.await {
-                Ok(Ok(())) => status_label.set_label("Results exported successfully"),
-                Ok(Err(err)) => status_label.set_label(&format!("Export failed: {err}")),
-                Err(err) => status_label.set_label(&format!("Export failed: {err}")),
+                Ok(Ok(())) => toasts.add_toast(adw::Toast::new("Results exported successfully")),
+                Ok(Err(err)) => toasts.add_toast(adw::Toast::new(&format!("Export failed: {err}"))),
+                Err(err) => toasts.add_toast(adw::Toast::new(&format!("Export failed: {err}"))),
             }
         });
     });
@@ -243,7 +244,13 @@ fn build_history_content(buffer: &sourceview5::Buffer, popover: &gtk::Popover) -
     content.upcast()
 }
 
-fn build_snippets_content(buffer: &sourceview5::Buffer, popover: &gtk::Popover, connections: Rc<Vec<DbConnection>>, conn_dropdown: &gtk::DropDown) -> gtk::Widget {
+fn build_snippets_content(
+    buffer: &sourceview5::Buffer,
+    popover: &gtk::Popover,
+    connections: Rc<Vec<DbConnection>>,
+    conn_dropdown: &gtk::DropDown,
+    toasts: &adw::ToastOverlay,
+) -> gtk::Widget {
     let content = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).margin_top(6).margin_bottom(6).margin_start(6).margin_end(6).width_request(420).build();
 
     let name_row = adw::EntryRow::builder().title("Snippet name").build();
@@ -261,6 +268,8 @@ fn build_snippets_content(buffer: &sourceview5::Buffer, popover: &gtk::Popover, 
         connections,
         #[strong]
         conn_dropdown,
+        #[strong]
+        toasts,
         move |_| {
             let name = name_row.text().to_string();
             let (start, end) = buffer.bounds();
@@ -278,6 +287,7 @@ fn build_snippets_content(buffer: &sourceview5::Buffer, popover: &gtk::Popover, 
                 conn_label: conn.map(|c| c.label.clone()),
             });
             popover.popdown();
+            toasts.add_toast(adw::Toast::new("Snippet saved"));
         }
     ));
 
@@ -316,9 +326,11 @@ fn build_snippets_content(buffer: &sourceview5::Buffer, popover: &gtk::Popover, 
             connections,
             #[strong]
             conn_dropdown,
+            #[strong]
+            toasts,
             move |_| {
                 let _ = store::delete_snippet(&id);
-                popover.set_child(Some(&build_snippets_content(&buffer, &popover, connections.clone(), &conn_dropdown)));
+                popover.set_child(Some(&build_snippets_content(&buffer, &popover, connections.clone(), &conn_dropdown, &toasts)));
             }
         ));
         list.append(&row);
@@ -347,6 +359,7 @@ fn run_sql(
     cancel_state: &Rc<RefCell<Option<watch::Sender<bool>>>>,
     export_csv_btn: &gtk::Button,
     export_json_btn: &gtk::Button,
+    banner: &adw::Banner,
 ) {
     run_btn.set_sensitive(false);
     explain_btn.set_sensitive(false);
@@ -355,6 +368,7 @@ fn run_sql(
     cancel_btn.set_visible(true);
     cancel_btn.set_sensitive(true);
     status_label.set_label("Running…");
+    banner.set_revealed(false);
 
     let (cancel_sender, cancel_receiver) = watch::channel(false);
     *cancel_state.borrow_mut() = Some(cancel_sender);
@@ -385,6 +399,7 @@ fn run_sql(
     let cancel_state_for_task = cancel_state.clone();
     let export_csv_btn_for_task = export_csv_btn.clone();
     let export_json_btn_for_task = export_json_btn.clone();
+    let banner_for_task = banner.clone();
     glib::MainContext::default().spawn_local(async move {
         let elapsed = started.elapsed();
         match handle.await {
@@ -412,6 +427,7 @@ fn run_sql(
                 export_json_btn_for_task.set_sensitive(false);
                 if matches!(err, draco_core::error::CoreError::NotConnected) {
                     status_label_for_task.set_label("Connection is not open. Click Connect first.");
+                    banner_for_task.set_revealed(true);
                 } else if err.to_string() == "Query cancelled" {
                     status_label_for_task.set_label("Cancelled");
                 } else {
@@ -439,7 +455,10 @@ pub struct QueryEditor {
 }
 
 impl QueryEditor {
-    pub fn new(connections: Vec<DbConnection>, runtime: tokio::runtime::Handle, manager: SharedManager) -> Self {
+    /// `initial` — `(connection id, SQL)` — pre-selects that connection and pre-fills the buffer,
+    /// used by the Explorer table row's "Open SELECT * in New Query" shortcut. `None` behaves
+    /// exactly like before: first connection selected, empty buffer.
+    pub fn new(connections: Vec<DbConnection>, runtime: tokio::runtime::Handle, manager: SharedManager, toasts: adw::ToastOverlay, initial: Option<(String, String)>) -> Self {
         let buffer = sourceview5::Buffer::new(None);
         if let Some(lang) = sourceview5::LanguageManager::default().language("sql") {
             buffer.set_language(Some(&lang));
@@ -468,12 +487,20 @@ impl QueryEditor {
         completion_words.register(&completion_buffer);
 
         let connections: Rc<Vec<DbConnection>> = Rc::new(connections);
+        let initial_index = initial.as_ref().and_then(|(conn_id, _)| connections.iter().position(|c| &c.id == conn_id));
 
         let labels: Vec<&str> = connections.iter().map(|c| c.label.as_str()).collect();
         let conn_model = gtk::StringList::new(&labels);
         let conn_dropdown = gtk::DropDown::builder().model(&conn_model).build();
-        if let Some(conn) = connections.first() {
+        if let Some(index) = initial_index {
+            conn_dropdown.set_selected(index as u32);
+        }
+        let initial_conn = initial_index.and_then(|index| connections.get(index)).or_else(|| connections.first());
+        if let Some(conn) = initial_conn {
             refresh_completion_words(Some(conn.clone()), &runtime, &manager, &completion_buffer);
+        }
+        if let Some((_, sql)) = &initial {
+            buffer.set_text(sql);
         }
         conn_dropdown.connect_selected_notify(clone!(
             #[strong]
@@ -536,7 +563,9 @@ impl QueryEditor {
             connections,
             #[strong]
             conn_dropdown,
-            move |popover| popover.set_child(Some(&build_snippets_content(&buffer, popover, connections.clone(), &conn_dropdown)))
+            #[strong]
+            toasts,
+            move |popover| popover.set_child(Some(&build_snippets_content(&buffer, popover, connections.clone(), &conn_dropdown, &toasts)))
         ));
         let snippets_btn = gtk::MenuButton::builder().icon_name("user-bookmarks-symbolic").tooltip_text("Snippets").css_classes(["flat"]).popover(&snippets_popover).build();
 
@@ -581,8 +610,8 @@ impl QueryEditor {
             #[strong]
             runtime,
             #[strong]
-            status_label,
-            move |button| export_results(&results, ExportFormat::Csv, &runtime, &status_label, button)
+            toasts,
+            move |button| export_results(&results, ExportFormat::Csv, &runtime, &toasts, button)
         ));
         export_json_btn.connect_clicked(clone!(
             #[strong]
@@ -590,8 +619,8 @@ impl QueryEditor {
             #[strong]
             runtime,
             #[strong]
-            status_label,
-            move |button| export_results(&results, ExportFormat::Json, &runtime, &status_label, button)
+            toasts,
+            move |button| export_results(&results, ExportFormat::Json, &runtime, &toasts, button)
         ));
         let results_toolbar = gtk::Box::builder().orientation(gtk::Orientation::Horizontal).spacing(6).margin_top(6).margin_start(6).margin_end(6).build();
         results_toolbar.append(&gtk::Label::builder().label("Results").hexpand(true).xalign(0.0).build());
@@ -610,7 +639,45 @@ impl QueryEditor {
             .position(280)
             .build();
 
+        let banner = adw::Banner::new("Connection lost");
+        banner.set_button_label(Some("Reconnect"));
+        banner.set_revealed(false);
+        banner.connect_button_clicked(clone!(
+            #[strong]
+            runtime,
+            #[strong]
+            manager,
+            #[strong]
+            connections,
+            #[strong]
+            conn_dropdown,
+            #[strong]
+            status_label,
+            move |banner| {
+                let Some(conn) = connections.get(conn_dropdown.selected() as usize) else { return };
+                let conn_id = conn.id.clone();
+                let task_manager = manager.clone();
+                let handle = runtime.spawn(async move {
+                    let mut mgr = task_manager.lock().await;
+                    crate::connection_runtime::ensure_connected(&mut mgr, &conn_id).await
+                });
+                let banner = banner.clone();
+                let status_label = status_label.clone();
+                glib::MainContext::default().spawn_local(async move {
+                    match handle.await {
+                        Ok(Ok(())) => {
+                            banner.set_revealed(false);
+                            status_label.set_label("Reconnected");
+                        }
+                        Ok(Err(err)) => banner.set_title(&format!("Reconnect failed: {err}")),
+                        Err(_) => banner.set_title("Reconnect task failed"),
+                    }
+                });
+            }
+        ));
+
         let root = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
+        root.append(&banner);
         root.append(&toolbar);
         root.append(&paned);
 
@@ -645,6 +712,8 @@ impl QueryEditor {
             runtime,
             #[strong]
             manager,
+            #[strong]
+            banner,
             move |explain: bool| {
                 let selected = conn_dropdown.selected();
                 if !run_btn.is_sensitive() {
@@ -674,6 +743,7 @@ impl QueryEditor {
                     &cancel_state,
                     &export_csv_btn,
                     &export_json_btn,
+                    &banner,
                 );
             }
         ));

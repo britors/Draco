@@ -18,10 +18,16 @@ use gtk::glib::clone;
 use tokio::sync::Mutex;
 
 use crate::confirm::confirm_destructive;
+use crate::table_editor;
 
 type SharedManager = Arc<Mutex<ConnectionManager>>;
 /// `(connection id, schema, table)` — fired by a table row's "View details" button.
 type OnOpenTable = Rc<dyn Fn(String, String, String)>;
+/// Fired after a table row's Edit/Delete action succeeds — the caller reloads the whole tree
+/// (see `refresh_connections` in `window_main.rs`), same shape as `on_new_table` and friends.
+type OnTableChanged = Rc<dyn Fn()>;
+/// `(connection id, SQL, tab title)` — fired by a table row's "Open SELECT * in New Query" action.
+type OnOpenSelect = Rc<dyn Fn(String, String, String)>;
 /// `(connection id)` — fired by a connection row's "Dashboard" button.
 type OnOpenDashboard = Rc<dyn Fn(String)>;
 /// `(connection id, schema, function name — `None` means "create new")`.
@@ -55,11 +61,14 @@ struct Callbacks {
     on_open_erd: OnOpenErd,
     on_edit_connection: OnEditConnection,
     on_backup_restore: OnBackupRestore,
+    on_table_changed: OnTableChanged,
+    on_open_select: OnOpenSelect,
 }
 
 pub struct Explorer {
     list_box: gtk::ListBox,
     callbacks: Callbacks,
+    toasts: adw::ToastOverlay,
 }
 
 impl Explorer {
@@ -75,10 +84,17 @@ impl Explorer {
         on_open_erd: impl Fn(String, String) + 'static,
         on_edit_connection: impl Fn(DbConnection) + 'static,
         on_backup_restore: impl Fn(DbConnection) + 'static,
+        on_table_changed: impl Fn() + 'static,
+        on_open_select: impl Fn(String, String, String) + 'static,
+        toasts: adw::ToastOverlay,
     ) -> Self {
+        // `.navigation-sidebar` (not `.boxed-list`) is the HIG style class for a left-hand
+        // navigation panel like this one — `.boxed-list` is meant for preferences-style card
+        // lists, which is why this used to read as a stack of settings cards rather than a
+        // sidebar (same treatment Nautilus/Settings/Builder give their left panel).
         let list_box = gtk::ListBox::builder()
             .selection_mode(gtk::SelectionMode::None)
-            .css_classes(["boxed-list"])
+            .css_classes(["navigation-sidebar"])
             .valign(gtk::Align::Start)
             .build();
         let callbacks = Callbacks {
@@ -92,10 +108,13 @@ impl Explorer {
             on_open_erd: Rc::new(on_open_erd),
             on_edit_connection: Rc::new(on_edit_connection),
             on_backup_restore: Rc::new(on_backup_restore),
+            on_table_changed: Rc::new(on_table_changed),
+            on_open_select: Rc::new(on_open_select),
         };
         Self {
             list_box,
             callbacks,
+            toasts,
         }
     }
 
@@ -119,6 +138,7 @@ impl Explorer {
                 manager.clone(),
                 self.callbacks.clone(),
                 self.list_box.clone(),
+                self.toasts.clone(),
             ));
         }
     }
@@ -130,6 +150,7 @@ fn build_connection_row(
     manager: SharedManager,
     callbacks: Callbacks,
     list_box: gtk::ListBox,
+    toasts: adw::ToastOverlay,
 ) -> adw::ExpanderRow {
     let connection_details = format!("{}@{}:{}/{}", conn.user, conn.host, conn.port, conn.database);
     let row = adw::ExpanderRow::builder()
@@ -145,6 +166,8 @@ fn build_connection_row(
 
     // Before connecting: just a "Connect" action, no expand arrow and no other actions — there's
     // nothing to browse/administer yet. All of that appears only once the connection succeeds.
+    // The same button then doubles as "Disconnect" once connected, rather than disappearing —
+    // closing the driver is otherwise unreachable from the UI.
     let connect_btn = gtk::Button::builder()
         .icon_name("network-wired-symbolic")
         .tooltip_text("Connect")
@@ -152,6 +175,7 @@ fn build_connection_row(
         .css_classes(["flat"])
         .build();
     row.add_suffix(&connect_btn);
+    let connected = Rc::new(Cell::new(false));
 
     let dashboard_btn = gtk::Button::builder()
         .icon_name("org.gnome.SystemMonitor-symbolic")
@@ -316,10 +340,46 @@ fn build_connection_row(
         status_icon,
         #[strong]
         connection_details,
+        #[strong]
+        connected,
         move |btn| {
             btn.set_sensitive(false);
             let task_id = id.clone();
             let task_manager = manager.clone();
+
+            if connected.get() {
+                let handle = runtime.spawn(async move {
+                    let mut mgr = task_manager.lock().await;
+                    mgr.disconnect(&task_id).await;
+                });
+
+                let btn = btn.clone();
+                let row = row.clone();
+                let dashboard_btn = dashboard_btn.clone();
+                let admin_btn = admin_btn.clone();
+                let status_icon = status_icon.clone();
+                let connection_details = connection_details.clone();
+                let connected = connected.clone();
+                glib::MainContext::default().spawn_local(async move {
+                    let _ = handle.await;
+                    connected.set(false);
+                    // Rows already fetched stay in the (now hidden) tree — `loaded` isn't reset —
+                    // so reconnecting shows them instantly instead of refetching.
+                    row.set_expanded(false);
+                    row.set_enable_expansion(false);
+                    dashboard_btn.set_visible(false);
+                    admin_btn.set_visible(false);
+                    status_icon.remove_css_class("success");
+                    status_icon.add_css_class("error");
+                    status_icon.set_tooltip_text(Some("Disconnected"));
+                    row.set_subtitle(&connection_details);
+                    btn.set_icon_name("network-wired-symbolic");
+                    btn.set_tooltip_text(Some("Connect"));
+                    btn.set_sensitive(true);
+                });
+                return;
+            }
+
             let handle = runtime.spawn(async move {
                 let mut mgr = task_manager.lock().await;
                 crate::connection_runtime::ensure_connected(&mut mgr, &task_id).await?;
@@ -332,18 +392,22 @@ fn build_connection_row(
             let admin_btn = admin_btn.clone();
             let status_icon = status_icon.clone();
             let connection_details = connection_details.clone();
+            let connected = connected.clone();
             glib::MainContext::default().spawn_local(async move {
                 match handle.await {
                     Ok(Ok(())) => {
+                        connected.set(true);
                         row.set_enable_expansion(true);
                         row.set_expanded(true);
-                        btn.set_visible(false);
                         dashboard_btn.set_visible(true);
                         admin_btn.set_visible(true);
                         status_icon.remove_css_class("error");
                         status_icon.add_css_class("success");
                         status_icon.set_tooltip_text(Some("Connected"));
                         row.set_subtitle(&connection_details);
+                        btn.set_icon_name("network-offline-symbolic");
+                        btn.set_tooltip_text(Some("Disconnect"));
+                        btn.set_sensitive(true);
                     }
                     Ok(Err(err)) => {
                         btn.set_tooltip_text(Some(&format!("Failed to connect: {err}")));
@@ -374,6 +438,8 @@ fn build_connection_row(
         id,
         #[strong]
         callbacks,
+        #[strong]
+        toasts,
         move |exp_row| {
             if !exp_row.is_expanded() || loaded.get() {
                 return;
@@ -399,6 +465,7 @@ fn build_connection_row(
             let manager_for_task = manager.clone();
             let conn_id_for_task = id.clone();
             let callbacks_for_task = callbacks.clone();
+            let toasts_for_task = toasts.clone();
             glib::MainContext::default().spawn_local(async move {
                 row_for_task.remove(&spinner_row);
                 match handle.await {
@@ -414,6 +481,7 @@ fn build_connection_row(
                                 runtime_for_task.clone(),
                                 manager_for_task.clone(),
                                 callbacks_for_task.clone(),
+                                toasts_for_task.clone(),
                             ));
                         }
                     }
@@ -439,6 +507,7 @@ fn build_schema_row(
     runtime: tokio::runtime::Handle,
     manager: SharedManager,
     callbacks: Callbacks,
+    toasts: adw::ToastOverlay,
 ) -> adw::ExpanderRow {
     let row = adw::ExpanderRow::builder()
         .title(glib::markup_escape_text(&schema.name))
@@ -503,6 +572,8 @@ fn build_schema_row(
         schema_name,
         #[strong]
         callbacks,
+        #[strong]
+        toasts,
         move |exp_row| {
             if !exp_row.is_expanded() || loaded.get() {
                 return;
@@ -525,9 +596,12 @@ fn build_schema_row(
             });
 
             let row_for_task = row.clone();
+            let runtime_for_task = runtime.clone();
+            let manager_for_task = manager.clone();
             let conn_id_for_task = conn_id.clone();
             let schema_for_task = schema_name.clone();
             let callbacks_for_task = callbacks.clone();
+            let toasts_for_task = toasts.clone();
             glib::MainContext::default().spawn_local(async move {
                 match handle.await {
                     Ok(Ok((tables, functions, sequences, triggers))) => {
@@ -535,7 +609,12 @@ fn build_schema_row(
                             conn_id_for_task.clone(),
                             schema_for_task.clone(),
                             tables,
+                            runtime_for_task.clone(),
+                            manager_for_task.clone(),
                             callbacks_for_task.on_open_table.clone(),
+                            callbacks_for_task.on_table_changed.clone(),
+                            callbacks_for_task.on_open_select.clone(),
+                            toasts_for_task.clone(),
                         ));
                         row_for_task.add_row(&build_objects_row(
                             conn_id_for_task.clone(),
@@ -564,14 +643,35 @@ fn build_schema_row(
     row
 }
 
-fn build_tables_row(conn_id: String, schema: String, tables: Vec<TableInfo>, on_open_table: OnOpenTable) -> adw::ExpanderRow {
+#[allow(clippy::too_many_arguments)]
+fn build_tables_row(
+    conn_id: String,
+    schema: String,
+    tables: Vec<TableInfo>,
+    runtime: tokio::runtime::Handle,
+    manager: SharedManager,
+    on_open_table: OnOpenTable,
+    on_table_changed: OnTableChanged,
+    on_open_select: OnOpenSelect,
+    toasts: adw::ToastOverlay,
+) -> adw::ExpanderRow {
     let row = adw::ExpanderRow::builder().title("Tables").build();
     row.add_prefix(&gtk::Image::from_icon_name("view-grid-symbolic"));
     if tables.is_empty() {
         row.add_row(&adw::ActionRow::builder().title("No tables").build());
     } else {
         for table in tables {
-            row.add_row(&build_table_row(conn_id.clone(), schema.clone(), table, on_open_table.clone()));
+            row.add_row(&build_table_row(
+                conn_id.clone(),
+                schema.clone(),
+                table,
+                runtime.clone(),
+                manager.clone(),
+                on_open_table.clone(),
+                on_table_changed.clone(),
+                on_open_select.clone(),
+                toasts.clone(),
+            ));
         }
     }
     row
@@ -716,12 +816,20 @@ fn build_functions_row(
 }
 
 /// A leaf row — no inline column expansion. Columns live in the table detail tab (the "View
-/// details" button below), reached in one click without cluttering the tree.
+/// Details" menu entry below), reached in one click without cluttering the tree. The
+/// "view-more-symbolic" button is a real options menu (not just an alias for the row click) —
+/// view/edit/maintenance/destructive actions that don't need a whole tab.
+#[allow(clippy::too_many_arguments)]
 fn build_table_row(
     conn_id: String,
     schema: String,
     table: TableInfo,
+    runtime: tokio::runtime::Handle,
+    manager: SharedManager,
     on_open_table: OnOpenTable,
+    on_table_changed: OnTableChanged,
+    on_open_select: OnOpenSelect,
+    toasts: adw::ToastOverlay,
 ) -> adw::ActionRow {
     let icon_name = if table.kind == TableKind::View {
         "view-list-symbolic"
@@ -733,34 +841,330 @@ fn build_table_row(
         .activatable(true)
         .build();
     row.add_prefix(&gtk::Image::from_icon_name(icon_name));
-
-    let details_btn = gtk::Button::builder()
-        .icon_name("view-more-symbolic")
-        .tooltip_text("View details (DDL, indexes, constraints, FKs)")
-        .valign(gtk::Align::Center)
-        .css_classes(["flat"])
-        .build();
-    row.add_suffix(&details_btn);
+    let table_name = table.name;
 
     let open = clone!(
         #[strong]
         conn_id,
         #[strong]
         schema,
-        #[strong(rename_to = table_name)]
-        table.name,
+        #[strong]
+        table_name,
         #[strong]
         on_open_table,
         move || {
             on_open_table(conn_id.clone(), schema.clone(), table_name.clone());
         }
     );
-    details_btn.connect_clicked(clone!(
+    row.connect_activated(clone!(
         #[strong]
         open,
         move |_| open()
     ));
-    row.connect_activated(move |_| open());
+
+    let menu_btn = gtk::MenuButton::builder()
+        .icon_name("view-more-symbolic")
+        .tooltip_text("Table options")
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
+    row.add_suffix(&menu_btn);
+
+    let popover = gtk::Popover::new();
+    let popover_box = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(2)
+        .margin_top(6)
+        .margin_bottom(6)
+        .margin_start(6)
+        .margin_end(6)
+        .build();
+
+    let menu_item = |label: &str| gtk::Button::builder().label(label).halign(gtk::Align::Start).css_classes(["flat"]).build();
+
+    let view_btn = menu_item("View Details");
+    popover_box.append(&view_btn);
+    view_btn.connect_clicked(clone!(
+        #[weak]
+        popover,
+        #[strong]
+        open,
+        move |_| {
+            popover.popdown();
+            open();
+        }
+    ));
+
+    let edit_btn = menu_item("Edit Table…");
+    popover_box.append(&edit_btn);
+    edit_btn.connect_clicked(clone!(
+        #[weak]
+        popover,
+        #[strong]
+        runtime,
+        #[strong]
+        manager,
+        #[strong]
+        conn_id,
+        #[strong]
+        schema,
+        #[strong]
+        table_name,
+        #[strong]
+        on_table_changed,
+        #[strong]
+        toasts,
+        move |btn| {
+            popover.popdown();
+            let Some(parent) = btn.root() else { return };
+            let task_conn_id = conn_id.clone();
+            let task_schema = schema.clone();
+            let task_table = table_name.clone();
+            let task_manager = manager.clone();
+            let handle = runtime.spawn(async move {
+                let mut mgr = task_manager.lock().await;
+                crate::connection_runtime::ensure_connected(&mut mgr, &task_conn_id).await?;
+                let driver = mgr.get_driver(&task_conn_id).ok_or(draco_core::error::CoreError::NotConnected)?;
+                queries::get_table_detail(driver, &task_schema, &task_table).await
+            });
+            let runtime = runtime.clone();
+            let manager = manager.clone();
+            let conn_id = conn_id.clone();
+            let schema = schema.clone();
+            let table_name = table_name.clone();
+            let on_table_changed = on_table_changed.clone();
+            let toasts = toasts.clone();
+            glib::MainContext::default().spawn_local(async move {
+                match handle.await {
+                    Ok(Ok(detail)) => {
+                        table_editor::open(&parent, conn_id, schema, table_name, detail, runtime, manager, move || on_table_changed());
+                    }
+                    Ok(Err(err)) => toasts.add_toast(adw::Toast::new(&format!("Failed to load table: {err}"))),
+                    Err(_) => toasts.add_toast(adw::Toast::new("Failed to load table")),
+                }
+            });
+        }
+    ));
+
+    let copy_btn = menu_item("Copy Qualified Name");
+    popover_box.append(&copy_btn);
+    copy_btn.connect_clicked(clone!(
+        #[weak]
+        popover,
+        #[strong]
+        schema,
+        #[strong]
+        table_name,
+        #[strong]
+        toasts,
+        move |btn| {
+            popover.popdown();
+            btn.clipboard().set_text(&format!("{schema}.{table_name}"));
+            toasts.add_toast(adw::Toast::new("Qualified name copied"));
+        }
+    ));
+
+    let select_btn = menu_item("Open SELECT * in New Query");
+    popover_box.append(&select_btn);
+    select_btn.connect_clicked(clone!(
+        #[weak]
+        popover,
+        #[strong]
+        conn_id,
+        #[strong]
+        schema,
+        #[strong]
+        table_name,
+        #[strong]
+        on_open_select,
+        move |_| {
+            popover.popdown();
+            let sql = format!("SELECT * FROM \"{schema}\".\"{table_name}\" LIMIT 100;");
+            on_open_select(conn_id.clone(), sql, format!("{schema}.{table_name}"));
+        }
+    ));
+
+    let vacuum_btn = menu_item("Vacuum");
+    popover_box.append(&vacuum_btn);
+    vacuum_btn.connect_clicked(clone!(
+        #[weak]
+        popover,
+        #[strong]
+        runtime,
+        #[strong]
+        manager,
+        #[strong]
+        conn_id,
+        #[strong]
+        schema,
+        #[strong]
+        table_name,
+        #[strong]
+        toasts,
+        move |_| {
+            popover.popdown();
+            run_maintenance(&runtime, &manager, &toasts, conn_id.clone(), schema.clone(), table_name.clone(), "VACUUM", "Vacuum completed", "Vacuum failed");
+        }
+    ));
+
+    let reindex_btn = menu_item("Reindex Table");
+    popover_box.append(&reindex_btn);
+    reindex_btn.connect_clicked(clone!(
+        #[weak]
+        popover,
+        #[strong]
+        runtime,
+        #[strong]
+        manager,
+        #[strong]
+        conn_id,
+        #[strong]
+        schema,
+        #[strong]
+        table_name,
+        #[strong]
+        toasts,
+        move |_| {
+            popover.popdown();
+            run_maintenance(&runtime, &manager, &toasts, conn_id.clone(), schema.clone(), table_name.clone(), "REINDEX", "Table reindexed", "Reindex failed");
+        }
+    ));
+
+    let truncate_btn = menu_item("Truncate Table…");
+    popover_box.append(&truncate_btn);
+    truncate_btn.connect_clicked(clone!(
+        #[weak]
+        popover,
+        #[strong]
+        runtime,
+        #[strong]
+        manager,
+        #[strong]
+        conn_id,
+        #[strong]
+        schema,
+        #[strong]
+        table_name,
+        #[strong]
+        toasts,
+        move |btn| {
+            popover.popdown();
+            let Some(parent) = btn.root() else { return };
+            let runtime = runtime.clone();
+            let manager = manager.clone();
+            let conn_id = conn_id.clone();
+            let schema = schema.clone();
+            let table_name = table_name.clone();
+            let toasts = toasts.clone();
+            confirm_destructive(
+                &parent,
+                "Truncate table?",
+                &format!("This permanently removes every row from \u{201c}{schema}.{table_name}\u{201d}. The table definition stays intact. This cannot be undone."),
+                "Truncate Table",
+                move || {
+                    run_maintenance(&runtime, &manager, &toasts, conn_id.clone(), schema.clone(), table_name.clone(), "TRUNCATE", "Table truncated", "Truncate failed");
+                },
+            );
+        }
+    ));
+
+    let delete_btn = menu_item("Delete Table…");
+    popover_box.append(&delete_btn);
+    delete_btn.connect_clicked(clone!(
+        #[weak]
+        popover,
+        #[strong]
+        runtime,
+        #[strong]
+        manager,
+        #[strong]
+        conn_id,
+        #[strong]
+        schema,
+        #[strong]
+        table_name,
+        #[strong]
+        toasts,
+        #[strong]
+        on_table_changed,
+        move |btn| {
+            popover.popdown();
+            let Some(parent) = btn.root() else { return };
+            let task_conn_id = conn_id.clone();
+            let task_schema = schema.clone();
+            let task_table = table_name.clone();
+            let task_manager = manager.clone();
+            let runtime = runtime.clone();
+            let toasts = toasts.clone();
+            let on_table_changed = on_table_changed.clone();
+            confirm_destructive(
+                &parent,
+                "Delete table?",
+                &format!("This permanently removes the table \u{201c}{schema}.{table_name}\u{201d} and all of its data. This cannot be undone."),
+                "Delete Table",
+                move || {
+                    let handle = runtime.spawn(async move {
+                        let mut mgr = task_manager.lock().await;
+                        crate::connection_runtime::ensure_connected(&mut mgr, &task_conn_id).await?;
+                        let driver = mgr.get_driver(&task_conn_id).ok_or(draco_core::error::CoreError::NotConnected)?;
+                        queries::drop_table(driver, &task_schema, &task_table).await
+                    });
+                    let toasts = toasts.clone();
+                    let on_table_changed = on_table_changed.clone();
+                    glib::MainContext::default().spawn_local(async move {
+                        match handle.await {
+                            Ok(Ok(())) => {
+                                toasts.add_toast(adw::Toast::new("Table deleted"));
+                                on_table_changed();
+                            }
+                            Ok(Err(err)) => toasts.add_toast(adw::Toast::new(&format!("Delete failed: {err}"))),
+                            Err(_) => toasts.add_toast(adw::Toast::new("Delete task failed")),
+                        }
+                    });
+                },
+            );
+        }
+    ));
+
+    popover.set_child(Some(&popover_box));
+    menu_btn.set_popover(Some(&popover));
 
     row
+}
+
+/// Shared by Vacuum/Reindex/Truncate — the three "quick" maintenance ops that just need a
+/// connected driver, an SQL keyword and a toast on completion (Truncate's confirmation dialog
+/// happens before this is called; VACUUM/REINDEX run immediately, matching the non-FULL vacuum
+/// ops in `table_detail.rs`'s own maintenance menu).
+#[allow(clippy::too_many_arguments)]
+fn run_maintenance(
+    runtime: &tokio::runtime::Handle,
+    manager: &SharedManager,
+    toasts: &adw::ToastOverlay,
+    conn_id: String,
+    schema: String,
+    table: String,
+    op: &'static str,
+    success: &'static str,
+    failure: &'static str,
+) {
+    let task_manager = manager.clone();
+    let handle = runtime.spawn(async move {
+        let mut mgr = task_manager.lock().await;
+        crate::connection_runtime::ensure_connected(&mut mgr, &conn_id).await?;
+        let driver = mgr.get_driver(&conn_id).ok_or(draco_core::error::CoreError::NotConnected)?;
+        match op {
+            "TRUNCATE" => queries::truncate_table(driver, &schema, &table).await,
+            "REINDEX" => queries::reindex_table(driver, &schema, &table).await,
+            _ => queries::run_vacuum(driver, &schema, &table, op).await,
+        }
+    });
+    let toasts = toasts.clone();
+    glib::MainContext::default().spawn_local(async move {
+        match handle.await {
+            Ok(Ok(())) => toasts.add_toast(adw::Toast::new(success)),
+            Ok(Err(err)) => toasts.add_toast(adw::Toast::new(&format!("{failure}: {err}"))),
+            Err(_) => toasts.add_toast(adw::Toast::new(&format!("{failure} (task error)"))),
+        }
+    });
 }
