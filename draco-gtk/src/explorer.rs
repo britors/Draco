@@ -979,7 +979,8 @@ fn build_table_row(
         on_open_select,
         move |_| {
             popover.popdown();
-            let sql = format!("SELECT * FROM \"{schema}\".\"{table_name}\" LIMIT 100;");
+            let preview_row_limit = store::get_settings().preview_row_limit.max(1);
+            let sql = format!("SELECT * FROM \"{schema}\".\"{table_name}\" LIMIT {preview_row_limit};");
             on_open_select(conn_id.clone(), sql, format!("{schema}.{table_name}"));
         }
     ));

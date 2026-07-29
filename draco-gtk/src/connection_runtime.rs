@@ -7,6 +7,7 @@
 use draco_core::error::{CoreError, Result};
 use draco_core::manager::ConnectionManager;
 use draco_core::secrets;
+use draco_core::store;
 
 pub async fn ensure_connected(manager: &mut ConnectionManager, connection_id: &str) -> Result<()> {
     if manager.get_driver(connection_id).is_some() {
@@ -27,7 +28,7 @@ pub async fn ensure_connected(manager: &mut ConnectionManager, connection_id: &s
         .connect(
             connection_id,
             &password,
-            30_000,
+            store::get_settings().query_timeout,
             (!ssh_password.is_empty()).then_some(ssh_password.as_str()),
             (!jump_password.is_empty()).then_some(jump_password.as_str()),
         )

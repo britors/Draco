@@ -175,8 +175,6 @@ fn chrono_now_millis() -> i64 {
 pub struct AppSettings {
     pub query_timeout: u32,
     pub preview_row_limit: u32,
-    pub default_ssl: bool,
-    pub default_port: u16,
     pub show_row_count: bool,
 }
 
@@ -185,8 +183,6 @@ impl Default for AppSettings {
         Self {
             query_timeout: 30_000,
             preview_row_limit: 100,
-            default_ssl: false,
-            default_port: 5432,
             show_row_count: false,
         }
     }

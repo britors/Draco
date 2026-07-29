@@ -10,6 +10,7 @@ mod function_editor;
 mod query_editor;
 mod results_grid;
 mod search;
+mod settings;
 mod object_creator;
 mod table_creator;
 mod table_detail;

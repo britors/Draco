@@ -24,6 +24,7 @@ use crate::explorer::Explorer;
 use crate::function_editor::FunctionEditor;
 use crate::query_editor::QueryEditor;
 use crate::search;
+use crate::settings;
 use crate::object_creator;
 use crate::table_creator;
 use crate::table_detail::TableDetailView;
@@ -398,6 +399,14 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     content_header.pack_start(&new_query_btn);
     content_header.pack_start(&search_btn);
 
+    let menu = build_main_menu();
+    let menu_button = gtk::MenuButton::builder()
+        .icon_name("open-menu-symbolic")
+        .tooltip_text("Menu principal")
+        .menu_model(&menu)
+        .build();
+    content_header.pack_end(&menu_button);
+
     // Reflects the currently selected tab's title — every `page.set_title(...)` call above
     // happens before the page is selected, so listening for selection changes alone is enough.
     let content_title = adw::WindowTitle::new("Draco", "");
@@ -530,6 +539,8 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         .content(&toast_overlay)
         .build();
 
+    install_window_actions(&window);
+
     add_btn.connect_clicked(clone!(
         #[weak]
         window,
@@ -647,6 +658,54 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     app.set_accels_for_action("win.explain-query", &["F10"]);
 
     window.present();
+}
+
+/// Builds the application menu shown by the main content header bar.
+///
+/// The menu points at window actions so the same operations can later be exposed through
+/// shortcuts without duplicating their implementation.
+fn build_main_menu() -> gio::Menu {
+    let menu = gio::Menu::new();
+
+    let settings = gio::Menu::new();
+    settings.append(Some("Configurações"), Some("win.settings"));
+    menu.append_section(None, &settings);
+
+    let application = gio::Menu::new();
+    application.append(Some("Sobre o Draco"), Some("win.about"));
+    menu.append_section(None, &application);
+
+    menu
+}
+
+fn install_window_actions(window: &adw::ApplicationWindow) {
+    let settings_action = gio::SimpleAction::new("settings", None);
+    settings_action.connect_activate(clone!(
+        #[weak]
+        window,
+        move |_, _| settings::show(&window)
+    ));
+    window.add_action(&settings_action);
+
+    let about_action = gio::SimpleAction::new("about", None);
+    about_action.connect_activate(clone!(
+        #[weak]
+        window,
+        move |_, _| {
+            let dialog = adw::AboutDialog::builder()
+                .application_name("Draco")
+                .application_icon("org.lyraos.Draco")
+                .developer_name("Lyra OS")
+                .version(env!("CARGO_PKG_VERSION"))
+                .website("https://github.com/britors/Draco")
+                .issue_url("https://github.com/britors/Draco/issues")
+                .license_type(gtk::License::Gpl30)
+                .build();
+            dialog.set_developers(&["Rodrigo Brito"]);
+            dialog.present(Some(&window));
+        }
+    ));
+    window.add_action(&about_action);
 }
 
 fn refresh_connections(

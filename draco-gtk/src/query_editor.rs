@@ -400,6 +400,7 @@ fn run_sql(
     let export_csv_btn_for_task = export_csv_btn.clone();
     let export_json_btn_for_task = export_json_btn.clone();
     let banner_for_task = banner.clone();
+    let show_row_count = store::get_settings().show_row_count;
     glib::MainContext::default().spawn_local(async move {
         let elapsed = started.elapsed();
         match handle.await {
@@ -408,7 +409,12 @@ fn run_sql(
                 results_for_task.set_data(&result.columns, result.rows);
                 export_csv_btn_for_task.set_sensitive(true);
                 export_json_btn_for_task.set_sensitive(true);
-                status_label_for_task.set_label(&format!("{row_count} rows in {:.2}s", elapsed.as_secs_f64()));
+                let status = if show_row_count {
+                    format!("{row_count} rows in {:.2}s", elapsed.as_secs_f64())
+                } else {
+                    format!("Completed in {:.2}s", elapsed.as_secs_f64())
+                };
+                status_label_for_task.set_label(&status);
                 if record_history {
                     let _ = store::add_history(store::HistoryEntry {
                         id: String::new(),
