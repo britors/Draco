@@ -1,6 +1,14 @@
 -------------------------------------------------------------------
 Wed Jul 29 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
 
+- Novo menu principal (Configurações/Sobre), no mesmo padrão do Vega e
+  do Beam. A tela de Configurações agora controla o tempo limite de
+  consulta, o limite de linhas nas prévias e a exibição da contagem de
+  linhas.
+
+-------------------------------------------------------------------
+Wed Jul 29 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
+
 - Atualizada a versão para 0.1.1 para que o Zypper reconheça a nova
   revisão do pacote.
 
