@@ -1,6 +1,24 @@
 -------------------------------------------------------------------
 Wed Jul 29 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
 
+- Novo Assistente de IA por conexão: consultor de tuning somente leitura
+  para PostgreSQL (Anthropic/OpenAI/Gemini), com ferramentas de
+  introspecção de schema/DDL/índices, análise de plano de execução
+  (EXPLAIN) e amostragem de dados — nunca executa DDL/DML, qualquer
+  índice ou reescrita sugerida fica como texto para o usuário rodar
+  manualmente. Chave de API armazenada só no Secret Service (oo7).
+- Editor SQL ganha o botão "Avaliar com IA": abre um modal para escolher
+  o foco da análise (Geral, Performance, Segurança, Legibilidade) e
+  anexar uma mensagem opcional, enviando a query direto para uma aba
+  nova do Assistente de IA.
+- Menu de opções da conexão no Explorer consolidado: Dashboard,
+  Administração e Assistente de IA passam a ficar dentro do menu "⋮" da
+  linha (desabilitados até conectar); a linha em si só mostra
+  Conectar/Desconectar e o botão de menu.
+
+-------------------------------------------------------------------
+Wed Jul 29 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
+
 - Novo menu principal (Configurações/Sobre), no mesmo padrão do Vega e
   do Beam. A tela de Configurações agora controla o tempo limite de
   consulta, o limite de linhas nas prévias e a exibição da contagem de
