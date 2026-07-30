@@ -194,8 +194,20 @@ fn render_history(transcript: &gtk::TextView, history: &[AiMessage]) {
     };
     let buffer = transcript.buffer();
     buffer.set_text(&text);
-    let mut end = buffer.end_iter();
-    transcript.scroll_to_iter(&mut end, 0.0, false, 0.0, 0.0);
+
+    // `scroll_to_iter` needs a fresh size allocation for the new text to compute the right
+    // offset, which hasn't happened yet at this point in the call stack — deferring to an idle
+    // callback lets GTK finish laying out the buffer first, so the scroll actually lands at the
+    // bottom instead of wherever the view was before the update.
+    glib::idle_add_local_once(clone!(
+        #[weak]
+        transcript,
+        move || {
+            let buffer = transcript.buffer();
+            let mut end = buffer.end_iter();
+            transcript.scroll_to_iter(&mut end, 0.0, false, 0.0, 0.0);
+        }
+    ));
 }
 
 async fn run_conversation(
