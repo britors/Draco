@@ -1,4 +1,18 @@
 -------------------------------------------------------------------
+Thu Jul 30 13:00:00 UTC 2026 - rodrigo@w3ti.com.br
+
+- Versão 1.0.0: primeiro release considerado estável do Draco em
+  Rust/GTK4, cobrindo a paridade ampla planejada com a versão anterior
+  em Electron (dashboard, ERD, editores de tabela/função, roles,
+  pg_cron, activity/locks, extensões, query stats, Assistente de IA).
+- Refatoração interna: `postgres::queries` (2186 linhas num arquivo só)
+  dividido em um módulo por área (introspecção, ERD, browse/edit,
+  ALTER TABLE, dashboard, activity/locks, sequences, roles, extensões,
+  editor de função, pg_cron, query stats), sem mudança de API pública.
+  Escaping de identificador SQL duplicado em vários lugares (roles,
+  schemas, extensões) consolidado na função `quote_ident` já existente.
+
+-------------------------------------------------------------------
 Thu Jul 30 12:00:00 UTC 2026 - rodrigo@w3ti.com.br
 
 - Nova aba "Query Stats" no Admin, baseada em pg_stat_statements: top
