@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use adw::prelude::*;
 use draco_core::connection::DbConnection;
-use draco_core::manager::ConnectionManager;
+use draco_core::manager::{ConnectionManager, ConnectionStatus};
 use draco_core::postgres::queries::{self, FunctionInfo, SchemaInfo, SequenceInfo, TableInfo, TableKind, TriggerInfo};
 use draco_core::{secrets, store};
 use gtk::glib;
@@ -158,14 +158,25 @@ fn build_connection_row(
     toasts: adw::ToastOverlay,
 ) -> adw::ExpanderRow {
     let connection_details = format!("{}@{}:{}/{}", conn.user, conn.host, conn.port, conn.database);
+    // `set_connections` rebuilds every row from scratch on each refresh (see its doc comment),
+    // but the manager's driver map survives that rebuild — so a row must check whether its
+    // connection is already live instead of always starting out "Disconnected". Without this, a
+    // refresh triggered by e.g. creating a table would visually disconnect every open connection
+    // even though the backend driver was never touched.
+    let initial_connected = manager
+        .try_lock()
+        .map(|mgr| matches!(mgr.get(&conn.id).map(|m| m.status), Some(ConnectionStatus::Connected)))
+        .unwrap_or(false);
+
     let row = adw::ExpanderRow::builder()
         .title(glib::markup_escape_text(&conn.label))
         .subtitle(&connection_details)
-        .enable_expansion(false)
+        .enable_expansion(initial_connected)
         .build();
     let status_icon = gtk::Image::builder()
         .icon_name("drive-harddisk-symbolic")
-        .css_classes(["error"])
+        .css_classes(if initial_connected { ["success"] } else { ["error"] })
+        .tooltip_text(if initial_connected { "Connected" } else { "Disconnected" })
         .build();
     row.add_prefix(&status_icon);
 
@@ -173,14 +184,18 @@ fn build_connection_row(
     // nothing to browse/administer yet. All of that appears only once the connection succeeds.
     // The same button then doubles as "Disconnect" once connected, rather than disappearing —
     // closing the driver is otherwise unreachable from the UI.
+    //
+    // Icon reflects current status, matching `status_icon`: "idle" (plain network glyph) means
+    // live, "offline" (network glyph with a slash) means not connected — not the action the
+    // button performs, which is already spelled out by the tooltip.
     let connect_btn = gtk::Button::builder()
-        .icon_name("network-idle-symbolic")
-        .tooltip_text("Connect")
+        .icon_name(if initial_connected { "network-idle-symbolic" } else { "network-offline-symbolic" })
+        .tooltip_text(if initial_connected { "Disconnect" } else { "Connect" })
         .valign(gtk::Align::Center)
         .css_classes(["flat"])
         .build();
     row.add_suffix(&connect_btn);
-    let connected = Rc::new(Cell::new(false));
+    let connected = Rc::new(Cell::new(initial_connected));
 
     // Everything past Connect/Disconnect (Dashboard/Admin/AI Assistant/Edit/Backup/Delete) lives
     // in this one options menu now, so the row only ever shows two buttons — the per-row action
@@ -207,7 +222,7 @@ fn build_connection_row(
         .label("Dashboard")
         .halign(gtk::Align::Start)
         .css_classes(["flat"])
-        .sensitive(false)
+        .sensitive(initial_connected)
         .build();
     more_box.append(&dashboard_btn);
     let id_for_dashboard = conn.id.clone();
@@ -228,7 +243,7 @@ fn build_connection_row(
         .label("Administration")
         .halign(gtk::Align::Start)
         .css_classes(["flat"])
-        .sensitive(false)
+        .sensitive(initial_connected)
         .build();
     more_box.append(&admin_btn);
     let id_for_admin = conn.id.clone();
@@ -249,7 +264,7 @@ fn build_connection_row(
         .label("AI Assistant")
         .halign(gtk::Align::Start)
         .css_classes(["flat"])
-        .sensitive(false)
+        .sensitive(initial_connected)
         .build();
     more_box.append(&assistant_btn);
     let id_for_assistant = conn.id.clone();
@@ -383,6 +398,10 @@ fn build_connection_row(
         connected,
         move |btn| {
             btn.set_sensitive(false);
+            // Otherwise the button looks unresponsive between the click and the async
+            // connect/disconnect finishing — worse over a slow SSH tunnel or jump host.
+            btn.set_icon_name("content-loading-symbolic");
+            btn.set_tooltip_text(Some(if connected.get() { "Disconnecting…" } else { "Connecting…" }));
             let task_id = id.clone();
             let task_manager = manager.clone();
 
@@ -414,7 +433,7 @@ fn build_connection_row(
                     status_icon.add_css_class("error");
                     status_icon.set_tooltip_text(Some("Disconnected"));
                     row.set_subtitle(&connection_details);
-                    btn.set_icon_name("network-idle-symbolic");
+                    btn.set_icon_name("network-offline-symbolic");
                     btn.set_tooltip_text(Some("Connect"));
                     btn.set_sensitive(true);
                 });
@@ -448,17 +467,19 @@ fn build_connection_row(
                         status_icon.add_css_class("success");
                         status_icon.set_tooltip_text(Some("Connected"));
                         row.set_subtitle(&connection_details);
-                        btn.set_icon_name("network-offline-symbolic");
+                        btn.set_icon_name("network-idle-symbolic");
                         btn.set_tooltip_text(Some("Disconnect"));
                         btn.set_sensitive(true);
                     }
                     Ok(Err(err)) => {
+                        btn.set_icon_name("network-offline-symbolic");
                         btn.set_tooltip_text(Some(&format!("Failed to connect: {err}")));
                         status_icon.set_tooltip_text(Some(&format!("Connection failed: {err}")));
                         row.set_subtitle(&format!("Connection failed: {err}"));
                         btn.set_sensitive(true);
                     }
                     Err(_) => {
+                        btn.set_icon_name("network-offline-symbolic");
                         status_icon.set_tooltip_text(Some("Connection task failed"));
                         row.set_subtitle("Connection task failed");
                         btn.set_sensitive(true);
