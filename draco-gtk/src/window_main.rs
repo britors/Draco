@@ -30,11 +30,20 @@ use crate::object_creator;
 use crate::table_creator;
 use crate::table_detail::TableDetailView;
 
-/// Registry of `(tab page, its QueryEditor's run action)` — see the `query_run_registry` comment
-/// at its construction site in `build` for why this exists.
-type QueryRunRegistry = Rc<RefCell<Vec<(adw::TabPage, Rc<dyn Fn(bool)>)>>>;
+/// Registry of `(tab page, its QueryEditor's run action, its script action)` — see the
+/// `query_run_registry` comment at its construction site in `build` for why this exists.
+type QueryRunRegistry = Rc<RefCell<Vec<(adw::TabPage, Rc<dyn Fn(bool)>, Rc<dyn Fn()>)>>>;
 type OpenTable = Rc<dyn Fn(String, String, String)>;
 type OpenTableCell = Rc<RefCell<Option<OpenTable>>>;
+/// Opens (or reuses) the connection's AI Assistant tab and sends it `(conn_id, message)` —
+/// shared by the query editor's "Avaliar com IA" flow, the Explorer's "Open in New Query" AI
+/// hook and the Admin view's per-row "Analisar com IA" button, so the tab-opening logic lives
+/// in exactly one place.
+type OpenAiMessage = Rc<dyn Fn(String, String)>;
+/// Opens a new Query tab pre-filled with `(conn_id, sql)`, titled `title`. Shared by the
+/// Explorer's "Open SELECT * in New Query" and the Admin view's per-row "Open in new Query tab"
+/// button.
+type OpenQuerySql = Rc<dyn Fn(String, String, String)>;
 
 pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     let manager: Arc<Mutex<ConnectionManager>> = Arc::new(Mutex::new(ConnectionManager::new()));
@@ -83,7 +92,58 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         #[strong]
         query_run_registry,
         move |_, page, _| {
-            query_run_registry.borrow_mut().retain(|(p, _)| p != page);
+            query_run_registry.borrow_mut().retain(|(p, _, _)| p != page);
+        }
+    ));
+
+    let open_ai_with_message: OpenAiMessage = Rc::new(clone!(
+        #[strong]
+        runtime,
+        #[strong]
+        manager,
+        #[weak]
+        tab_view,
+        move |conn_id: String, message: String| {
+            let view = AiAssistantView::new(conn_id, runtime.clone(), manager.clone());
+            let page = tab_view.append(view.widget());
+            page.set_title("Assistente de IA");
+            tab_view.set_selected_page(&page);
+            view.send_message(&message);
+        }
+    ));
+
+    let open_query_with_sql: OpenQuerySql = Rc::new(clone!(
+        #[strong]
+        runtime,
+        #[strong]
+        manager,
+        #[weak]
+        tab_view,
+        #[strong]
+        query_run_registry,
+        #[strong]
+        toast_overlay,
+        #[strong]
+        open_ai_with_message,
+        move |conn_id: String, sql: String, title: String| {
+            let connections = store::list_connections();
+            let editor = QueryEditor::new(
+                connections,
+                runtime.clone(),
+                manager.clone(),
+                toast_overlay.clone(),
+                Some((conn_id, sql)),
+                clone!(
+                    #[strong]
+                    open_ai_with_message,
+                    move |conn_id, message| open_ai_with_message(conn_id, message)
+                ),
+            );
+            let page = tab_view.append(editor.widget());
+            page.set_title(&title);
+            editor.bind_tab_page(page.clone());
+            query_run_registry.borrow_mut().push((page.clone(), editor.run_action(), editor.script_action()));
+            tab_view.set_selected_page(&page);
         }
     ));
 
@@ -252,8 +312,19 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
             tab_view,
             #[strong]
             toast_overlay,
+            #[strong]
+            open_query_with_sql,
+            #[strong]
+            open_ai_with_message,
             move |conn_id| {
-                let view = AdminView::new(conn_id, runtime.clone(), manager.clone(), toast_overlay.clone());
+                let view = AdminView::new(
+                    conn_id,
+                    runtime.clone(),
+                    manager.clone(),
+                    toast_overlay.clone(),
+                    open_query_with_sql.clone(),
+                    open_ai_with_message.clone(),
+                );
                 let page = tab_view.append(view.widget());
                 page.set_title("Admin");
                 tab_view.set_selected_page(&page);
@@ -354,44 +425,8 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         ),
         clone!(
             #[strong]
-            runtime,
-            #[strong]
-            manager,
-            #[weak]
-            tab_view,
-            #[strong]
-            query_run_registry,
-            #[strong]
-            toast_overlay,
-            move |conn_id: String, sql: String, title: String| {
-                let connections = store::list_connections();
-                let editor = QueryEditor::new(
-                    connections,
-                    runtime.clone(),
-                    manager.clone(),
-                    toast_overlay.clone(),
-                    Some((conn_id, sql)),
-                    clone!(
-                        #[strong]
-                        runtime,
-                        #[strong]
-                        manager,
-                        #[strong]
-                        tab_view,
-                        move |conn_id: String, message: String| {
-                            let view = AiAssistantView::new(conn_id, runtime.clone(), manager.clone());
-                            let page = tab_view.append(view.widget());
-                            page.set_title("Assistente de IA");
-                            tab_view.set_selected_page(&page);
-                            view.send_message(&message);
-                        }
-                    ),
-                );
-                let page = tab_view.append(editor.widget());
-                page.set_title(&title);
-                query_run_registry.borrow_mut().push((page.clone(), editor.run_action()));
-                tab_view.set_selected_page(&page);
-            }
+            open_query_with_sql,
+            move |conn_id: String, sql: String, title: String| open_query_with_sql(conn_id, sql, title)
         ),
         toast_overlay.clone(),
     ));
@@ -539,6 +574,8 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         query_run_registry,
         #[strong]
         toast_overlay,
+        #[strong]
+        open_ai_with_message,
         move || {
             let connections = store::list_connections();
             let editor = QueryEditor::new(
@@ -549,27 +586,18 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
                 None,
                 clone!(
                     #[strong]
-                    runtime,
-                    #[strong]
-                    manager,
-                    #[strong]
-                    tab_view,
-                    move |conn_id: String, message: String| {
-                        let view = AiAssistantView::new(conn_id, runtime.clone(), manager.clone());
-                        let page = tab_view.append(view.widget());
-                        page.set_title("Assistente de IA");
-                        tab_view.set_selected_page(&page);
-                        view.send_message(&message);
-                    }
+                    open_ai_with_message,
+                    move |conn_id, message| open_ai_with_message(conn_id, message)
                 ),
             );
             let page = tab_view.append(editor.widget());
             let n = query_tab_count.get() + 1;
             query_tab_count.set(n);
             page.set_title(&format!("Query {n}"));
+            editor.bind_tab_page(page.clone());
             query_run_registry
                 .borrow_mut()
-                .push((page.clone(), editor.run_action()));
+                .push((page.clone(), editor.run_action(), editor.script_action()));
             tab_view.set_selected_page(&page);
         }
     );
@@ -686,7 +714,7 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         query_run_registry,
         move |_, _| {
             if let Some(page) = tab_view.selected_page() {
-                if let Some((_, run)) = query_run_registry.borrow().iter().find(|(p, _)| *p == page)
+                if let Some((_, run, _)) = query_run_registry.borrow().iter().find(|(p, _, _)| *p == page)
                 {
                     run(false);
                 }
@@ -704,7 +732,7 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
         query_run_registry,
         move |_, _| {
             if let Some(page) = tab_view.selected_page() {
-                if let Some((_, run)) = query_run_registry.borrow().iter().find(|(p, _)| *p == page)
+                if let Some((_, run, _)) = query_run_registry.borrow().iter().find(|(p, _, _)| *p == page)
                 {
                     run(true);
                 }
@@ -713,6 +741,24 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     ));
     window.add_action(&explain_query_action);
     app.set_accels_for_action("win.explain-query", &["F10"]);
+
+    let run_script_action = gio::SimpleAction::new("run-script", None);
+    run_script_action.connect_activate(clone!(
+        #[strong]
+        tab_view,
+        #[strong]
+        query_run_registry,
+        move |_, _| {
+            if let Some(page) = tab_view.selected_page() {
+                if let Some((_, _, run_script)) = query_run_registry.borrow().iter().find(|(p, _, _)| *p == page)
+                {
+                    run_script();
+                }
+            }
+        }
+    ));
+    window.add_action(&run_script_action);
+    app.set_accels_for_action("win.run-script", &["F5"]);
 
     window.present();
 }

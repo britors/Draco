@@ -270,6 +270,11 @@ async fn connects_and_introspects_the_real_database() {
     println!("extensions: {} installed, {} available", extensions.installed.len(), extensions.available.len());
     assert!(!extensions.available.is_empty());
 
+    // pg_stat_statements may legitimately be absent (needs shared_preload_libraries + a server
+    // restart, outside what CREATE EXTENSION alone can do), same tolerance as pg_cron below.
+    let query_stats = queries::get_query_stats(&driver).await.expect("get_query_stats");
+    println!("query stats: installed={} count={}", query_stats.installed, query_stats.queries.len());
+
     let sequences = queries::get_sequences(&driver, &test_schema).await.expect("get_sequences");
     assert!(sequences.iter().any(|sequence| sequence.name == "draco_live_test_seq"));
     println!("test sequences: {sequences:?}");

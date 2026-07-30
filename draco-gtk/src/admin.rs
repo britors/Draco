@@ -1,12 +1,14 @@
-//! Administration tab: roles, pg_cron jobs, activity/locks, extensions and sequences — one page
-//! per connection, same "fetch once, render sections" shape as `dashboard.rs`, with per-row
-//! action buttons (drop/cancel/toggle/install) that refetch just their own section afterward.
+//! Administration tab: roles, pg_cron jobs, activity/locks, extensions, query stats and
+//! sequences — one page per connection, same "fetch once, render sections" shape as
+//! `dashboard.rs`, with per-row action buttons (drop/cancel/toggle/install) that refetch just
+//! their own section afterward.
 
+use std::rc::Rc;
 use std::sync::Arc;
 
 use adw::prelude::*;
 use draco_core::manager::ConnectionManager;
-use draco_core::postgres::queries::{self, ActivityRow, CronJob, ExtensionInfo, JobRun, LockRow, NewRole, RoleInfo, SequenceInfo};
+use draco_core::postgres::queries::{self, ActivityRow, CronJob, ExtensionInfo, JobRun, LockRow, NewRole, QueryStatRow, RoleInfo, SequenceInfo};
 use gtk::glib;
 use gtk::glib::clone;
 use tokio::sync::Mutex;
@@ -14,6 +16,8 @@ use tokio::sync::Mutex;
 use crate::confirm::confirm_destructive;
 
 type SharedManager = Arc<Mutex<ConnectionManager>>;
+type OpenQuerySql = Rc<dyn Fn(String, String, String)>;
+type OpenAiMessage = Rc<dyn Fn(String, String)>;
 
 /// Connects (if needed) then runs a query against the connection's driver, on the tokio runtime.
 /// Pure text substitution (not generics) — keeps every call site's `Fn`/lifetime story identical
@@ -37,6 +41,8 @@ struct Ctx {
     runtime: tokio::runtime::Handle,
     manager: SharedManager,
     toasts: adw::ToastOverlay,
+    open_query: OpenQuerySql,
+    open_ai: OpenAiMessage,
 }
 
 pub struct AdminView {
@@ -58,7 +64,15 @@ fn stack_page(section: &Section) -> gtk::ScrolledWindow {
 }
 
 impl AdminView {
-    pub fn new(conn_id: String, runtime: tokio::runtime::Handle, manager: SharedManager, toasts: adw::ToastOverlay) -> Self {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        conn_id: String,
+        runtime: tokio::runtime::Handle,
+        manager: SharedManager,
+        toasts: adw::ToastOverlay,
+        open_query: OpenQuerySql,
+        open_ai: OpenAiMessage,
+    ) -> Self {
         let root = gtk::Box::builder().orientation(gtk::Orientation::Vertical).build();
 
         let roles_section = Section::new("Roles");
@@ -70,29 +84,56 @@ impl AdminView {
         let activity_section = Section::new("Activity");
         let locks_section = Section::new("Locks");
         let extensions_section = Section::new("Extensions");
+        let query_stats_section = Section::new("Query Stats (pg_stat_statements)");
+        let reset_stats_btn = gtk::Button::builder().icon_name("edit-clear-all-symbolic").tooltip_text("Reset stats").css_classes(["flat"]).valign(gtk::Align::Center).build();
+        query_stats_section.widget().set_header_suffix(Some(&reset_stats_btn));
         let sequences_section = Section::new("Sequences (public)");
 
         let stack = adw::ViewStack::new();
         stack.add_titled_with_icon(&stack_page(&roles_section), Some("roles"), "Roles", "system-users-symbolic");
         stack.add_titled_with_icon(&stack_page(&jobs_section), Some("jobs"), "Jobs", "alarm-symbolic");
-        stack.add_titled_with_icon(&stack_page(&activity_section), Some("activity"), "Activity", "utilities-system-monitor-symbolic");
+        stack.add_titled_with_icon(&stack_page(&activity_section), Some("activity"), "Activity", "system-run-symbolic");
         stack.add_titled_with_icon(&stack_page(&locks_section), Some("locks"), "Locks", "changes-prevent-symbolic");
         stack.add_titled_with_icon(&stack_page(&extensions_section), Some("extensions"), "Extensions", "application-x-addon-symbolic");
+        stack.add_titled_with_icon(&stack_page(&query_stats_section), Some("query-stats"), "Query Stats", "view-sort-descending-symbolic");
         stack.add_titled_with_icon(&stack_page(&sequences_section), Some("sequences"), "Sequences", "view-list-ordered-symbolic");
 
         let switcher = adw::ViewSwitcher::builder().stack(&stack).policy(adw::ViewSwitcherPolicy::Wide).halign(gtk::Align::Center).build();
+        // Every section only (re)loads on tab open or right after one of its own mutating
+        // actions — DDL run from outside Draco (another session, a DBA, `psql`) never shows up
+        // until something triggers a refetch. This button re-runs every section's `refresh_*` at
+        // once instead of requiring the whole Admin tab to be closed and reopened.
+        let refresh_all_btn = gtk::Button::builder().icon_name("view-refresh-symbolic").tooltip_text("Refresh all").css_classes(["flat"]).valign(gtk::Align::Center).build();
         let switcher_bar = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
+            .spacing(6)
             .halign(gtk::Align::Center)
             .margin_top(6)
             .margin_bottom(6)
             .build();
         switcher_bar.append(&switcher);
+        switcher_bar.append(&refresh_all_btn);
 
         root.append(&switcher_bar);
         root.append(&stack);
 
-        let ctx = Ctx { conn_id, runtime, manager, toasts };
+        let ctx = Ctx { conn_id, runtime, manager, toasts, open_query, open_ai };
+
+        reset_stats_btn.connect_clicked(clone!(
+            #[strong]
+            ctx,
+            #[strong]
+            query_stats_section,
+            move |_| {
+                let handle = spawn_query!(ctx, |d| queries::reset_query_stats(d).await);
+                let ctx = ctx.clone();
+                let section = query_stats_section.clone();
+                glib::MainContext::default().spawn_local(async move {
+                    let _ = handle.await;
+                    refresh_query_stats(ctx, section);
+                });
+            }
+        ));
 
         new_role_btn.connect_clicked(clone!(
             #[strong]
@@ -115,11 +156,40 @@ impl AdminView {
             }
         ));
 
+        refresh_all_btn.connect_clicked(clone!(
+            #[strong]
+            ctx,
+            #[strong]
+            roles_section,
+            #[strong]
+            jobs_section,
+            #[strong]
+            activity_section,
+            #[strong]
+            locks_section,
+            #[strong]
+            extensions_section,
+            #[strong]
+            query_stats_section,
+            #[strong]
+            sequences_section,
+            move |_| {
+                refresh_roles(ctx.clone(), roles_section.clone());
+                refresh_jobs(ctx.clone(), jobs_section.clone());
+                refresh_activity(ctx.clone(), activity_section.clone());
+                refresh_locks(ctx.clone(), locks_section.clone());
+                refresh_extensions(ctx.clone(), extensions_section.clone());
+                refresh_query_stats(ctx.clone(), query_stats_section.clone());
+                refresh_sequences(ctx.clone(), sequences_section.clone());
+            }
+        ));
+
         refresh_roles(ctx.clone(), roles_section);
         refresh_jobs(ctx.clone(), jobs_section);
         refresh_activity(ctx.clone(), activity_section);
         refresh_locks(ctx.clone(), locks_section);
         refresh_extensions(ctx.clone(), extensions_section);
+        refresh_query_stats(ctx.clone(), query_stats_section);
         refresh_sequences(ctx.clone(), sequences_section);
 
         Self { root }
@@ -167,11 +237,23 @@ fn refresh_activity(ctx: Ctx, section: Section) {
     });
 }
 
+/// Icon reflecting `state` (`pg_stat_activity.state`): actively running vs. idle/idle-in-transaction/
+/// waiting-on-a-lock, so the list reads at a glance instead of requiring the subtitle text.
+fn activity_state_icon(state: Option<&str>) -> &'static str {
+    match state {
+        Some("active") => "media-playback-start-symbolic",
+        Some(s) if s.starts_with("idle in transaction") => "dialog-warning-symbolic",
+        Some("idle") => "media-playback-pause-symbolic",
+        _ => "system-run-symbolic",
+    }
+}
+
 fn activity_row(r: &ActivityRow, ctx: &Ctx, section: &Section) -> adw::ActionRow {
     let row = adw::ActionRow::builder()
         .title(format!("pid {} · {}", r.pid, r.usename.as_deref().unwrap_or("?")))
         .subtitle(format!("{} · {}s · {}", r.state.as_deref().unwrap_or("?"), r.duration.as_deref().unwrap_or("0"), r.query.as_deref().unwrap_or("")))
         .build();
+    row.add_prefix(&gtk::Image::from_icon_name(activity_state_icon(r.state.as_deref())));
     let cancel_btn = gtk::Button::builder().icon_name("process-stop-symbolic").tooltip_text("Cancel").valign(gtk::Align::Center).css_classes(["flat"]).build();
     row.add_suffix(&cancel_btn);
     let pid = r.pid;
@@ -213,6 +295,82 @@ fn lock_row(r: &LockRow) -> adw::ActionRow {
             r.blocking_query.as_deref().unwrap_or("")
         ))
         .build()
+}
+
+fn refresh_query_stats(ctx: Ctx, section: Section) {
+    let handle = spawn_query!(ctx, |d| queries::get_query_stats(d).await);
+    glib::MainContext::default().spawn_local(async move {
+        match handle.await {
+            Ok(Ok(stats)) if stats.installed => {
+                section.set_rows(stats.queries.iter().map(|r| query_stat_row(r, &ctx)).collect());
+            }
+            Ok(Ok(_)) => {
+                let row = adw::ActionRow::builder().title("pg_stat_statements is not installed on this database").build();
+                let enable_btn = gtk::Button::builder().icon_name("list-add-symbolic").tooltip_text("Enable extension").valign(gtk::Align::Center).css_classes(["flat"]).build();
+                row.add_suffix(&enable_btn);
+                enable_btn.connect_clicked(clone!(
+                    #[strong]
+                    ctx,
+                    #[strong]
+                    section,
+                    move |_| {
+                        let handle = spawn_query!(ctx, |d| queries::ext_install(d, "pg_stat_statements").await);
+                        let ctx = ctx.clone();
+                        let section = section.clone();
+                        glib::MainContext::default().spawn_local(async move {
+                            let _ = handle.await;
+                            refresh_query_stats(ctx, section);
+                        });
+                    }
+                ));
+                section.set_rows(vec![row]);
+            }
+            Ok(Err(err)) => section.set_rows(vec![adw::ActionRow::builder().title("Unable to load query stats").subtitle(err.to_string()).build()]),
+            Err(_) => section.set_rows(vec![adw::ActionRow::builder().title("Query stats loading task failed").build()]),
+        }
+    });
+}
+
+/// First line of `query`, truncated to a tab-title-friendly length.
+fn short_title(query: &str) -> String {
+    let first_line = query.lines().next().unwrap_or("").trim();
+    if first_line.chars().count() > 40 {
+        format!("{}…", first_line.chars().take(40).collect::<String>())
+    } else if first_line.is_empty() {
+        "Query".to_string()
+    } else {
+        first_line.to_string()
+    }
+}
+
+fn query_stat_row(r: &QueryStatRow, ctx: &Ctx) -> adw::ActionRow {
+    let row = adw::ActionRow::builder()
+        .title(glib::markup_escape_text(&r.query))
+        .subtitle(format!("{} calls · {:.1}ms avg · {:.0}ms total · {} rows", r.calls, r.mean_exec_ms, r.total_exec_ms, r.rows))
+        .build();
+
+    let open_query_btn = gtk::Button::builder().icon_name("media-playback-start-symbolic").tooltip_text("Open in new Query tab").valign(gtk::Align::Center).css_classes(["flat"]).build();
+    let conn_id = ctx.conn_id.clone();
+    let query = r.query.clone();
+    let open_query = ctx.open_query.clone();
+    open_query_btn.connect_clicked(move |_| {
+        open_query(conn_id.clone(), query.clone(), short_title(&query));
+    });
+    row.add_suffix(&open_query_btn);
+
+    let analyze_btn = gtk::Button::builder().icon_name("chat-message-new-symbolic").tooltip_text("Analisar com IA").valign(gtk::Align::Center).css_classes(["flat"]).build();
+    let conn_id = ctx.conn_id.clone();
+    let message = format!(
+        "Analise esta query quanto a performance. Estatísticas do pg_stat_statements: {} execuções, {:.1}ms em média, {:.0}ms no total, {} linhas retornadas no total.\n\n```sql\n{}\n```",
+        r.calls, r.mean_exec_ms, r.total_exec_ms, r.rows, r.query
+    );
+    let open_ai = ctx.open_ai.clone();
+    analyze_btn.connect_clicked(move |_| {
+        open_ai(conn_id.clone(), message.clone());
+    });
+    row.add_suffix(&analyze_btn);
+
+    row
 }
 
 fn open_new_role_dialog(parent: &impl IsA<gtk::Widget>, ctx: Ctx, section: Section) {

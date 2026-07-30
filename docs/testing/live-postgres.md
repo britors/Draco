@@ -23,7 +23,8 @@ O cenário executado contra PostgreSQL 18.4 cobre:
 - criação/alteração de tabela, importação, browse, update, delete, `ANALYZE` e estatísticas;
 - criação, validação, introspecção e chamada de função;
 - criação, leitura e `nextval`/`setval` de sequences, além de triggers;
-- dashboard, estatísticas do banco, roles, activity, locks e extensões;
+- dashboard, estatísticas do banco, roles, activity, locks, extensões e query stats
+  (`pg_stat_statements`, quando instalada);
 - jobs `pg_cron` quando a extensão estiver instalada; no banco de validação ela estava ausente;
 - `EXPLAIN` sem `ANALYZE`, execução de query, erro seguido de recuperação e busca global;
 - ERD e relações de FK.

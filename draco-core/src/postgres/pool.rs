@@ -101,6 +101,14 @@ impl PostgresDriver {
         Ok(())
     }
 
+    /// Same simple-query protocol as `batch_execute`, but keeps each statement's row/command
+    /// data instead of discarding it — used by the query editor's "Run as script" so a
+    /// multi-statement buffer still shows a result, not just a side effect.
+    pub async fn simple_query(&self, sql: &str) -> Result<Vec<tokio_postgres::SimpleQueryMessage>> {
+        let client = self.pool.get().await?;
+        Ok(client.simple_query(sql).await?)
+    }
+
     /// `pg_cancel_backend()` for whatever this driver's own connections are currently running —
     /// used to implement the query editor's Cancel button.
     pub async fn cancel_active(&self) -> Result<()> {

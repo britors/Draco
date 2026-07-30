@@ -174,7 +174,7 @@ fn build_connection_row(
     // The same button then doubles as "Disconnect" once connected, rather than disappearing —
     // closing the driver is otherwise unreachable from the UI.
     let connect_btn = gtk::Button::builder()
-        .icon_name("network-wired-symbolic")
+        .icon_name("network-idle-symbolic")
         .tooltip_text("Connect")
         .valign(gtk::Align::Center)
         .css_classes(["flat"])
@@ -414,7 +414,7 @@ fn build_connection_row(
                     status_icon.add_css_class("error");
                     status_icon.set_tooltip_text(Some("Disconnected"));
                     row.set_subtitle(&connection_details);
-                    btn.set_icon_name("network-wired-symbolic");
+                    btn.set_icon_name("network-idle-symbolic");
                     btn.set_tooltip_text(Some("Connect"));
                     btn.set_sensitive(true);
                 });

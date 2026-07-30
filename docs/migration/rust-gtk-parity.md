@@ -33,6 +33,7 @@ decisão que o aprovou.
 | M7 | Activity & Locks | sessões (`pg_stat_activity`) com cancelar, locks bloqueados/bloqueantes | implementado |
 | M7 | Sequences | listar, next value | implementado (falta: reset value — `seq_set_val` já existe) |
 | M7 | Extension Manager | instaladas + até 30 disponíveis, instalar/remover um clique | implementado |
+| M7 | Query Stats (pg_stat_statements) | agregado por query (calls, tempo médio/total, rows), top 30 por tempo total, reset de contadores, detecta extensão ausente com botão de instalar; cada linha tem atalho para abrir a query numa nova aba do Editor SQL e para mandar a query (com as estatísticas) direto pro Assistente de IA analisar | implementado (falta: validar contra Postgres real com a extensão pré-carregada; sem opção de ordenar por calls/mean, só total_exec_time) |
 | M7 | VACUUM/ANALYZE | por tabela: VACUUM, ANALYZE, VACUUM ANALYZE, VACUUM FULL — botão de manutenção (`edit-clear-all-symbolic`) no header do Detalhe de Tabela, popover com as 4 opções, confirmação obrigatória (`adw::AlertDialog`) só para VACUUM FULL (lock exclusivo) | implementado (falta: validar contra Postgres real; não expõe VACUUM em nível de banco/schema, só por tabela) |
 | M8 | ERD | diagrama de FKs (`cairo`+`GestureDrag`, sem precedente nos apps irmãos), arrastar tabela, pan do canvas | implementado (falta: zoom) |
 | M8 | Busca Global | `Ctrl+P` entre tabelas/views/colunas/funções, clique abre o detalhe da tabela | implementado |
