@@ -1,4 +1,15 @@
 -------------------------------------------------------------------
+Thu Jul 30 17:42:31 UTC 2026 - rodrigo@w3ti.com.br
+
+- Corrigido o ícone de conectar/desconectar na barra lateral de conexões:
+  os ícones "idle"/"offline" estavam trocados em relação ao indicador de
+  status (verde/vermelho) da linha, o botão não dava nenhum feedback
+  visual enquanto a conexão/desconexão assíncrona estava em andamento, e
+  toda linha voltava a aparecer como desconectada sempre que a árvore
+  era reconstruída (criar/editar tabela, sequence, trigger, função ou
+  salvar edição de conexão), mesmo com o driver ainda ativo no backend.
+
+-------------------------------------------------------------------
 Thu Jul 30 13:00:00 UTC 2026 - rodrigo@w3ti.com.br
 
 - Versão 1.0.0: primeiro release considerado estável do Draco em

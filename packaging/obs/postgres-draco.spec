@@ -11,7 +11,7 @@
 
 Name:           postgres-draco
 Version:        1.0.0
-Release:        0
+Release:        1
 Summary:        Cliente de banco de dados do ecossistema Lyra OS
 License:        GPL-3.0-or-later
 Group:          Productivity/Databases/Tools
