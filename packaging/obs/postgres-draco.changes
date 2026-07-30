@@ -1,4 +1,22 @@
 -------------------------------------------------------------------
+Thu Jul 30 12:00:00 UTC 2026 - rodrigo@w3ti.com.br
+
+- Nova aba "Query Stats" no Admin, baseada em pg_stat_statements: top
+  queries por tempo total, reset de contadores, detecção/instalação da
+  extensão quando ausente, e um botão de Refresh geral pra toda a aba
+  Admin. Cada linha permite abrir a query numa nova aba do Editor SQL
+  ou mandar pro Assistente de IA analisar (com as estatísticas
+  agregadas).
+- Editor SQL: botão "Run as script" (F5) que executa o buffer inteiro
+  via protocolo simple-query (múltiplas instruções separadas por `;`)
+  e agora traz de volta o resultado da última instrução, em vez de só
+  descartar. Também ganhou botão de renomear aba, abrir/salvar arquivo
+  `.sql`, e mensagens de erro completas (severidade/DETAIL/HINT do
+  Postgres) numa área própria abaixo da grade de resultados.
+- Alguns ícones ajustados (aba Activity, botão de conectar, salvar SQL)
+  para ícones simbólicos com melhor suporte no tema.
+
+-------------------------------------------------------------------
 Thu Jul 30 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
 
 - Corrigido o autoscroll da transcrição do Assistente de IA: a rolagem
