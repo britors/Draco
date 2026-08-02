@@ -43,6 +43,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="1.1.1" date="2026-08-02">
+      <description>
+        <p>Corrigido o ícone do desktop para usar o logo oficial do cilindro do Draco.</p>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-08-02">
       <description>
         <p>Atualização visual do Draco com o novo símbolo dourado de dragão, aplicado ao aplicativo, à janela Sobre e aos pacotes de desktop.</p>
