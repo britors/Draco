@@ -4,6 +4,7 @@ use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=../data/icons.gresource.xml");
+    println!("cargo:rerun-if-changed=../data/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png");
     println!("cargo:rerun-if-changed=../data/icons/hicolor/scalable/apps/org.lyraos.Draco.svg");
     println!("cargo:rerun-if-changed=../data/icons/hicolor/symbolic/apps/org.lyraos.Draco-symbolic.svg");
 

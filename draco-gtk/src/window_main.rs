@@ -502,7 +502,7 @@ pub fn build(app: &adw::Application, runtime: tokio::runtime::Handle) {
     // themed lookup (`add_resource_path` + `icon_name(APP_ID)`) rendered a broken-image glyph
     // here, and this sidesteps that resolution step entirely.
     let logo_image = gtk::Image::from_resource(
-        "/org/lyraos/Draco/icons/hicolor/scalable/apps/org.lyraos.Draco.svg",
+        "/org/lyraos/Draco/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png",
     );
     logo_image.set_pixel_size(128);
     let empty_state = gtk::Box::builder()

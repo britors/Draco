@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="logo.svg" alt="Draco" width="200">
+  <img src="logo-cylinder.png" alt="Draco" width="200">
+</p>
+
+<p align="center">
+  <sub>Logo inspirado na imagem de referência gerada com <a href="https://www.craiyon.com/pt/image/Hem-omdSQoWd0VBfMnBbHg">Craiyon</a>.</sub>
 </p>
 
 <p align="center">
