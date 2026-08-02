@@ -799,7 +799,7 @@ fn install_window_actions(window: &adw::ApplicationWindow, runtime: tokio::runti
         move |_, _| {
             let dialog = adw::AboutDialog::builder()
                 .application_name("Draco")
-                .application_icon("org.lyraos.Draco")
+                .application_icon("org.lyraos.Draco-about")
                 .developer_name("Lyra OS")
                 .version(env!("CARGO_PKG_VERSION"))
                 .website("https://github.com/britors/Draco")

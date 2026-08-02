@@ -10,7 +10,7 @@
 #
 
 Name:           postgres-draco
-Version:        1.0.0
+Version:        1.1.0
 Release:        1
 Summary:        Cliente de banco de dados do ecossistema Lyra OS
 License:        GPL-3.0-or-later
@@ -60,6 +60,8 @@ install -Dm0644 data/org.lyraos.Draco.metainfo.xml \
     %{buildroot}%{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
 install -Dm0644 data/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png \
     %{buildroot}%{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png
+install -Dm0644 data/icons/hicolor/1024x1024/apps/org.lyraos.Draco-about.png \
+    %{buildroot}%{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco-about.png
 install -Dm0644 data/icons/org.lyraos.Draco-symbolic.svg \
     %{buildroot}%{_datadir}/icons/hicolor/symbolic/apps/org.lyraos.Draco-symbolic.svg
 
@@ -87,6 +89,7 @@ cargo test --offline -p draco-core
 %{_datadir}/applications/org.lyraos.Draco.desktop
 %{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
 %{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png
+%{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco-about.png
 %{_datadir}/icons/hicolor/symbolic/apps/org.lyraos.Draco-symbolic.svg
 
 %changelog

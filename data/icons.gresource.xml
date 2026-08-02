@@ -2,6 +2,7 @@
 <gresources>
   <gresource prefix="/org/lyraos/Draco/icons">
     <file>hicolor/1024x1024/apps/org.lyraos.Draco.png</file>
+    <file>hicolor/1024x1024/apps/org.lyraos.Draco-about.png</file>
     <file>hicolor/symbolic/apps/org.lyraos.Draco-symbolic.svg</file>
   </gresource>
 </gresources>

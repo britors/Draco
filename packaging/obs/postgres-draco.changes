@@ -1,4 +1,12 @@
 -------------------------------------------------------------------
+Sun Aug 02 18:30:00 UTC 2026 - rodrigo@w3ti.com.br
+
+- Versão 1.1.0: novo símbolo dourado de dragão aplicado ao aplicativo,
+  à janela Sobre, ao ícone do desktop e aos artefatos de documentação.
+- Corrigida a janela Sobre para carregar um recurso próprio do novo logo,
+  sem reutilizar o ícone azul legado do tema do sistema.
+
+-------------------------------------------------------------------
 Sun Aug 02 18:00:00 UTC 2026 - rodrigo@w3ti.com.br
 
 - Novo logo do Draco baseado em um olho de dragão com escamas azuis,

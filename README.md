@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo-cylinder.png" alt="Draco" width="200">
+  <img src="logo/draco_postgresql_logo_v3_no_cylinder.png" alt="Draco" width="200">
 </p>
 
 <p align="center">
