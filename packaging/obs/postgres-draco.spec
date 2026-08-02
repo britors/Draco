@@ -58,8 +58,8 @@ install -Dm0644 data/org.lyraos.Draco.desktop \
     %{buildroot}%{_datadir}/applications/org.lyraos.Draco.desktop
 install -Dm0644 data/org.lyraos.Draco.metainfo.xml \
     %{buildroot}%{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
-install -Dm0644 data/icons/org.lyraos.Draco.svg \
-    %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/org.lyraos.Draco.svg
+install -Dm0644 data/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png \
+    %{buildroot}%{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png
 install -Dm0644 data/icons/org.lyraos.Draco-symbolic.svg \
     %{buildroot}%{_datadir}/icons/hicolor/symbolic/apps/org.lyraos.Draco-symbolic.svg
 
@@ -86,7 +86,7 @@ cargo test --offline -p draco-core
 %{_bindir}/draco
 %{_datadir}/applications/org.lyraos.Draco.desktop
 %{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
-%{_datadir}/icons/hicolor/scalable/apps/org.lyraos.Draco.svg
+%{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png
 %{_datadir}/icons/hicolor/symbolic/apps/org.lyraos.Draco-symbolic.svg
 
 %changelog
