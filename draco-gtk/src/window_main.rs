@@ -799,7 +799,9 @@ fn install_window_actions(window: &adw::ApplicationWindow, runtime: tokio::runti
         move |_, _| {
             let dialog = adw::AboutDialog::builder()
                 .application_name("Draco")
-                .application_icon("org.lyraos.Draco-about")
+                // Reuse the canonical application icon. Keeping a second icon name here lets
+                // the desktop/theme cache retain a stale About-dialog image independently.
+                .application_icon("org.lyraos.Draco")
                 .developer_name("Lyra OS")
                 .version(env!("CARGO_PKG_VERSION"))
                 .website("https://github.com/britors/Draco")
