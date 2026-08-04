@@ -6,6 +6,7 @@ Tue Aug 04 17:20:00 UTC 2026 - rodrigo@w3ti.com.br
 - Removidas dos pacotes oficiais as dependências GTK4, libadwaita e
   GtkSourceView5; o frontend GTK permanece apenas no código como rollback.
 - Migração compatível de conexões e credenciais legadas do Secret Service.
+- Deduplicados os ícones instalados e removidos scriptlets vazios do RPM.
 
 -------------------------------------------------------------------
 Mon Aug 03 14:00:00 UTC 2026 - rodrigo@w3ti.com.br

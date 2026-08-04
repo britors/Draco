@@ -67,6 +67,8 @@ install -Dm0644 data/icons/hicolor/1024x1024/apps/org.lyraos.Draco-about.png \
 install -Dm0644 data/icons/org.lyraos.Draco-symbolic.svg \
     %{buildroot}%{_datadir}/icons/hicolor/symbolic/apps/org.lyraos.Draco-symbolic.svg
 
+%fdupes %{buildroot}%{_datadir}/icons/hicolor/1024x1024/apps
+
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.lyraos.Draco.desktop
 appstream-util validate-relax --nonet \
     %{buildroot}%{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
@@ -75,14 +77,6 @@ appstream-util validate-relax --nonet \
 # Live PostgreSQL and browser/display tests are ignored; unit, contract and Tauri smoke tests run
 # against the vendored Rust dependencies without a server or GUI session.
 cargo test --locked --offline --workspace --exclude draco-gtk
-
-%post
-%desktop_database_post
-%icon_theme_cache_post
-
-%postun
-%desktop_database_postun
-%icon_theme_cache_postun
 
 %files
 %license LICENSE
