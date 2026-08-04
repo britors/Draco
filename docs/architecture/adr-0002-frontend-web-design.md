@@ -16,6 +16,12 @@ fica isolada no frontend e não altera os comandos nem os DTOs de `draco-app`. C
 opção preferida para o editor SQL nessa segunda etapa; Monaco só será escolhido se a análise de
 bundle e acessibilidade justificar o peso adicional.
 
+Syntax highlighting e autocomplete do Editor SQL (2026-08-04) foram entregues sem essa segunda
+etapa: um tokenizer próprio (`sql-highlight.js`, overlay `<pre>` atrás do `<textarea>`) e um
+índice de completion (`sql-autocomplete.js`, alimentado por `completion_data`) cobrem o que a
+issue #109 pedia sem precisar de bundler. O gatilho para migrar ao CodeMirror continua sendo o
+definido acima — ainda não foi cruzado.
+
 ## Trade-offs
 
 | Decisão | Benefício | Custo aceito |

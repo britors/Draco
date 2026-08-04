@@ -145,6 +145,34 @@ pub struct SchemaObjectView {
     pub detail: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompletionTableView {
+    pub schema: String,
+    pub name: String,
+    pub kind: ObjectKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompletionColumnView {
+    pub schema: String,
+    pub table: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompletionFunctionView {
+    pub schema: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct CompletionDataView {
+    pub schemas: Vec<String>,
+    pub tables: Vec<CompletionTableView>,
+    pub columns: Vec<CompletionColumnView>,
+    pub functions: Vec<CompletionFunctionView>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SearchObjectKind {
@@ -814,6 +842,45 @@ impl Application {
             detail: Some(format!("on {}", trigger.table)),
         }));
         Ok(objects)
+    }
+
+    /// Whole-database completion data (schemas, tables, columns, functions) for the SQL editor's
+    /// autocomplete. One round trip per connection; the frontend caches the result.
+    pub async fn completion_data(&self, id: &str) -> Result<CompletionDataView> {
+        let (driver, _) = self.connected_driver(id).await?;
+        let data = queries::get_completion_data(&driver).await?;
+        Ok(CompletionDataView {
+            schemas: data.schemas,
+            tables: data
+                .tables
+                .into_iter()
+                .map(|table| CompletionTableView {
+                    schema: table.schema,
+                    name: table.name,
+                    kind: match table.kind {
+                        queries::TableKind::Table => ObjectKind::Table,
+                        queries::TableKind::View => ObjectKind::View,
+                    },
+                })
+                .collect(),
+            columns: data
+                .columns
+                .into_iter()
+                .map(|column| CompletionColumnView {
+                    schema: column.schema,
+                    table: column.table,
+                    name: column.name,
+                })
+                .collect(),
+            functions: data
+                .functions
+                .into_iter()
+                .map(|function| CompletionFunctionView {
+                    schema: function.schema,
+                    name: function.name,
+                })
+                .collect(),
+        })
     }
 
     pub async fn global_search(&self, id: &str, term: &str) -> Result<Vec<SearchResultView>> {
@@ -1824,6 +1891,24 @@ mod tests {
             app.delete_cron_job("missing", -1).await,
             Err(ApplicationError::InvalidInput(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn completion_data_reports_connection_not_found_for_unknown_id() {
+        let error = Application::new()
+            .completion_data("missing")
+            .await
+            .expect_err("unknown connection must be rejected");
+        assert!(matches!(error, ApplicationError::ConnectionNotFound(_)));
+    }
+
+    #[test]
+    fn completion_data_view_defaults_to_empty_collections() {
+        let data = CompletionDataView::default();
+        assert!(data.schemas.is_empty());
+        assert!(data.tables.is_empty());
+        assert!(data.columns.is_empty());
+        assert!(data.functions.is_empty());
     }
 
     #[test]

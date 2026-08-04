@@ -1,10 +1,10 @@
 use draco_app::{
     AdminView, Application, ApplicationError, AssistantReplyView, BackupOptionsInput,
-    ConnectionInput, ConnectionView, CreateRoleInput, CronJobsView, DashboardView, ErdView,
-    ExtensionsView, Health, HistoryView, PreferencesView, QueryResult, QueryStatsView,
-    RestoreOptionsInput, RoleView, SchemaObjectView, SchemaView, SearchResultView, SnippetInput,
-    SnippetView, TableDetailView, TableMaintenanceOperation, TableView, ToolResultView,
-    UpdateStatusView,
+    CompletionDataView, ConnectionInput, ConnectionView, CreateRoleInput, CronJobsView,
+    DashboardView, ErdView, ExtensionsView, Health, HistoryView, PreferencesView, QueryResult,
+    QueryStatsView, RestoreOptionsInput, RoleView, SchemaObjectView, SchemaView, SearchResultView,
+    SnippetInput, SnippetView, TableDetailView, TableMaintenanceOperation, TableView,
+    ToolResultView, UpdateStatusView,
 };
 use draco_core::assistant::{AiMessage, Provider, Settings};
 use serde::{Deserialize, Serialize};
@@ -291,6 +291,14 @@ async fn list_schema_objects(
         .list_schema_objects(&id, &schema)
         .await
         .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn completion_data(
+    state: State<'_, Application>,
+    id: String,
+) -> Result<CompletionDataView, CommandError> {
+    state.completion_data(&id).await.map_err(Into::into)
 }
 
 #[tauri::command]
@@ -584,6 +592,7 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             list_schemas,
             list_tables,
             list_schema_objects,
+            completion_data,
             global_search,
             dashboard,
             table_detail,

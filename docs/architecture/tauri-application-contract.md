@@ -100,6 +100,7 @@ O shell inicial em `src-tauri` expõe:
 | `list_snippets` / `save_snippet` / `rename_snippet` / `delete_snippet` | snippets nomeados e vinculados à conexão |
 | `list_schemas` / `list_tables` | introspecção lazy do Explorer |
 | `list_schema_objects` | funções, procedures, sequences e triggers por schema |
+| `completion_data` | schemas/tabelas/colunas/funções do banco inteiro num round trip, para o autocomplete do Editor SQL |
 | `dashboard` | KPIs, saúde do banco e maiores tabelas |
 | `table_detail` | colunas, constraints, índices, FKs, DDL e estatísticas de coluna |
 | `erd` | tabelas e relações de um schema |

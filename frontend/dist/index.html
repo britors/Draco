@@ -43,6 +43,7 @@
             </div>
           </div>
         </header>
+        <div class="workspace-content">
         <section id="view-connections" class="view active">
           <section class="hero-panel">
             <div>
@@ -134,13 +135,17 @@
             <div class="panel-heading"><div><span class="eyebrow">QUERY WORKSPACE</span><h2>SQL Editor</h2></div><span class="badge" id="query-status">Ready</span></div>
             <div class="query-tabs" id="query-tabs" role="tablist" aria-label="Open SQL queries"></div>
             <div class="query-toolbar"><label>Connection<select id="query-connection"><option value="">Select a connected connection</option></select></label><div class="form-actions"><button class="button" id="format-sql" type="button">Format SQL</button><button class="button" id="save-current-snippet" type="button">Save snippet</button><button class="button" id="explain-query" type="button">Explain (F10)</button><button class="button" id="run-script" type="button">Run script</button><button class="button primary" id="run-query" type="button">Run query</button><button class="button danger" id="cancel-query" type="button" hidden>Cancel</button></div></div>
-            <textarea id="sql-editor" spellcheck="false" placeholder="SELECT current_database(), now();"></textarea>
-            <div class="query-hint">Ctrl+Enter or F8 runs the selection or the whole editor. F10 shows a planning-only EXPLAIN; multiple statements use “Run script”.</div>
+            <div class="sql-editor-wrap">
+              <pre class="sql-editor-highlight" id="sql-editor-highlight" aria-hidden="true"></pre>
+              <textarea id="sql-editor" spellcheck="false" autocomplete="off" placeholder="SELECT current_database(), now();"></textarea>
+              <ul class="sql-autocomplete" id="sql-autocomplete" hidden role="listbox" aria-label="SQL suggestions"></ul>
+            </div>
+            <div class="query-hint">Ctrl+Enter or F8 runs the selection or the whole editor. F10 shows a planning-only EXPLAIN; multiple statements use “Run script”. Tab or Enter accepts a highlighted suggestion.</div>
           </section>
           <section class="panel result-panel">
             <div class="panel-heading"><div><span class="eyebrow">RESULTS</span><h2>Data grid</h2></div><div class="form-actions"><button class="button small" id="copy-result" type="button" disabled>Copy</button><button class="button small" id="export-csv" type="button" disabled>CSV</button><button class="button small" id="export-json" type="button" disabled>JSON</button><span class="badge" id="result-summary">No result</span></div></div>
             <div id="result-error" class="form-status error"></div>
-            <div id="result-grid" class="result-grid"><div class="empty-state"><strong>Run a query to see results</strong><span>Rows are rendered virtually in the first result viewport.</span></div></div>
+            <div id="result-grid" class="result-grid"><div class="empty-state"><strong>Run a query to see results</strong><span>Only the rows in view are rendered — scroll to page through the full result.</span></div></div>
           </section>
         </section>
         <section id="view-history" class="view" hidden>
@@ -189,6 +194,7 @@
             </div>
           </section>
         </section>
+        </div>
       </main>
     </div>
     <section id="command-palette" class="command-palette" hidden role="dialog" aria-modal="true" aria-labelledby="command-palette-title">

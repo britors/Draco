@@ -15,6 +15,8 @@ test('shell contains every registered application view', () => {
   assert.match(index, /<script type="module" src="\.\/app\.js"><\/script>/);
   assert.match(index, /id="query-tabs"[^>]+role="tablist"/);
   for (const control of ['format-sql', 'explain-query', 'copy-result']) assert.match(index, new RegExp(`id="${control}"`));
+  assert.match(index, /id="sql-editor-highlight"[^>]+aria-hidden="true"/);
+  assert.match(index, /id="sql-autocomplete"[^>]+role="listbox"/);
   for (const control of ['window-minimize', 'window-maximize', 'window-close']) assert.match(index, new RegExp(`id="${control}"`));
   assert.match(index, /data-tauri-drag-region/);
   assert.match(index, /id="sidebar-toggle"/);
@@ -31,13 +33,82 @@ test('shell contains every registered application view', () => {
 });
 
 test('frontend invokes only the typed local application bridge', () => {
-  for (const command of ['health', 'preferences', 'save_preferences', 'check_for_updates', 'list_connections', 'list_schema_objects', 'global_search', 'execute_query', 'execute_explain', 'rename_snippet', 'dashboard', 'cancel_activity', 'list_cron_jobs', 'set_cron_job_active', 'delete_cron_job', 'list_extensions', 'install_extension', 'drop_extension', 'query_stats', 'reset_query_stats', 'run_table_maintenance', 'list_roles', 'create_role', 'delete_role', 'run_backup', 'assistant_send']) {
+  for (const command of ['health', 'preferences', 'save_preferences', 'check_for_updates', 'list_connections', 'list_schema_objects', 'completion_data', 'global_search', 'execute_query', 'execute_explain', 'rename_snippet', 'dashboard', 'cancel_activity', 'list_cron_jobs', 'set_cron_job_active', 'delete_cron_job', 'list_extensions', 'install_extension', 'drop_extension', 'query_stats', 'reset_query_stats', 'run_table_maintenance', 'list_roles', 'create_role', 'delete_role', 'run_backup', 'assistant_send']) {
     assert.match(app, new RegExp(`['"]${command}['"]`));
   }
   assert.doesNotMatch(app, /localStorage|sessionStorage|fetch\(|XMLHttpRequest|dangerouslySetInnerHTML/);
   assert.doesNotMatch(app, /window\.(alert|confirm|prompt)\s*\(/);
   assert.doesNotMatch(index, /<script[^>]+src=["']https?:|<link[^>]+href=["']https?:/);
   assert.match(app, /import \{ resultRowToText, resultToTsv, serializeResult \} from '\.\/result-export\.js'/);
+  assert.match(app, /import \{ highlightSql \} from '\.\/sql-highlight\.js'/);
+});
+
+test('the topbar stays fixed and only the workspace content scrolls, not the whole page', () => {
+  assert.match(index, /<div class="workspace-content">/);
+  assert.match(style, /body \{[^}]*height:\s*100vh;[^}]*overflow:\s*hidden/);
+  assert.match(style, /\.app-shell \{[^}]*height:\s*100vh;[^}]*overflow:\s*hidden/);
+  assert.match(style, /\.workspace \{[^}]*height:\s*100vh;[^}]*display:\s*flex;\s*flex-direction:\s*column;\s*overflow:\s*hidden/);
+  assert.match(style, /\.topbar \{[^}]*flex:\s*0 0 auto/);
+  assert.match(style, /\.workspace-content \{[^}]*flex:\s*1 1 auto;[^}]*overflow-y:\s*auto/);
+  assert.match(style, /\.workspace-content \{[^}]*padding:\s*0 12px 72px 0/, 'a right-hand gutter keeps panel content from touching the scrollbar');
+  const mobileBlock = style.match(/@media \(max-width: 860px\) \{[\s\S]*?\n\}/)[0];
+  assert.match(mobileBlock, /body \{ height: auto; overflow: visible; \}/, 'below 860px the layout falls back to a single stacked page scroll');
+  assert.match(mobileBlock, /\.workspace-content \{ padding-bottom: 0; overflow: visible; \}/);
+});
+
+test('query tabs can be renamed and closed, and always leave at least one tab open', () => {
+  assert.match(app, /function renameQueryTab/);
+  assert.match(app, /function closeQueryTab/);
+  assert.match(app, /className = 'query-tab-close'/);
+  assert.match(app, /showPrompt\('Choose a name for this query tab\.', 'Rename tab', 'Tab name', '', tab\.label\)/);
+  assert.match(app, /if \(state\.queryTabs\.length === 1\) \{/);
+  assert.match(style, /\.query-tab-wrap \{/);
+  assert.match(style, /\.query-tab-close \{/);
+});
+
+test('connecting refreshes every connection dropdown, not just the connection list and Explorer', () => {
+  const connectBody = app.match(/async function connect\(id\) \{[\s\S]*?\n\}/)[0];
+  assert.match(connectBody, /renderQueryConnections\(\);/, 'Query connection select must refresh after connecting or the new session never appears there');
+  assert.match(connectBody, /renderAdvancedConnections\(\);/, 'Dashboard/Admin/Backup/Assistant selects must refresh after connecting');
+});
+
+test('SQL editor overlays local syntax highlighting without introducing untrusted HTML', () => {
+  assert.match(style, /\.sql-editor-wrap \{[^}]*display:\s*grid/);
+  for (const token of ['keyword', 'type', 'string', 'number', 'comment', 'function', 'param']) {
+    assert.match(style, new RegExp(`\\.sql-tok-${token}`));
+  }
+  assert.match(app, /function syncEditorHighlight/);
+  assert.match(app, /function setEditorValue/);
+  assert.match(app, /overlay\.innerHTML = highlightSql\(editor\.value\)/);
+  assert.match(app, /syncEditorHighlight\(\); void updateAutocomplete\(\)/);
+  assert.match(app, /byId\('sql-editor'\)\.addEventListener\('scroll'/);
+  assert.doesNotMatch(app, /byId\('sql-editor'\)\.value = (?!text;)/, 'every sql-editor.value write must go through setEditorValue so the overlay never drifts out of sync');
+});
+
+test('the result grid renders only the rows in view instead of the whole dataset at once', () => {
+  assert.match(app, /import \{ visibleRange \} from '\.\/virtual-list\.js'/);
+  assert.match(app, /function renderVirtualizedRows/);
+  assert.match(app, /function buildResultRow/);
+  assert.match(app, /grid\.addEventListener\('scroll', onScroll\)/);
+  assert.match(app, /requestAnimationFrame\(\(\) => \{ frame = null; update\(\); \}\)/);
+  assert.match(app, /resultVirtualCleanup = renderVirtualizedRows/);
+  assert.match(app, /if \(resultVirtualCleanup\) \{ resultVirtualCleanup\(\); resultVirtualCleanup = null; \}/);
+  assert.doesNotMatch(app, /result\.rows\.slice\(0, 500\)/, 'the grid must not silently drop rows past a fixed cutoff anymore');
+  assert.match(style, /\.result-grid tr\.result-row-alt td/);
+  assert.match(style, /\.result-grid tr\.result-spacer td/);
+});
+
+test('SQL editor offers schema-aware autocomplete with keyboard and pointer selection', () => {
+  assert.match(app, /import \{ applySuggestion, buildCompletionIndex, suggest \} from '\.\/sql-autocomplete\.js'/);
+  assert.match(app, /invoke\('completion_data', \{ id \}\)/);
+  assert.match(app, /function completionIndexFor/);
+  assert.match(app, /function caretPixelPosition/);
+  assert.match(app, /function acceptSuggestion/);
+  assert.match(app, /event\.key === 'ArrowDown' \|\| event\.key === 'ArrowUp'/);
+  assert.match(app, /event\.key === 'Enter' \|\| event\.key === 'Tab'/);
+  assert.match(app, /option\.addEventListener\('mousedown'/);
+  assert.match(style, /\.sql-autocomplete \{/);
+  assert.match(style, /\.sql-suggestion\.active/);
 });
 
 test('dark visual system is local and has explicit loading/error/empty surfaces', () => {

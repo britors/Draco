@@ -1,4 +1,7 @@
 import { resultRowToText, resultToTsv, serializeResult } from './result-export.js';
+import { highlightSql } from './sql-highlight.js';
+import { applySuggestion, buildCompletionIndex, suggest } from './sql-autocomplete.js';
+import { visibleRange } from './virtual-list.js';
 
 const invoke = window.__TAURI__?.core?.invoke;
 const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
@@ -92,6 +95,129 @@ function showPreferenceSection(name) {
   for (const panel of document.querySelectorAll('[data-preference-panel]')) panel.hidden = panel.dataset.preferencePanel !== name;
 }
 
+function syncEditorHighlight() {
+  const editor = byId('sql-editor');
+  const overlay = byId('sql-editor-highlight');
+  overlay.innerHTML = highlightSql(editor.value);
+  overlay.scrollTop = editor.scrollTop;
+  overlay.scrollLeft = editor.scrollLeft;
+}
+
+function setEditorValue(text) {
+  byId('sql-editor').value = text;
+  syncEditorHighlight();
+  hideAutocomplete();
+}
+
+const completionCache = new Map();
+let autocompleteItems = [];
+let autocompleteActive = 0;
+
+async function completionIndexFor(id) {
+  if (!id) return buildCompletionIndex(null);
+  if (completionCache.has(id)) return completionCache.get(id);
+  try {
+    const data = await invoke('completion_data', { id });
+    const index = buildCompletionIndex(data);
+    completionCache.set(id, index);
+    return index;
+  } catch {
+    return buildCompletionIndex(null);
+  }
+}
+
+function hideAutocomplete() {
+  const popup = byId('sql-autocomplete');
+  popup.hidden = true;
+  popup.replaceChildren();
+  autocompleteItems = [];
+}
+
+function setActiveSuggestion(index) {
+  const popup = byId('sql-autocomplete');
+  const options = [...popup.querySelectorAll('.sql-suggestion')];
+  options.forEach((option, i) => {
+    option.classList.toggle('active', i === index);
+    option.setAttribute('aria-selected', String(i === index));
+  });
+  autocompleteActive = index;
+  options[index]?.scrollIntoView({ block: 'nearest' });
+}
+
+function acceptSuggestion(index = autocompleteActive) {
+  const suggestion = autocompleteItems[index];
+  if (!suggestion) return;
+  const editor = byId('sql-editor');
+  const { text, caret } = applySuggestion(editor.value, editor.selectionStart, suggestion);
+  editor.value = text;
+  editor.setSelectionRange(caret, caret);
+  syncEditorHighlight();
+  saveCurrentQueryTab();
+  hideAutocomplete();
+  editor.focus();
+}
+
+// A hidden mirror of the textarea (same font/padding/border/wrapping) lets us measure where a
+// caret offset lands in pixels — textareas have no native API for this.
+function caretPixelPosition(textarea, offset) {
+  const mirror = document.createElement('div');
+  const style = window.getComputedStyle(textarea);
+  for (const prop of ['boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'tabSize']) {
+    mirror.style[prop] = style[prop];
+  }
+  mirror.style.position = 'absolute';
+  mirror.style.visibility = 'hidden';
+  mirror.style.whiteSpace = 'pre-wrap';
+  mirror.style.wordWrap = 'break-word';
+  mirror.style.top = '0';
+  mirror.style.left = '-9999px';
+  mirror.style.height = 'auto';
+  document.body.append(mirror);
+  mirror.append(document.createTextNode(textarea.value.slice(0, offset)));
+  const marker = document.createElement('span');
+  marker.textContent = '​';
+  mirror.append(marker);
+  const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
+  const { offsetLeft, offsetTop } = marker;
+  mirror.remove();
+  return { top: offsetTop + lineHeight - textarea.scrollTop, left: offsetLeft - textarea.scrollLeft };
+}
+
+function renderAutocomplete(items, position) {
+  autocompleteItems = items;
+  autocompleteActive = 0;
+  const popup = byId('sql-autocomplete');
+  popup.replaceChildren();
+  items.forEach((item, index) => {
+    const option = document.createElement('li');
+    option.role = 'option';
+    option.id = `sql-suggestion-${index}`;
+    option.className = `sql-suggestion${index === 0 ? ' active' : ''}`;
+    option.setAttribute('aria-selected', String(index === 0));
+    const label = document.createElement('span');
+    label.className = 'sql-suggestion-label';
+    label.textContent = item.label;
+    const detail = document.createElement('span');
+    detail.className = 'sql-suggestion-detail';
+    detail.textContent = item.detail;
+    option.append(label, detail);
+    option.addEventListener('mousedown', (event) => { event.preventDefault(); acceptSuggestion(index); });
+    popup.append(option);
+  });
+  popup.hidden = false;
+  popup.style.top = `${position.top}px`;
+  popup.style.left = `${position.left}px`;
+}
+
+async function updateAutocomplete() {
+  const editor = byId('sql-editor');
+  if (editor.selectionStart !== editor.selectionEnd) { hideAutocomplete(); return; }
+  const index = await completionIndexFor(byId('query-connection').value);
+  const suggestions = suggest(index, editor.value, editor.selectionStart);
+  if (!suggestions.length) { hideAutocomplete(); return; }
+  renderAutocomplete(suggestions, caretPixelPosition(editor, editor.selectionStart));
+}
+
 function saveCurrentQueryTab() {
   const tab = state.queryTabs.find((item) => item.id === state.currentQueryTabId);
   if (tab) tab.sql = byId('sql-editor').value;
@@ -102,14 +228,28 @@ function renderQueryTabs() {
   if (!tabs) return;
   tabs.replaceChildren();
   for (const tab of state.queryTabs) {
+    const wrap = document.createElement('div');
+    wrap.className = 'query-tab-wrap';
+    const selected = tab.id === state.currentQueryTabId;
+    wrap.classList.toggle('active', selected);
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'query-tab';
     button.role = 'tab';
-    button.ariaSelected = String(tab.id === state.currentQueryTabId);
+    button.ariaSelected = String(selected);
     button.textContent = tab.label;
+    button.title = 'Double-click to rename';
     button.addEventListener('click', () => selectQueryTab(tab.id));
-    tabs.append(button);
+    button.addEventListener('dblclick', (event) => { event.preventDefault(); void renameQueryTab(tab.id); });
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'query-tab-close';
+    close.textContent = '×';
+    close.title = `Close ${tab.label}`;
+    close.setAttribute('aria-label', `Close ${tab.label}`);
+    close.addEventListener('click', (event) => { event.stopPropagation(); closeQueryTab(tab.id); });
+    wrap.append(button, close);
+    tabs.append(wrap);
   }
   const add = document.createElement('button');
   add.type = 'button';
@@ -126,7 +266,7 @@ function selectQueryTab(id) {
   const tab = state.queryTabs.find((item) => item.id === id);
   if (!tab) return;
   state.currentQueryTabId = id;
-  byId('sql-editor').value = tab.sql;
+  setEditorValue(tab.sql);
   renderQueryTabs();
   byId('sql-editor').focus();
 }
@@ -136,9 +276,37 @@ function newQueryTab() {
   const next = Math.max(...state.queryTabs.map((item) => item.id), 0) + 1;
   state.queryTabs.push({ id: next, label: `Query ${next}`, sql: '' });
   state.currentQueryTabId = next;
-  byId('sql-editor').value = '';
+  setEditorValue('');
   renderQueryTabs();
   byId('sql-editor').focus();
+}
+
+function closeQueryTab(id) {
+  const index = state.queryTabs.findIndex((item) => item.id === id);
+  if (index === -1) return;
+  if (state.queryTabs.length === 1) {
+    state.queryTabs = [{ id, label: 'Query 1', sql: '' }];
+    state.currentQueryTabId = id;
+    setEditorValue('');
+    renderQueryTabs();
+    return;
+  }
+  state.queryTabs.splice(index, 1);
+  if (state.currentQueryTabId === id) {
+    const next = state.queryTabs[Math.max(0, index - 1)];
+    state.currentQueryTabId = next.id;
+    setEditorValue(next.sql);
+  }
+  renderQueryTabs();
+}
+
+async function renameQueryTab(id) {
+  const tab = state.queryTabs.find((item) => item.id === id);
+  if (!tab) return;
+  const name = await showPrompt('Choose a name for this query tab.', 'Rename tab', 'Tab name', '', tab.label);
+  if (!name) return;
+  tab.label = name;
+  renderQueryTabs();
 }
 
 function openSqlInNewTab(sql, connectionId) {
@@ -150,7 +318,7 @@ function openSqlInNewTab(sql, connectionId) {
     tab.sql = sql;
     tab.label = firstLine.length > 28 ? `${firstLine.slice(0, 28)}…` : firstLine || tab.label;
   }
-  byId('sql-editor').value = sql;
+  setEditorValue(sql);
   byId('query-connection').value = connectionId;
   renderQueryTabs();
 }
@@ -346,6 +514,8 @@ async function connect(id) {
     state.selectedConnectionId = id;
     renderConnections();
     renderExplorerConnections();
+    renderQueryConnections();
+    renderAdvancedConnections();
   } catch (error) {
     connection.state = 'error';
     connection.error = 'Connection failed';
@@ -913,11 +1083,87 @@ function renderErdCanvas(data) {
   return shell;
 }
 
+const RESULT_ROW_HEIGHT = 35;
+const RESULT_OVERSCAN = 10;
+let resultVirtualCleanup = null;
+
+function buildResultRow(result, rowIndex) {
+  const row = result.rows[rowIndex];
+  const tr = document.createElement('tr');
+  tr.dataset.rowIndex = String(rowIndex);
+  if (rowIndex % 2 === 1) tr.classList.add('result-row-alt');
+  for (const column of result.columns) {
+    const cell = document.createElement('td');
+    const current = row[column];
+    if (current === null || current === undefined) { cell.textContent = 'NULL'; cell.className = 'null'; }
+    else if (typeof current === 'object') cell.textContent = JSON.stringify(current);
+    else cell.textContent = String(current);
+    tr.append(cell);
+  }
+  const actionCell = document.createElement('td');
+  const detail = document.createElement('button');
+  detail.className = 'button small row-detail-action';
+  detail.type = 'button';
+  detail.textContent = 'Details';
+  detail.setAttribute('aria-label', `View details for row ${rowIndex + 1}`);
+  detail.addEventListener('click', () => {
+    void showAlert(resultRowToText(row, result.columns), `Row ${rowIndex + 1}`);
+  });
+  actionCell.append(detail);
+  tr.append(actionCell);
+  return tr;
+}
+
+/** Windowed rendering: only the rows inside (plus a small overscan around) the visible viewport
+ * ever exist as DOM nodes. Two spacer <tr>s (sized in pixels, matching the rows they stand in for)
+ * keep the scrollbar accurate for results with hundreds of thousands of rows. Returns a cleanup
+ * function that removes the scroll listener — callers must invoke it before replacing the grid. */
+function renderVirtualizedRows(tbody, result, columnCount) {
+  const grid = byId('result-grid');
+  const rowCount = result.rows.length;
+  const topSpacer = document.createElement('tr');
+  topSpacer.className = 'result-spacer';
+  const topCell = document.createElement('td');
+  topCell.colSpan = columnCount;
+  topSpacer.append(topCell);
+  const bottomSpacer = document.createElement('tr');
+  bottomSpacer.className = 'result-spacer';
+  const bottomCell = document.createElement('td');
+  bottomCell.colSpan = columnCount;
+  bottomSpacer.append(bottomCell);
+  tbody.append(topSpacer, bottomSpacer);
+
+  const update = () => {
+    const { start, end } = visibleRange({
+      rowCount,
+      rowHeight: RESULT_ROW_HEIGHT,
+      scrollTop: grid.scrollTop,
+      viewportHeight: grid.clientHeight,
+      overscan: RESULT_OVERSCAN,
+    });
+    topCell.style.height = `${start * RESULT_ROW_HEIGHT}px`;
+    bottomCell.style.height = `${(rowCount - end) * RESULT_ROW_HEIGHT}px`;
+    for (const row of tbody.querySelectorAll('tr[data-row-index]')) row.remove();
+    const fragment = document.createDocumentFragment();
+    for (let index = start; index < end; index += 1) fragment.append(buildResultRow(result, index));
+    tbody.insertBefore(fragment, bottomSpacer);
+  };
+
+  let frame = null;
+  const onScroll = () => {
+    if (frame !== null) return;
+    frame = requestAnimationFrame(() => { frame = null; update(); });
+  };
+  grid.addEventListener('scroll', onScroll);
+  update();
+  return () => grid.removeEventListener('scroll', onScroll);
+}
+
 function renderResult(result) {
   state.result = result;
+  if (resultVirtualCleanup) { resultVirtualCleanup(); resultVirtualCleanup = null; }
   const grid = byId('result-grid');
   const error = byId('result-error');
-  document.querySelector('.result-note')?.remove();
   error.textContent = '';
   byId('export-csv').disabled = !result;
   byId('export-json').disabled = !result;
@@ -949,38 +1195,9 @@ function renderResult(result) {
   headerRow.append(actionHeader);
   head.append(headerRow);
   const body = document.createElement('tbody');
-  const visibleRows = result.rows.slice(0, 500);
-  for (const [rowIndex, row] of visibleRows.entries()) {
-    const tr = document.createElement('tr');
-    for (const column of result.columns) {
-      const cell = document.createElement('td');
-      const current = row[column];
-      if (current === null || current === undefined) { cell.textContent = 'NULL'; cell.className = 'null'; }
-      else if (typeof current === 'object') cell.textContent = JSON.stringify(current);
-      else cell.textContent = String(current);
-      tr.append(cell);
-    }
-    const actionCell = document.createElement('td');
-    const detail = document.createElement('button');
-    detail.className = 'button small row-detail-action';
-    detail.type = 'button';
-    detail.textContent = 'Details';
-    detail.setAttribute('aria-label', `View details for row ${rowIndex + 1}`);
-    detail.addEventListener('click', () => {
-      void showAlert(resultRowToText(row, result.columns), `Row ${rowIndex + 1}`);
-    });
-    actionCell.append(detail);
-    tr.append(actionCell);
-    body.append(tr);
-  }
   table.append(head, body);
   grid.append(table);
-  if (result.rows.length > visibleRows.length) {
-    const note = document.createElement('div');
-    note.className = 'query-hint result-note';
-    note.textContent = `Showing ${visibleRows.length} of ${result.rows.length} rows in the viewport.`;
-    grid.after(note);
-  }
+  resultVirtualCleanup = renderVirtualizedRows(body, result, result.columns.length + 1);
 }
 
 async function runQuery(mode = 'query') {
@@ -1058,7 +1275,7 @@ async function loadHistory() {
     const meta = document.createElement('small'); meta.textContent = `${entry.conn_label} · ${entry.row_count} rows · ${entry.duration_ms} ms`;
     const remove = document.createElement('button'); remove.className = 'button small danger history-meta'; remove.type = 'button'; remove.textContent = 'Delete';
     remove.addEventListener('click', async (event) => { event.stopPropagation(); await invoke('delete_history_entry', { id: entry.id }); loadHistory(); });
-    item.append(sql, meta, remove); item.addEventListener('click', () => { byId('sql-editor').value = entry.sql; switchView('query'); }); list.append(item);
+    item.append(sql, meta, remove); item.addEventListener('click', () => { setEditorValue(entry.sql); switchView('query'); }); list.append(item);
   }
 }
 
@@ -1088,7 +1305,7 @@ async function loadSnippets() {
       catch (error) { await showAlert(error?.message || 'Could not delete snippet', 'Snippet not deleted'); }
     });
     actions.append(rename, remove);
-    item.append(name, sql, meta, actions); item.addEventListener('click', () => { byId('sql-editor').value = snippet.sql; switchView('query'); }); list.append(item);
+    item.append(name, sql, meta, actions); item.addEventListener('click', () => { setEditorValue(snippet.sql); switchView('query'); }); list.append(item);
   }
 }
 
@@ -1481,6 +1698,7 @@ byId('format-sql').addEventListener('click', () => {
   const formatted = formatSql(source);
   if (start !== end) editor.setRangeText(formatted, start, end, 'select');
   else editor.value = formatted;
+  syncEditorHighlight();
   saveCurrentQueryTab();
   byId('query-status').textContent = 'SQL formatted';
 });
@@ -1493,7 +1711,30 @@ byId('export-json').addEventListener('click', () => downloadResult('json'));
 byId('copy-result').addEventListener('click', copyResult);
 byId('save-current-snippet').addEventListener('click', saveCurrentSnippet);
 byId('clear-history').addEventListener('click', async () => { if (await showConfirm('Clear all saved query history?', 'Clear history', true, 'Clear')) { await invoke('clear_history'); loadHistory(); } });
-byId('sql-editor').addEventListener('keydown', (event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); runQuery(); } });
+byId('sql-editor').addEventListener('keydown', (event) => {
+  const popupOpen = !byId('sql-autocomplete').hidden;
+  if (popupOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    event.preventDefault();
+    setActiveSuggestion((autocompleteActive + (event.key === 'ArrowDown' ? 1 : -1) + autocompleteItems.length) % autocompleteItems.length);
+    return;
+  }
+  if (popupOpen && (event.key === 'Enter' || event.key === 'Tab')) { event.preventDefault(); acceptSuggestion(); return; }
+  if (popupOpen && event.key === 'Escape') { event.preventDefault(); hideAutocomplete(); return; }
+  if (popupOpen && ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) hideAutocomplete();
+  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); runQuery(); }
+});
+byId('sql-editor').addEventListener('input', () => { syncEditorHighlight(); void updateAutocomplete(); });
+byId('sql-editor').addEventListener('click', hideAutocomplete);
+byId('sql-editor').addEventListener('scroll', () => {
+  const overlay = byId('sql-editor-highlight');
+  overlay.scrollTop = byId('sql-editor').scrollTop;
+  overlay.scrollLeft = byId('sql-editor').scrollLeft;
+  hideAutocomplete();
+});
+byId('query-connection').addEventListener('change', () => { void completionIndexFor(byId('query-connection').value); });
+document.addEventListener('click', (event) => {
+  if (!byId('sql-autocomplete').hidden && !event.target.closest('.sql-editor-wrap')) hideAutocomplete();
+});
 byId('open-erd').addEventListener('click', openErd);
 byId('explorer-filter').addEventListener('input', (event) => {
   state.explorerFilter = event.target.value;
@@ -1522,5 +1763,6 @@ bindWindowControls();
 bindSidebarToggle();
 bindAppDialog();
 renderQueryTabs();
+syncEditorHighlight();
 applyAppearance(state.preferences);
 boot();
