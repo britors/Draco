@@ -1,21 +1,16 @@
 # Release Linux pendente
 
-O código em desenvolvimento está em `2.0.3`, mas RPM/OBS, AUR e AppStream ainda apontam para
-`1.1.3`. A tag `v1.1.3` é anterior à introdução de `src-tauri`; portanto, seu tarball não pode ser
-usado para validar nem publicar o bundle Tauri atual.
+A tag imutável `v2.0.3` foi publicada e os metadados locais de RPM/OBS, AUR e AppStream apontam
+para ela. Este registro permanece até os canais de pacote serem construídos, instalados e
+publicados. A publicação no AUR foi adiada por decisão do mantenedor em 04/08/2026.
 
 Antes da próxima publicação:
 
-1. criar a tag imutável `v2.0.3` a partir do worktree validado;
-2. atualizar `Version`/`pkgver`, `Release`/`pkgrel`, AppStream e changelog;
-3. baixar o tarball da tag e substituir o SHA-256 do `aur/PKGBUILD`;
-4. gerar o tarball de fontes e `vendor.tar.zst` para o OBS;
-5. construir, instalar e abrir RPM e AUR em Wayland e X11;
-6. remover este arquivo — o contrato de distribuição exige um registro enquanto as versões
-   publicada e de desenvolvimento forem diferentes.
+1. construir, instalar e publicar o RPM no OBS;
+2. quando autorizado, construir, instalar e publicar o pacote AUR;
+3. remover este arquivo após confirmar os artefatos publicados.
 
-Não reutilizar a tag `v1.1.3`, não publicar com `SKIP` e não criar checksum a partir de `main`,
-porque esse branch é mutável.
+O checksum AUR foi calculado do tarball da tag, nunca de `main`, e não usa `SKIP`.
 
 ## Validação local concluída em 04/08/2026
 

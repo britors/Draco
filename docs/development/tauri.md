@@ -39,9 +39,8 @@ O caminho de distribuição inicial é:
 Os manifests de desenvolvimento (`Cargo.toml`, `tauri.conf.json` e `frontend/package.json`) podem
 estar à frente da última tag publicada. RPM, AUR e a primeira entrada AppStream, porém, sempre
 descrevem a mesma tag imutável. O teste `frontend/tests/distribution.test.mjs` impede divergência
-interna entre esses dois grupos, rejeita checksum AUR com `SKIP` e exige um registro explícito
-quando eles estiverem atrás do desenvolvimento. No estado atual, a tag `v1.1.3` é anterior ao
-diretório `src-tauri` e **não** valida o pacote Tauri; os passos obrigatórios para `v2.0.3` estão em
+interna entre esses dois grupos e rejeita checksum AUR com `SKIP`. A tag `v2.0.3` contém o shell
+Tauri oficial; a sincronização dos canais está registrada em
 [`packaging/RELEASE_PENDING.md`](../../packaging/RELEASE_PENDING.md).
 
 ## Build offline e validação do pacote

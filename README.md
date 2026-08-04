@@ -98,9 +98,8 @@ oficial `extra/draco` do Arch — o app continua se chamando Draco, só o nome
 de distribuição do pacote muda. Não há build Windows — nenhum app do
 ecossistema Lyra OS sustenta essa plataforma hoje.
 
-> **Release em preparação:** o worktree `2.0.3` já usa Tauri, mas os metadados
-> publicados ainda estão em `1.1.3`, cuja tag é anterior ao shell Tauri. Não
-> use esse tarball para validar o app atual; o checklist de publicação está em
+> **Release Tauri:** a tag `v2.0.3` contém o novo aplicativo oficial. Os passos
+> restantes para sincronizar os canais RPM/OBS e AUR estão registrados em
 > [`packaging/RELEASE_PENDING.md`](packaging/RELEASE_PENDING.md).
 
 ## Licença

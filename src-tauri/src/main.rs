@@ -1,3 +1,5 @@
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use draco_app::{
     AdminView, AlterTableInput, AlterTablePreviewView, Application, ApplicationError,
     AssistantReplyView, BackupFormat, BackupOptionsInput, BrowseTableView, CompletionDataView,

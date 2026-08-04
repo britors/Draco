@@ -3,10 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
-const [workspace, frontend, tauri, desktop, metainfo, aur, spec, releasePending] = await Promise.all([
+const [workspace, frontend, tauri, tauriMain, desktop, metainfo, aur, spec, releasePending] = await Promise.all([
   read('../../Cargo.toml'),
   read('../package.json'),
   read('../../src-tauri/tauri.conf.json'),
+  read('../../src-tauri/src/main.rs'),
   read('../../data/org.lyraos.Draco.desktop'),
   read('../../data/org.lyraos.Draco.metainfo.xml'),
   read('../../aur/PKGBUILD'),
@@ -31,7 +32,8 @@ test('published Linux package metadata describes one immutable release', () => {
   assert.ok(aurVersion);
   assert.equal(rpmVersion, aurVersion);
   assert.equal(appstreamVersion, aurVersion);
-  assert.match(aur, /sha256sums=\('[a-f0-9]{64}'\)/);
+  const checksums = aur.match(/sha256sums=\(([\s\S]*?)\)/)?.[1].match(/[a-f0-9]{64}/g) || [];
+  assert.equal(checksums.length, 2, 'the tagged source and metadata patch both require SHA-256 checksums');
   assert.doesNotMatch(aur, /sha256sums=\('SKIP'\)/);
   if (aurVersion !== workspaceVersion) {
     assert.match(releasePending, new RegExp(`desenvolvimento está em \`${workspaceVersion}\``));
@@ -48,6 +50,13 @@ test('installed identity is consistent across Tauri, desktop and AppStream', () 
   assert.match(metainfo, new RegExp(`<id>${appId}</id>`));
   assert.match(metainfo, new RegExp(`<launchable type="desktop-id">${appId}\\.desktop</launchable>`));
   assert.match(metainfo, /<binary>draco<\/binary>/);
+});
+
+test('Windows release starts without a console window', () => {
+  assert.match(
+    tauriMain,
+    /^#!\[cfg_attr\(all\(windows, not\(debug_assertions\)\), windows_subsystem = "windows"\)\]$/m,
+  );
 });
 
 test('official packages contain Tauri runtime dependencies without GTK fallback dependencies', () => {

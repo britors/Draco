@@ -10,14 +10,15 @@
 #
 
 Name:           postgres-draco
-Version:        1.1.3
-Release:        2
+Version:        2.0.3
+Release:        1
 Summary:        Cliente de banco de dados do ecossistema Lyra OS
 License:        GPL-3.0-or-later
 Group:          Productivity/Databases/Tools
 URL:            https://github.com/britors/Draco
 Source0:        %{name}-%{version}.tar.zst
 Source1:        vendor.tar.zst
+Patch0:         draco-2.0.3-metainfo.patch
 
 BuildRequires:  cargo
 BuildRequires:  cargo-packaging
@@ -48,7 +49,7 @@ Keyring/KWallet), já integrado ao sistema.
 # -a1 extracts Source0, then unpacks Source1 (vendor.tar.zst) on top of it; the vendor
 # tarball produced by the cargo_vendor OBS service already includes .cargo/config.toml, so
 # no manual step is needed to point cargo at the vendored crates.
-%autosetup -a1
+%autosetup -a1 -p1
 
 %build
 cargo build --locked --offline --release -p draco-tauri
