@@ -12,8 +12,10 @@ release dificultaria rollback e confundiria falhas de paridade com falhas de emp
       distribuição;
 - [x] raiz de pacote temporária valida binário, desktop entry, AppStream, ícone e bibliotecas
       dinâmicas no CI;
-- [ ] RPM/OBS e AUR atualizados para a tag Tauri `v2.0.3`, com SHA-256 e crates vendorizados
-      (a tag publicada `v1.1.3` é anterior a `src-tauri`; ver `packaging/RELEASE_PENDING.md`);
+- [x] RPM/OBS atualizado para a tag Tauri `v2.0.3`, com fontes imutáveis, patch AppStream e
+      crates vendorizados; a revisão 17 concluiu com `succeeded` e `rpmlint` sem erros ou avisos;
+- [ ] AUR construído, instalado e publicado a partir da tag Tauri `v2.0.3`, com SHA-256
+      (publicação adiada pelo mantenedor em 04/08/2026; ver `packaging/RELEASE_PENDING.md`);
 
 - [ ] três ciclos de release sem regressão bloqueadora no shell Tauri;
 - [x] fluxo de conexão, Explorer, SQL, histórico, snippets, Dashboard, Admin e ERD validado contra
@@ -21,7 +23,9 @@ release dificultaria rollback e confundiria falhas de paridade com falhas de emp
       chaves dos provedores;
 - [x] smoke test do binário release em uma raiz de instalação temporária, usando Wayland e
       X11/XWayland em 04/08/2026;
-- [ ] RPM OBS e AUR instalados sem dependências GTK4/libadwaita/GtkSourceView5;
+- [x] artefato RPM do OBS extraído e iniciado em Wayland, com `ldd` sem bibliotecas ausentes e
+      sem dependências GTK4/libadwaita/GtkSourceView5;
+- [ ] artefato AUR instalado sem dependências GTK4/libadwaita/GtkSourceView5;
 - [x] migração de configurações e entradas legadas do Secret Service confirmada pelo E2E real;
 - [x] checklist visual da issue #105 aprovado para loading, vazio, erro, acessibilidade e ações
       destrutivas;
