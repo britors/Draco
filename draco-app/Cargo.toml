@@ -1,0 +1,18 @@
+[package]
+name = "draco-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Toolkit-independent application services and DTOs for Draco"
+
+[dependencies]
+draco-core = { path = "../draco-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["sync", "time"] }
+
+[dev-dependencies]
+futures-util = "0.3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

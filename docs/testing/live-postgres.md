@@ -11,8 +11,28 @@ DRACO_TEST_USER=torven \
 cargo test -p draco-core --test live_postgres -- --ignored --nocapture
 ```
 
+Para validar a ponte usada pelos comandos Tauri, rode também:
+
+```sh
+DRACO_TEST_CONN_ID=torven-local \
+DRACO_TEST_HOST=localhost \
+DRACO_TEST_DB=torven \
+DRACO_TEST_USER=torven \
+cargo test -p draco-app --test live_postgres -- --ignored --nocapture
+```
+
 O `DRACO_TEST_CONN_ID` é usado somente para buscar a senha no Secret Service. Senhas e conteúdo
 sensível não são impressos pelo teste.
+
+Para executar os dois testes em sequência, com a mesma configuração e uma checagem prévia de
+disponibilidade do servidor:
+
+```sh
+./scripts/test-live-postgres.sh
+```
+
+O script aceita `DRACO_TEST_CONN_ID`, `DRACO_TEST_HOST`, `DRACO_TEST_DB` e `DRACO_TEST_USER` já
+definidos no ambiente. A senha continua exclusivamente no Secret Service.
 
 ## Checklist automatizado
 
@@ -28,10 +48,13 @@ O cenário executado contra PostgreSQL 18.4 cobre:
 - jobs `pg_cron` quando a extensão estiver instalada; no banco de validação ela estava ausente;
 - `EXPLAIN` sem `ANALYZE`, execução de query, erro seguido de recuperação e busca global;
 - ERD e relações de FK.
+- contrato de aplicação consumido pelo Tauri (conexão, schemas, dashboard,
+  query e administração).
 
 DDL de teste é criado em um schema com prefixo `draco_live_`. O schema é removido com
-`CASCADE` ao final e sobras de uma execução interrompida são removidas no início da próxima;
-nenhum objeto da aplicação é usado para mutação.
+`CASCADE` ao final, inclusive quando uma asserção falha; sobras de uma execução interrompida
+são removidas no início da próxima. O teste de aplicação também remove sua conexão temporária
+em caso de falha. Nenhum objeto da aplicação é usado para mutação.
 
 Resultado em 28/07/2026:
 
@@ -40,11 +63,15 @@ test connects_and_introspects_the_real_database ... ok
 test result: ok. 1 passed; 0 failed
 ```
 
+Esse resultado é do cenário `draco-core`. O cenário `draco-app` e a execução conjunta pelo
+script acima ficam reproduzíveis, mas não foram marcados como passados nesta sessão: em
+03/08/2026 `pg_isready -h localhost -p 5432` retornou `no response`.
+
 ## Checklist transversal
 
 | Cenário | Evidência |
 |---|---|
-| Nominal contra Postgres real | teste E2E acima passou |
+| Nominal contra Postgres real | core passou em 28/07/2026; app aguarda servidor disponível nesta sessão |
 | Conexão ausente/perdida | `ConnectionManager`, editor e explorer exibem erro; recuperação após erro SQL coberta pelo teste |
 | SSH/jump host | suporte permanece coberto pelo `PostgresDriver`; não executado porque o ambiente E2E não possui endpoint SSH configurado |
 | Loading, vazio e erro | estados implementados nas views; vazio de `pg_cron`, activity e locks observado no teste |

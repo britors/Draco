@@ -13,6 +13,8 @@
 use draco_core::connection::DbConnection;
 use draco_core::postgres::{queries, PostgresDriver};
 use draco_core::secrets;
+use futures_util::FutureExt;
+use std::panic::AssertUnwindSafe;
 
 fn env_or_skip(name: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| panic!("set {name} to run this test (see module docs)"))
@@ -34,15 +36,45 @@ fn test_connection() -> DbConnection {
 #[ignore]
 async fn connects_and_introspects_the_real_database() {
     let conn = test_connection();
-    let password = secrets::get_password(&conn.id).await.expect("password readable from Secret Service");
-    assert!(!password.is_empty(), "expected a password stored under id {} in the Secret Service", conn.id);
+    let password = secrets::get_password(&conn.id)
+        .await
+        .expect("password readable from Secret Service");
+    assert!(
+        !password.is_empty(),
+        "expected a password stored under id {} in the Secret Service",
+        conn.id
+    );
 
-    let invalid = PostgresDriver::connect(&conn, "draco-invalid-password", 3_000, "draco-live-invalid", None, None).await;
-    assert!(invalid.is_err(), "invalid credentials unexpectedly connected");
+    let invalid = PostgresDriver::connect(
+        &conn,
+        "draco-invalid-password",
+        3_000,
+        "draco-live-invalid",
+        None,
+        None,
+    )
+    .await;
+    assert!(
+        invalid.is_err(),
+        "invalid credentials unexpectedly connected"
+    );
 
     let driver = PostgresDriver::connect(&conn, &password, 30_000, "draco-live-test", None, None)
         .await
         .expect("connect to the real PostgreSQL database");
+
+    let test_schema = format!(
+        "draco_live_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_millis()
+    );
+
+    // Keep cleanup outside the scenario future. `catch_unwind` lets us drop the isolated schema
+    // even when an assertion or a database operation panics halfway through the checklist.
+    let scenario = AssertUnwindSafe(async {
 
     // Remove only schemas created by this test family, including leftovers from an interrupted
     // run. The prefix is deliberately unique to this test and never targets application data.
@@ -61,14 +93,6 @@ async fn connects_and_introspects_the_real_database() {
             .expect("drop stale live-test schema");
     }
 
-    let test_schema = format!(
-        "draco_live_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system clock")
-            .as_millis()
-    );
     queries::create_schema(&driver, &test_schema).await.expect("create isolated test schema");
 
     let schemas = queries::get_schemas(&driver).await.expect("get_schemas");
@@ -322,8 +346,26 @@ async fn connects_and_introspects_the_real_database() {
     println!("search 'appointment': {search_results:?}");
     assert!(search_results.iter().any(|r| r.name.contains("appointment")));
 
-    queries::execute_query(&driver, &format!("DROP SCHEMA \"{test_schema}\" CASCADE"))
-        .await
-        .expect("cleanup: drop isolated test schema");
+    })
+    .catch_unwind()
+    .await;
+
+    let cleanup = queries::execute_query(
+        &driver,
+        &format!("DROP SCHEMA IF EXISTS \"{test_schema}\" CASCADE"),
+    )
+    .await;
     driver.disconnect().await;
+
+    match scenario {
+        Ok(()) => {
+            cleanup.expect("cleanup: drop isolated test schema");
+        }
+        Err(payload) => {
+            if let Err(error) = cleanup {
+                eprintln!("live PostgreSQL cleanup failed: {error}");
+            }
+            std::panic::resume_unwind(payload);
+        }
+    }
 }

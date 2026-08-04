@@ -8,7 +8,7 @@ description = "GTK4/libadwaita frontend for Draco"
 build = "build.rs"
 
 [[bin]]
-name = "draco"
+name = "draco-gtk"
 path = "src/main.rs"
 
 [dependencies]

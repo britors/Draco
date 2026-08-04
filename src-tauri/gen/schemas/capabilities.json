@@ -1,0 +1,1 @@
+{"main-capability":{"identifier":"main-capability","description":"Main window may invoke registered Rust commands and its explicit window controls","local":true,"windows":["main"],"permissions":["core:window:allow-close","core:window:allow-maximize","core:window:allow-minimize","core:window:allow-start-dragging","core:window:allow-toggle-maximize"]}}

@@ -1,9 +1,9 @@
-# Matriz de paridade Rust + GTK4
+# Matriz de paridade Tauri + GTK4 de fallback
 
 Lista de aceite funcional usada na migração da antiga UI Electron/TypeScript
-para a interface nativa Rust + GTK4/libadwaita. A implementação legada já foi
-removida dos fontes (ver `git log` anterior à reescrita para referência do
-comportamento original).
+para o frontend local Tauri 2. O `draco-gtk` é mantido como fallback compilável
+durante a estabilização; a decisão e o checklist para removê-lo estão em
+[`tauri-stabilization.md`](tauri-stabilization.md).
 
 Estados permitidos: `pendente`, `em desenvolvimento`, `implementado`,
 `validado` e `desvio aprovado`. `Implementado` indica que a superfície foi

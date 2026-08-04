@@ -67,6 +67,12 @@ impl ConnectionManager {
         self.map.get(id).and_then(|m| m.driver.as_ref())
     }
 
+    /// Returns a cheap clone of the driver's pool/tunnel handle so application queries can run
+    /// without holding the manager mutex for their entire duration.
+    pub fn get_driver_handle(&self, id: &str) -> Option<PostgresDriver> {
+        self.get_driver(id).cloned()
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub async fn connect(
         &mut self,
@@ -112,7 +118,8 @@ impl ConnectionManager {
 
     pub async fn disconnect(&mut self, id: &str) {
         let Some(managed) = self.map.get_mut(id) else { return };
-        if let Some(driver) = managed.driver.take() {
+        let driver = managed.driver.take();
+        if let Some(driver) = driver {
             driver.disconnect().await;
         }
         managed.status = ConnectionStatus::Disconnected;

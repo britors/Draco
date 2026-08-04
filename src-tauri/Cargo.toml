@@ -1,0 +1,25 @@
+[package]
+name = "draco-tauri"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Tauri 2 shell and typed bridge for Draco"
+build = "build.rs"
+
+[[bin]]
+name = "draco"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = "2.6.3"
+
+[dependencies]
+draco-app = { path = "../draco-app" }
+draco-core = { path = "../draco-core" }
+serde = { version = "1", features = ["derive"] }
+tauri = "2.11.5"
+
+[dev-dependencies]
+serde_json = "1"
+tauri = { version = "2.11.5", features = ["test"] }

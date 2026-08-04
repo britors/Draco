@@ -61,12 +61,20 @@ pub async fn store_ssh_password(id: &str, password: &str) -> Result<()> {
     store(id, "ssh", password).await
 }
 
+pub async fn remove_ssh_password(id: &str) -> Result<()> {
+    remove(id, "ssh").await
+}
+
 pub async fn get_ssh_password(id: &str) -> Result<String> {
     get(id, "ssh").await
 }
 
 pub async fn store_jump_ssh_password(id: &str, password: &str) -> Result<()> {
     store(id, "jump", password).await
+}
+
+pub async fn remove_jump_ssh_password(id: &str) -> Result<()> {
+    remove(id, "jump").await
 }
 
 pub async fn get_jump_ssh_password(id: &str) -> Result<String> {

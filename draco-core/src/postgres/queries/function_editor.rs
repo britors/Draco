@@ -3,6 +3,7 @@ use serde::Serialize;
 use crate::error::Result;
 use crate::postgres::pool::PostgresDriver;
 use super::helpers::*;
+use tokio::sync::watch;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FunctionOverload {
@@ -58,6 +59,16 @@ pub async fn execute_query(driver: &PostgresDriver, sql: &str) -> Result<QueryRe
     Ok(QueryResult { columns, rows: rows.iter().map(row_to_json_map).collect() })
 }
 
+pub async fn execute_query_cancelable(
+    driver: &PostgresDriver,
+    sql: &str,
+    cancel_rx: watch::Receiver<bool>,
+) -> Result<QueryResult> {
+    let rows = driver.query_cancelable(sql, &[], cancel_rx).await?;
+    let columns = rows.first().map(|r| r.columns().iter().map(|c| c.name().to_string()).collect()).unwrap_or_default();
+    Ok(QueryResult { columns, rows: rows.iter().map(row_to_json_map).collect() })
+}
+
 /// Runs `sql` as a multi-statement script via the simple query protocol (`simple_query`,
 /// the row-preserving sibling of `batch_execute` — already used by `alter_table` for the
 /// side-effect-only case) instead of `execute_query`'s single prepared statement — lets the
@@ -95,6 +106,58 @@ pub async fn execute_script(driver: &PostgresDriver, sql: &str) -> Result<QueryR
                 // A statement just finished — commit it as the result-so-far, overwriting
                 // whatever the previous statement left, so after the loop this holds only the
                 // last statement's outcome.
+                if let Some(columns) = current_columns.take() {
+                    final_columns = columns;
+                    final_rows = std::mem::take(&mut current_rows);
+                    final_affected = None;
+                } else {
+                    final_columns = Vec::new();
+                    final_rows = Vec::new();
+                    final_affected = Some(affected);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if final_columns.is_empty() {
+        final_columns = vec!["rows_affected".to_string()];
+        let mut map = serde_json::Map::new();
+        map.insert("rows_affected".to_string(), serde_json::Value::from(final_affected.unwrap_or(0)));
+        final_rows = vec![map];
+    }
+
+    Ok(QueryResult { columns: final_columns, rows: final_rows })
+}
+
+pub async fn execute_script_cancelable(
+    driver: &PostgresDriver,
+    sql: &str,
+    cancel_rx: watch::Receiver<bool>,
+) -> Result<QueryResult> {
+    let messages = driver.simple_query_cancelable(sql, cancel_rx).await?;
+
+    let mut current_columns: Option<Vec<String>> = None;
+    let mut current_rows: Vec<serde_json::Map<String, serde_json::Value>> = Vec::new();
+    let mut final_columns: Vec<String> = Vec::new();
+    let mut final_rows: Vec<serde_json::Map<String, serde_json::Value>> = Vec::new();
+    let mut final_affected: Option<u64> = None;
+
+    for message in messages {
+        match message {
+            tokio_postgres::SimpleQueryMessage::RowDescription(columns) => {
+                current_columns = Some(columns.iter().map(|c| c.name().to_string()).collect());
+                current_rows.clear();
+            }
+            tokio_postgres::SimpleQueryMessage::Row(row) => {
+                let mut map = serde_json::Map::new();
+                for (i, col) in row.columns().iter().enumerate() {
+                    let value = row.get(i).map(|v| serde_json::Value::String(v.to_string())).unwrap_or(serde_json::Value::Null);
+                    map.insert(col.name().to_string(), value);
+                }
+                current_rows.push(map);
+            }
+            tokio_postgres::SimpleQueryMessage::CommandComplete(affected) => {
                 if let Some(columns) = current_columns.take() {
                     final_columns = columns;
                     final_rows = std::mem::take(&mut current_rows);

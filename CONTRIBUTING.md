@@ -3,7 +3,8 @@
 ## Pré-requisitos
 
 - Rust estável recente (`cargo`, `rustc` ≥ 1.85)
-- `gtk4-devel` (≥ 4.12), `libadwaita-devel` (≥ 1.5), `gtksourceview5-devel` (≥ 5.0)
+- WebKitGTK 4.1, GTK3, OpenSSL e librsvg para o shell Tauri; GTK4,
+  libadwaita e GtkSourceView5 apenas para o fallback `draco-gtk`
 - Uma instância PostgreSQL rodando para teste manual
 
 ## Setup
@@ -11,25 +12,31 @@
 ```bash
 git clone https://github.com/britors/Draco.git
 cd Draco
-cargo build
+cargo build --locked --release -p draco-tauri
 ```
 
 ## Fluxo de desenvolvimento
 
-**Build:**
+**Build oficial:**
 ```bash
-cargo build --workspace
+cargo build --locked --release -p draco-tauri
+```
+
+**Build de transição GTK:**
+```bash
+cargo check -p draco-gtk
 ```
 
 **Rodar:**
 ```bash
-DRACO_LOG=debug cargo run -p draco-gtk
+cargo run -p draco-tauri
 ```
 
 **Lint e testes** (rodar antes de qualquer PR):
 ```bash
-cargo clippy --workspace
-cargo test -p draco-core
+cargo clippy --workspace --exclude draco-gtk --all-targets -- -D warnings
+cargo test --workspace --exclude draco-gtk
+(cd frontend && npm run check && npm test)
 ```
 
 ## Estrutura do repositório
@@ -37,28 +44,47 @@ cargo test -p draco-core
 ```
 draco-core/     # pool Postgres, túnel SSH, queries, storage local, segredos —
                 # sem dependência de nenhum toolkit gráfico
-draco-gtk/      # frontend GTK4/libadwaita (binário `draco`)
+draco-app/      # casos de uso e DTOs serializáveis, sem dependência de toolkit
+src-tauri/      # shell Tauri 2, capabilities e bridge IPC tipada
+frontend/       # frontend web local empacotado pelo Tauri
+draco-gtk/      # frontend GTK4/libadwaita de fallback (binário `draco-gtk`)
 data/           # .desktop, metainfo AppStream, ícones
 packaging/obs/  # spec RPM para o OBS (home:rodrigosbrito:lyra/postgres-draco)
 aur/            # PKGBUILD
-docs/migration/ # matriz de paridade funcional da reescrita Rust/GTK
+docs/migration/ # matriz de paridade e decisão de estabilização Tauri
 ```
 
 ## Arquitetura
 
 - `draco-core` é agnóstico de UI: tudo que fala com o Postgres, com SSH ou com
   o disco vive lá, testável sem GTK.
+- `draco-app` é a fronteira de aplicação para futuros frontends: a UI deve
+  consumir seus DTOs e casos de uso, sem importar `draco-core` diretamente.
+- `src-tauri` expõe somente comandos finos sobre `draco-app`; capabilities são
+  explícitas e o frontend não recebe credenciais do Secret Service.
 - `draco-gtk` roda o loop do GTK na thread principal e um runtime `tokio`
   dedicado numa thread própria (`draco-tokio`, ver `draco-gtk/src/main.rs`).
   Trabalho async é disparado com `runtime_handle.spawn(...)` e o
   `JoinHandle` é aguardado dentro de um
   `glib::MainContext::default().spawn_local(...)` na thread GTK — nunca se
   bloqueia o main loop nem a thread do tokio uma na outra.
+- `frontend` usa assets locais; a CSP do Tauri bloqueia scripts, frames e
+  recursos remotos.
 - Segredos (senhas de conexão, senha de túnel SSH) passam pelo Serviço de
   Segredos do sistema via `oo7` — nunca são gravados em disco em texto plano
   nem logados.
 
-## Regras de UI
+## Regras do frontend oficial
+
+- O Tauri usa somente assets locais e não adiciona CDN, framework web ou
+  dependência npm de runtime.
+- Toda tela precisa representar loading, vazio, erro e recuperação; ações
+  destrutivas pedem confirmação explícita.
+- Dados vindos de queries ou usuários são inseridos como texto, nunca como HTML
+  confiável implicitamente.
+- Segredos não entram no DOM, `localStorage`, `sessionStorage`, logs ou eventos.
+
+## Regras do fallback GTK
 
 A interface deve usar **somente** widgets GTK4/libadwaita nativos:
 

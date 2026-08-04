@@ -7,23 +7,28 @@ GitHub: https://github.com/britors/Draco
 ## Stack
 
 - **Linguagem**: Rust
-- **Plataforma**: desktop Linux nativo, GTK4 + libadwaita
+- **Plataforma**: desktop Linux, Tauri 2 + WebKitGTK 4.1; GTK4 legado em transição
 - **Driver**: `tokio-postgres` — sem dependência de CLI externo (`psql`)
 - **Túnel SSH**: `russh` (em processo, sem shell out pro binário `ssh`)
-- **Editor SQL**: GtkSourceView5 (sem Monaco/CDN)
+- **Editor SQL**: frontend local HTML/CSS/JavaScript (sem framework/CDN)
 - **Segredos**: `oo7` (Secret Service / GNOME Keyring) — nunca texto plano
 - **Build**: `cargo` (workspace)
 
-Reescrito de Electron/TypeScript para Rust/GTK4 seguindo o mesmo padrão dos
-outros apps do ecossistema (Vega, Beam, Sulafat, Chord).
+O build oficial é `cargo build --locked --release -p draco-tauri`; use
+`cargo check -p draco-gtk` somente para verificar o fallback de transição.
+
+Reescrito de Electron/TypeScript para Rust/Tauri 2 seguindo o mesmo padrão de
+separação de núcleo e frontend dos outros apps do ecossistema.
 
 ## Arquitetura
 
-Workspace Cargo com dois crates:
+Workspace Cargo com núcleo, aplicação e dois frontends:
 - `draco-core` — pool Postgres, túnel SSH, queries de introspecção/DDL/stats,
   storage local (TOML/XDG via `directories`) e segredos. **Sem dependência de
   nenhum toolkit gráfico** — deve compilar e ser testável isoladamente.
-- `draco-gtk` — frontend GTK4/libadwaita, binário `draco`.
+- `draco-app` — casos de uso e DTOs sem toolkit.
+- `src-tauri` — shell oficial Tauri 2, binário `draco`.
+- `draco-gtk` — frontend GTK4/libadwaita de fallback, binário `draco-gtk`.
 
 Bridging async → GTK (ver `draco-gtk/src/main.rs`): um runtime `tokio`
 multi-thread roda numa thread própria (`draco-tokio`); o loop GTK fica na
@@ -32,23 +37,23 @@ main thread. Trabalho que precisa do reactor tokio (`tokio-postgres`, `russh`)
 dentro de `glib::MainContext::default().spawn_local(...)` na thread GTK —
 nunca se bloqueia uma thread na outra.
 
-## Regras de UI — obrigatórias
+## Regras do frontend oficial — obrigatórias
 
-A UI deve parecer **nativa do GNOME/Lyra**:
-- **Somente** widgets GTK4/libadwaita — tema `libadwaita` ativo (claro/escuro
-  automático), sem CSS custom hardcoded fora do necessário
-- **Sem bibliotecas de UI externas** (Electron, web frameworks, CSS frameworks)
-- Ícones simbólicos do tema do sistema (`-symbolic`)
-- Editor SQL: `GtkSourceView5` (highlighting + completion nativos)
-- Grids/listas: `gtk::ColumnView` + `gio::ListStore` (virtualizado)
-- Visualizações custom (gauges do dashboard, ERD): `gtk::DrawingArea` + `cairo`,
-  seguindo o precedente de `vega-gtk/src/ui/sparkline.rs`
+A UI deve parecer **dark-first, local e acessível**:
+- assets, fontes e scripts somente locais; nenhum CDN ou recurso remoto;
+- estados de loading, vazio, erro e confirmação destrutiva explícitos;
+- dados inseridos pelo usuário sempre via `textContent`, nunca HTML não confiável;
+- IPC somente por comandos registrados no `src-tauri`;
+- segredos nunca entram no DOM, storage do navegador ou logs.
+
+O frontend GTK segue as regras nativas abaixo somente enquanto existir como fallback.
 
 ## Segredos e logs
 
 - Senhas de conexão, SSH e jump host: `oo7` (Secret Service). Nunca gravar em
   disco em texto plano nem logar.
-- Log via `tracing`, nível controlado por `DRACO_LOG`. Conteúdo de query e
+- O fallback GTK usa `tracing` com nível controlado por `DRACO_LOG`; o shell
+  Tauri deve ser depurado pelo stderr do processo. Conteúdo de query e
   credenciais nunca aparecem em log.
 
 ## Progresso da reescrita
@@ -59,10 +64,12 @@ que falta) fica em
 Atualize a linha do módulo correspondente ao terminar de portar uma
 superfície.
 
-## Escopo confirmado
+## Build e escopo confirmado
 
-- Só Linux (GTK4/libadwaita via OBS + AUR) — sem build Windows. Nenhum app do
+- Só Linux (Tauri/WebKitGTK via OBS + AUR) — sem build Windows. Nenhum app do
   ecossistema Lyra OS sustenta Windows hoje.
+- O binário oficial é `target/release/draco`; o GTK permanece compilável até o
+  checklist de [`docs/migration/tauri-stabilization.md`](docs/migration/tauri-stabilization.md).
 - v1 mira paridade ampla com a versão Electron anterior (dashboard, ERD,
   editores de tabela/função, roles, pg_cron, activity/locks, stats — ver
   matriz de paridade), não um MVP deliberadamente reduzido.

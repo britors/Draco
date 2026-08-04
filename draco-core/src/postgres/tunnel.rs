@@ -195,7 +195,7 @@ impl SshTunnel {
         Ok(SshTunnel { local_port, accept_task })
     }
 
-    pub fn close(self) {
+    pub fn close(&self) {
         self.accept_task.abort();
     }
 }

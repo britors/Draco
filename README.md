@@ -20,15 +20,19 @@ esquemas, editor SQL e ferramenta de administração para PostgreSQL. Funciona e
 qualquer distribuição Linux moderna, com integração visual prioritária ao Lyra
 (GNOME/Wayland).
 
-- Driver Postgres assíncrono (`tokio-postgres`) — sem CLI externo (`psql`).
+- Driver Postgres assíncrono (`tokio-postgres`) para queries — sem CLI externo
+  (`psql`); backup/restauração usam explicitamente as ferramentas oficiais do
+  PostgreSQL.
 - Túnel SSH (incluindo jump host) feito em processo (`russh`), sem depender do
   binário `ssh`.
-- Interface em GTK4 + libadwaita; editor SQL em GtkSourceView5 (sem Monaco/CDN).
+- Interface oficial Tauri 2, com frontend local sem CDN; o `draco-gtk` é o
+  fallback compilável durante a estabilização.
 - Nenhuma senha ou passphrase é manuseada em texto plano — armazenamento
   delegado ao Serviço de Segredos do sistema (GNOME Keyring/KWallet, via
   `oo7`), já integrado ao sistema.
 
-> **Status**: em reescrita ativa de Electron/TypeScript para Rust + GTK4. Veja
+> **Status**: Tauri 2 é o artefato oficial; o `draco-gtk` permanece compilável
+> durante a transição. Veja
 > [`docs/migration/rust-gtk-parity.md`](docs/migration/rust-gtk-parity.md) para
 > o que já foi portado e o que falta.
 
@@ -39,7 +43,12 @@ qualquer distribuição Linux moderna, com integração visual prioritária ao L
 - `draco-core`: pool Postgres, túnel SSH, queries de introspecção/DDL/stats,
   storage local (TOML/XDG) e segredos — sem dependência de nenhum toolkit
   gráfico.
-- `draco-gtk`: frontend GTK4/libadwaita (binário `draco`).
+- `draco-app`: casos de uso e DTOs serializáveis, fronteira compartilhada entre
+  os frontends.
+- `src-tauri`: shell Tauri 2, capabilities mínimas e bridge IPC tipada.
+- `frontend/dist`: shell web local empacotado pelo Tauri, sem dependências de
+  rede em runtime.
+- `draco-gtk`: frontend GTK4/libadwaita de fallback (binário `draco-gtk`).
 - `data`: `.desktop`, metadados AppStream e ícones.
 - `packaging/obs`: artefatos para o pacote RPM no OBS
   (`home:rodrigosbrito:lyra/postgres-draco`).
@@ -48,29 +57,39 @@ qualquer distribuição Linux moderna, com integração visual prioritária ao L
 
 ## Compilando
 
-Dependências de sistema (nomes Fedora/openSUSE): `gtk4-devel` (≥ 4.12),
-`libadwaita-devel` (≥ 1.5), `gtksourceview5-devel` (≥ 5.0), um compilador
-Rust estável recente (`cargo`, `rustc` ≥ 1.85).
+Dependências de sistema para o app oficial (nomes Fedora/openSUSE): WebKitGTK
+4.1, GTK3, OpenSSL e librsvg, além de um compilador Rust estável recente
+(`cargo`, `rustc` ≥ 1.85). Para compilar o fallback GTK, instale também
+GTK4, libadwaita e GtkSourceView5.
 
 ```sh
-cargo build --release
+cargo build --locked --release -p draco-tauri
 ./target/release/draco
 ```
 
-Variável de ambiente `DRACO_LOG` controla o nível de log
-(`tracing-subscriber`), por exemplo `DRACO_LOG=debug ./target/debug/draco`.
-Senhas e conteúdo de query nunca são registrados nos logs.
+Para validar o fallback GTK durante a estabilização:
+
+```sh
+cargo run -p draco-gtk --bin draco-gtk
+```
+
+No fallback GTK, a variável `DRACO_LOG` controla o nível de log, por exemplo
+`DRACO_LOG=debug cargo run -p draco-gtk --bin draco-gtk`. Para o Tauri, use
+`RUST_BACKTRACE=1 cargo run -p draco-tauri`. Senhas e conteúdo de query nunca
+são registrados nos logs.
 
 ### Testes
 
 ```sh
 cargo test -p draco-core
+cargo test -p draco-app
+cargo test -p draco-tauri
+(cd frontend && npm run check && npm test)
 ```
 
 ## Instalação
 
-Ainda não há pacotes publicados — o rewrite está em andamento (ver matriz de
-paridade). Quando a v1 estiver pronta: RPM via OBS
+Os artefatos oficiais são RPM via OBS
 (`home:rodrigosbrito:lyra/postgres-draco`) e AUR (`postgres-draco`). O nome de
 pacote não é "draco" simples porque esse nome já é usado pelo projeto
 "graphics" do openSUSE (biblioteca de compressão 3D do Google) e pelo pacote

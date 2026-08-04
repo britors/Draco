@@ -1,16 +1,19 @@
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
+use std::sync::Arc;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::{NoTls, Row};
+use tokio::sync::watch;
 
 use crate::connection::DbConnection;
 use crate::error::Result;
 use crate::postgres::tls;
 use crate::postgres::tunnel::SshTunnel;
 
+#[derive(Clone)]
 pub struct PostgresDriver {
     pool: Pool,
     app_name: String,
-    tunnel: Option<SshTunnel>,
+    tunnel: Option<Arc<SshTunnel>>,
     external_host: String,
     external_port: u16,
 }
@@ -32,7 +35,7 @@ impl PostgresDriver {
         jump_password: Option<&str>,
     ) -> Result<Self> {
         let tunnel = if conn.ssh_enabled {
-            Some(SshTunnel::open(conn, ssh_password, jump_password).await?)
+            Some(Arc::new(SshTunnel::open(conn, ssh_password, jump_password).await?))
         } else {
             None
         };
@@ -81,9 +84,9 @@ impl PostgresDriver {
         })
     }
 
-    pub async fn disconnect(mut self) {
+    pub async fn disconnect(&self) {
         self.pool.close();
-        if let Some(tunnel) = self.tunnel.take() {
+        if let Some(tunnel) = &self.tunnel {
             tunnel.close();
         }
     }
@@ -107,6 +110,88 @@ impl PostgresDriver {
     pub async fn simple_query(&self, sql: &str) -> Result<Vec<tokio_postgres::SimpleQueryMessage>> {
         let client = self.pool.get().await?;
         Ok(client.simple_query(sql).await?)
+    }
+
+    /// Runs a query on one pooled backend and cancels that backend if the operation receiver is
+    /// signalled. This keeps concurrent queries on the same application connection isolated.
+    pub async fn query_cancelable(
+        &self,
+        sql: &str,
+        params: &[&(dyn ToSql + Sync)],
+        mut cancel_rx: watch::Receiver<bool>,
+    ) -> Result<Vec<Row>> {
+        let client = self.pool.get().await?;
+        let backend_pid = client
+            .query_one("SELECT pg_backend_pid()", &[])
+            .await?
+            .get::<_, i32>(0);
+        let query = client.query(sql, params);
+        tokio::pin!(query);
+        let cancellation = async {
+            loop {
+                if *cancel_rx.borrow() {
+                    break true;
+                }
+                if cancel_rx.changed().await.is_err() {
+                    break false;
+                }
+            }
+        };
+        tokio::pin!(cancellation);
+        tokio::select! {
+            result = &mut query => Ok(result?),
+            cancelled = &mut cancellation => {
+                if cancelled {
+                    self.cancel_backend(backend_pid).await?;
+                }
+                Ok(query.await?)
+            }
+        }
+    }
+
+    /// Simple-query counterpart to `query_cancelable`, used by multi-statement scripts.
+    pub async fn simple_query_cancelable(
+        &self,
+        sql: &str,
+        mut cancel_rx: watch::Receiver<bool>,
+    ) -> Result<Vec<tokio_postgres::SimpleQueryMessage>> {
+        let client = self.pool.get().await?;
+        let backend_pid = client
+            .query_one("SELECT pg_backend_pid()", &[])
+            .await?
+            .get::<_, i32>(0);
+        let query = client.simple_query(sql);
+        tokio::pin!(query);
+        let cancellation = async {
+            loop {
+                if *cancel_rx.borrow() {
+                    break true;
+                }
+                if cancel_rx.changed().await.is_err() {
+                    break false;
+                }
+            }
+        };
+        tokio::pin!(cancellation);
+        tokio::select! {
+            result = &mut query => Ok(result?),
+            cancelled = &mut cancellation => {
+                if cancelled {
+                    self.cancel_backend(backend_pid).await?;
+                }
+                Ok(query.await?)
+            }
+        }
+    }
+
+    /// Cancels exactly one backend PID, unlike the legacy application-name based fallback.
+    pub async fn cancel_backend(&self, backend_pid: i32) -> Result<()> {
+        self.query(
+            "SELECT pg_cancel_backend($1)",
+            &[&backend_pid],
+        )
+        .await?;
+        Ok(())
     }
 
     /// `pg_cancel_backend()` for whatever this driver's own connections are currently running —

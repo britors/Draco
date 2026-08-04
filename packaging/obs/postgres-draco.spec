@@ -11,7 +11,7 @@
 
 Name:           postgres-draco
 Version:        1.1.3
-Release:        1
+Release:        2
 Summary:        Cliente de banco de dados do ecossistema Lyra OS
 License:        GPL-3.0-or-later
 Group:          Productivity/Databases/Tools
@@ -22,10 +22,10 @@ Source1:        vendor.tar.zst
 BuildRequires:  cargo
 BuildRequires:  cargo-packaging
 BuildRequires:  rust >= 1.85
-BuildRequires:  gtk4-devel >= 4.12
-BuildRequires:  libadwaita-devel >= 1.5
-BuildRequires:  gtksourceview5-devel >= 5.0
 BuildRequires:  pkgconfig
+BuildRequires:  pkgconfig(webkit2gtk-4.1)
+BuildRequires:  pkgconfig(openssl)
+BuildRequires:  pkgconfig(librsvg-2.0)
 BuildRequires:  desktop-file-utils
 BuildRequires:  appstream-glib
 BuildRequires:  fdupes
@@ -37,10 +37,10 @@ esquemas, editor SQL e ferramenta de administração para PostgreSQL. É um
 aplicativo independente, utilizável em qualquer distribuição Linux moderna,
 com integração visual prioritária ao Lyra (GNOME/Wayland).
 
-Implementado em Rust, usando GTK4 + libadwaita e GtkSourceView5. Conexões via
-túnel SSH (incluindo jump host) são feitas em processo, sem depender do
-binário `ssh`. Nenhuma senha ou passphrase é manuseada em texto plano —
-armazenamento delegado ao Serviço de Segredos do sistema (GNOME
+Implementado em Rust, usando Tauri 2 com assets web locais e WebKitGTK 4.1.
+Conexões via túnel SSH (incluindo jump host) são feitas em processo, sem
+depender do binário `ssh`. Nenhuma senha ou passphrase é manuseada em texto
+plano — armazenamento delegado ao Serviço de Segredos do sistema (GNOME
 Keyring/KWallet), já integrado ao sistema.
 
 %prep
@@ -50,7 +50,7 @@ Keyring/KWallet), já integrado ao sistema.
 %autosetup -a1
 
 %build
-%{cargo_build}
+cargo build --locked --offline --release -p draco-tauri
 
 %install
 install -Dm0755 target/release/draco %{buildroot}%{_bindir}/draco
@@ -70,9 +70,9 @@ appstream-util validate-relax --nonet \
     %{buildroot}%{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
 
 %check
-# GUI tests need a display and a real Postgres server; only the toolkit-agnostic draco-core
-# unit tests run during package build.
-cargo test --offline -p draco-core
+# Live PostgreSQL and browser/display tests are ignored; unit, contract and Tauri smoke tests run
+# against the vendored Rust dependencies without a server or GUI session.
+cargo test --locked --offline --workspace --exclude draco-gtk
 
 %post
 %desktop_database_post
