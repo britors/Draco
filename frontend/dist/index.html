@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
     <title>Draco — PostgreSQL Workbench</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -26,6 +26,7 @@
           <button class="nav-item" data-icon="⌘" data-view="query" title="SQL Editor" type="button">SQL Editor</button>
           <button class="nav-item" data-icon="◷" data-view="history" title="History" type="button">History</button>
           <button class="nav-item" data-icon="▤" data-view="snippets" title="Snippets" type="button">Snippets</button>
+          <button class="nav-item" data-icon="◉" data-view="preferences" title="Preferences" type="button">Preferences</button>
         </nav>
         <div class="sidebar-footer"><span class="status-dot"></span><span id="health-label">Starting backend…</span></div>
       </aside>
@@ -90,15 +91,15 @@
         </section>
         <section id="view-explorer" class="view" hidden>
           <section class="panel explorer-panel">
-            <div class="panel-heading"><div><span class="eyebrow">LAZY INTROSPECTION</span><h2>Explorer</h2></div><div class="form-actions"><input class="explorer-filter" id="explorer-filter" type="search" placeholder="Filter schemas and tables" aria-label="Filter schemas and tables" autocomplete="off" /><span class="badge" id="explorer-status">Select a connection</span><button class="button small" id="open-erd" type="button" disabled>Open ERD</button></div></div>
-            <div class="explorer-layout"><div id="explorer-connections" class="tree-pane"></div><div id="explorer-tree" class="tree-pane tree-content"><div class="empty-state"><strong>Choose a connection</strong><span>Schemas and tables load on demand.</span></div></div></div>
+            <div class="panel-heading"><div><span class="eyebrow">LAZY INTROSPECTION</span><h2>Explorer</h2></div><div class="form-actions"><input class="explorer-filter" id="explorer-filter" type="search" placeholder="Filter schemas and objects" aria-label="Filter schemas and objects" autocomplete="off" /><span class="badge" id="explorer-status">Select a connection</span><button class="button small" id="open-erd" type="button" disabled>Open ERD</button></div></div>
+            <div class="explorer-layout"><div id="explorer-connections" class="tree-pane"></div><div id="explorer-tree" class="tree-pane tree-content"><div class="empty-state"><strong>Choose a connection</strong><span>Schema objects load on demand.</span></div></div></div>
           </section>
         </section>
         <section id="view-dashboard" class="view" hidden>
           <section class="panel"><div class="panel-heading"><div><span class="eyebrow">DATABASE OVERVIEW</span><h2>Dashboard</h2></div><select id="dashboard-connection"><option value="">Select a connected connection</option></select></div><div id="dashboard-content" class="dashboard-content"><div class="empty-state"><strong>Choose a connection</strong><span>KPIs and database health load from PostgreSQL.</span></div></div></section>
         </section>
         <section id="view-admin" class="view" hidden>
-          <section class="panel"><div class="panel-heading"><div><span class="eyebrow">OPERATIONS</span><h2>Administration</h2></div><select id="admin-connection"><option value="">Select a connected connection</option></select></div><div id="admin-content" class="admin-content"><div class="empty-state"><strong>Choose a connection</strong><span>Activity, locks, extensions and query stats.</span></div></div></section>
+          <section class="panel"><div class="panel-heading"><div><span class="eyebrow">OPERATIONS</span><h2>Administration</h2></div><select id="admin-connection"><option value="">Select a connected connection</option></select></div><div id="admin-content" class="admin-content"><div class="empty-state"><strong>Choose a connection</strong><span>Roles, pg_cron, activity, locks, extensions and query stats.</span></div></div></section>
         </section>
         <section id="view-table-detail" class="view" hidden>
           <section class="panel"><div class="panel-heading"><div><span class="eyebrow" id="detail-eyebrow">TABLE DETAIL</span><h2 id="detail-title">Table</h2></div><span class="badge" id="detail-summary">Loading</span></div><div id="detail-content" class="detail-content"></div></section>
@@ -132,12 +133,12 @@
           <section class="panel query-panel">
             <div class="panel-heading"><div><span class="eyebrow">QUERY WORKSPACE</span><h2>SQL Editor</h2></div><span class="badge" id="query-status">Ready</span></div>
             <div class="query-tabs" id="query-tabs" role="tablist" aria-label="Open SQL queries"></div>
-            <div class="query-toolbar"><label>Connection<select id="query-connection"><option value="">Select a connected connection</option></select></label><div class="form-actions"><button class="button" id="format-sql" type="button">Format SQL</button><button class="button" id="save-current-snippet" type="button">Save snippet</button><button class="button" id="run-script" type="button">Run script</button><button class="button primary" id="run-query" type="button">Run query</button><button class="button danger" id="cancel-query" type="button" hidden>Cancel</button></div></div>
+            <div class="query-toolbar"><label>Connection<select id="query-connection"><option value="">Select a connected connection</option></select></label><div class="form-actions"><button class="button" id="format-sql" type="button">Format SQL</button><button class="button" id="save-current-snippet" type="button">Save snippet</button><button class="button" id="explain-query" type="button">Explain (F10)</button><button class="button" id="run-script" type="button">Run script</button><button class="button primary" id="run-query" type="button">Run query</button><button class="button danger" id="cancel-query" type="button" hidden>Cancel</button></div></div>
             <textarea id="sql-editor" spellcheck="false" placeholder="SELECT current_database(), now();"></textarea>
-            <div class="query-hint">Ctrl+Enter runs the selection or the whole editor. Multiple statements use “Run script”.</div>
+            <div class="query-hint">Ctrl+Enter or F8 runs the selection or the whole editor. F10 shows a planning-only EXPLAIN; multiple statements use “Run script”.</div>
           </section>
           <section class="panel result-panel">
-            <div class="panel-heading"><div><span class="eyebrow">RESULTS</span><h2>Data grid</h2></div><div class="form-actions"><button class="button small" id="export-csv" type="button" disabled>CSV</button><button class="button small" id="export-json" type="button" disabled>JSON</button><span class="badge" id="result-summary">No result</span></div></div>
+            <div class="panel-heading"><div><span class="eyebrow">RESULTS</span><h2>Data grid</h2></div><div class="form-actions"><button class="button small" id="copy-result" type="button" disabled>Copy</button><button class="button small" id="export-csv" type="button" disabled>CSV</button><button class="button small" id="export-json" type="button" disabled>JSON</button><span class="badge" id="result-summary">No result</span></div></div>
             <div id="result-error" class="form-status error"></div>
             <div id="result-grid" class="result-grid"><div class="empty-state"><strong>Run a query to see results</strong><span>Rows are rendered virtually in the first result viewport.</span></div></div>
           </section>
@@ -147,6 +148,46 @@
         </section>
         <section id="view-snippets" class="view" hidden>
           <section class="panel"><div class="panel-heading"><div><span class="eyebrow">REUSABLE SQL</span><h2>Snippets</h2></div></div><div id="snippet-list" class="snippet-list"></div></section>
+        </section>
+        <section id="view-preferences" class="view" hidden>
+          <section class="panel preferences-panel">
+            <div class="panel-heading"><div><span class="eyebrow">APPLICATION</span><h2>Preferences</h2></div><span class="badge" id="preferences-status">Saved locally</span></div>
+            <div class="preferences-layout">
+              <div class="preferences-tabs" role="tablist" aria-label="Preference sections">
+                <button class="preference-tab active" data-preference-section="appearance" type="button" role="tab" aria-selected="true">Appearance</button>
+                <button class="preference-tab" data-preference-section="updates" type="button" role="tab" aria-selected="false">Updates</button>
+                <button class="preference-tab" data-preference-section="about" type="button" role="tab" aria-selected="false">About</button>
+              </div>
+              <div class="preferences-content">
+                <section class="preference-section" data-preference-panel="appearance">
+                  <span class="eyebrow">THEME</span><h3>Choose your workspace theme</h3><p>Dark is the default and both themes keep the same contrast and database status semantics.</p>
+                  <div class="theme-options">
+                    <button class="theme-option" data-theme-choice="dark" type="button" aria-pressed="true"><span class="theme-preview dark-preview"></span><strong>Dark</strong><small>Default</small></button>
+                    <button class="theme-option" data-theme-choice="light" type="button" aria-pressed="false"><span class="theme-preview light-preview"></span><strong>Light</strong><small>High clarity</small></button>
+                  </div>
+                  <span class="eyebrow preference-subheading">ACCENT COLOR</span><h3>Color</h3>
+                  <div class="accent-options" role="group" aria-label="Accent color">
+                    <button class="accent-option coral" data-accent-choice="coral" type="button" aria-label="Coral" aria-pressed="true"></button>
+                    <button class="accent-option blue" data-accent-choice="blue" type="button" aria-label="Blue" aria-pressed="false"></button>
+                    <button class="accent-option green" data-accent-choice="green" type="button" aria-label="Green" aria-pressed="false"></button>
+                    <button class="accent-option purple" data-accent-choice="purple" type="button" aria-label="Purple" aria-pressed="false"></button>
+                    <button class="accent-option amber" data-accent-choice="amber" type="button" aria-label="Amber" aria-pressed="false"></button>
+                  </div>
+                </section>
+                <section class="preference-section" data-preference-panel="updates" hidden>
+                  <span class="eyebrow">RELEASES</span><h3>Application updates</h3><p>Draco checks the latest published release in the official GitHub repository. Updates are never installed automatically.</p>
+                  <label class="check-row preference-check"><input id="check-updates-startup" type="checkbox" checked /> Check for updates when Draco starts</label>
+                  <div class="update-card"><div><strong id="update-title">Draco is ready to check</strong><small id="update-detail">Current version: 2.0.3</small></div><div class="form-actions"><button class="button small" id="copy-release-link" type="button" hidden>Copy release link</button><button class="button primary" id="check-updates" type="button">Check now</button></div></div>
+                </section>
+                <section class="preference-section" data-preference-panel="about" hidden>
+                  <div class="about-grid">
+                    <div class="about-copy"><span class="brand-mark about-mark">D</span><span class="eyebrow">POSTGRESQL WORKBENCH</span><h3>Draco <span id="about-version">2.0.3</span></h3><p>A native, open-source workspace for PostgreSQL administration and query development.</p><dl><div><dt>License</dt><dd>GPL-3.0-or-later</dd></div><div><dt>Repository</dt><dd>github.com/britors/Draco</dd></div></dl></div>
+                    <div class="donation-card"><span class="eyebrow">SUPPORT DRACO</span><h3>Donate with Pix</h3><p>Scan the QR code or copy the key. Choose any amount and confirm the recipient in your bank app.</p><img class="pix-qr" src="./pix-donation.svg" alt="QR Code for a Pix donation" width="280" height="280" /><div class="form-actions donation-actions"><button class="button small" id="copy-pix-key" type="button">Copy key</button><button class="button primary" id="copy-pix-code" type="button">Copy Pix code</button></div><small id="pix-status" role="status"></small></div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </section>
         </section>
       </main>
     </div>
@@ -168,6 +209,6 @@
         <div class="app-dialog-actions"><button class="button" id="app-dialog-cancel" type="button">Cancel</button><button class="button primary" id="app-dialog-confirm" type="button">Confirm</button></div>
       </div>
     </section>
-    <script src="./app.js"></script>
+    <script type="module" src="./app.js"></script>
   </body>
 </html>

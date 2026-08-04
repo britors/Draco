@@ -14,6 +14,12 @@ isoladas a uma tela.
 | Geometria | `--radius-sm`, `--radius-md`, `--radius-lg`, `--space-1`…`--space-4` |
 | Foco | `--focus-ring` — nunca remover sem alternativa equivalente |
 
+`--color-action`/`--color-action-soft`/`--focus-ring` são reescritos via `style.setProperty` em
+`applyAppearance()` (`app.js`) conforme a cor de destaque escolhida em Preferências (coral/azul/
+verde/roxo/âmbar); `html[data-theme="light"]` sobrescreve só os tokens de canvas/superfície/texto/
+borda no CSS. Um componente que usa exclusivamente os tokens acima já funciona nos dois temas e em
+qualquer destaque sem CSS adicional.
+
 ## Estados obrigatórios
 
 Cada view que espera dados apresenta uma destas superfícies: loading, vazio, sucesso ou erro.

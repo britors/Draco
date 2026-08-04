@@ -8,62 +8,52 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  rust-and-frontend:
-    name: Rust, Tauri smoke and frontend contracts
+  frontend:
+    name: Frontend contracts
     runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Linux build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes \
-            libayatana-appindicator3-dev \
-            libxdo-dev \
-            libssl-dev \
-            libwebkit2gtk-4.1-dev \
-            librsvg2-dev
-
-      - name: Install stable Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: Rust formatting for migrated crates
-        run: cargo fmt --check -p draco-app -p draco-tauri
-
-      - name: Rust lint
-        run: cargo clippy --workspace --exclude draco-gtk --all-targets -- -D warnings
-
-      - name: Rust tests and Tauri smoke tests
-        run: cargo test --workspace --exclude draco-gtk
-
-      - name: Frontend syntax and contract tests
+    timeout-minutes: 10
+    defaults:
+      run:
         working-directory: frontend
-        run: |
-          npm ci --ignore-scripts
-          npm run check
-          npm test
-
-  gtk-transition:
-    name: Legacy GTK transition build
-    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm test
 
-      - name: Install GTK transition dependencies
+  rust:
+    name: Rust, Tauri and GTK fallback
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Linux development libraries
+        run: >-
+          sudo apt-get update && sudo apt-get install --yes --no-install-recommends
+          libwebkit2gtk-4.1-dev libgtk-3-dev libgtk-4-dev libadwaita-1-dev
+          libgtksourceview-5-dev libayatana-appindicator3-dev libxdo-dev
+          libssl-dev librsvg2-dev gettext
+      - name: Select current stable Rust
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes \
-            libadwaita-1-dev \
-            libgtk-4-dev \
-            libgtksourceview-5-dev
-
-      - name: Install stable Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Keep GTK frontend compilable during stabilization
-        run: cargo check -p draco-gtk
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup override set stable
+      - name: Check formatting of migrated crates
+        run: cargo fmt --check -p draco-app -p draco-tauri
+      - name: Lint supported workspace
+        run: cargo clippy --locked --workspace --exclude draco-gtk --all-targets -- -D warnings
+      - name: Test supported workspace
+        run: cargo test --locked --workspace --exclude draco-gtk
+      - name: Build official Tauri binary
+        run: cargo build --locked -p draco-tauri
+      - name: Keep GTK rollback frontend compilable
+        run: cargo check --locked -p draco-gtk

@@ -10,5 +10,6 @@ pub mod parser;
 pub mod postgres;
 pub mod secrets;
 pub mod store;
+pub mod updates;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -87,25 +87,45 @@ O shell inicial em `src-tauri` expõe:
 | Comando | Finalidade |
 |---|---|
 | `health` | smoke check do backend Rust |
+| `preferences` / `save_preferences` | ler e persistir tema, cor de destaque e checagem automática de atualização |
+| `check_for_updates` | consultar a última release pública no GitHub e comparar com a versão instalada |
 | `list_connections` | listar metadados e estados |
 | `save_connection` / `delete_connection` | persistir metadados sem senha |
 | `connect_stored` / `disconnect` | ciclo de vida usando o Secret Service no backend |
 | `test_connection` | testar draft e credenciais antes de persistir |
 | `execute_query` / `execute_script` | executar SQL pela conexão ativa |
+| `execute_explain` | gerar plano JSON com `EXPLAIN` puro, sem `ANALYZE` |
 | `cancel_query` | cancelar a operação ativa via `pg_cancel_backend` |
 | `list_history` / `delete_history_entry` / `clear_history` | histórico limitado a 50 itens |
-| `list_snippets` / `save_snippet` / `delete_snippet` | snippets nomeados e vinculados à conexão |
+| `list_snippets` / `save_snippet` / `rename_snippet` / `delete_snippet` | snippets nomeados e vinculados à conexão |
 | `list_schemas` / `list_tables` | introspecção lazy do Explorer |
+| `list_schema_objects` | funções, procedures, sequences e triggers por schema |
 | `dashboard` | KPIs, saúde do banco e maiores tabelas |
-| `table_detail` | colunas, constraints, índices e FKs |
+| `table_detail` | colunas, constraints, índices, FKs, DDL e estatísticas de coluna |
 | `erd` | tabelas e relações de um schema |
-| `admin` | activity, locks, extensões e query stats |
+| `admin` | activity e locks |
+| `cancel_activity` | cancelar somente a query de um PID explícito, preservando a sessão |
+| `list_cron_jobs` / `set_cron_job_active` / `delete_cron_job` | detectar pg_cron, listar, pausar/retomar e excluir jobs |
+| `list_extensions` / `install_extension` / `drop_extension` | listar e gerenciar extensões por nome validado; `plpgsql` é protegida |
+| `query_stats` / `reset_query_stats` | métricas tipadas de pg_stat_statements e reset explícito dos contadores |
+| `run_table_maintenance` | executar somente VACUUM/ANALYZE allowlisted em tabela identificada |
+| `list_roles` | listar roles e atributos administrativos |
+| `create_role` / `delete_role` | criar role sem senha e excluir após confirmação nominal na UI |
 | `run_backup` / `run_restore` | backup/restauração via `pg_dump`, `pg_restore` ou `psql` |
 | `cancel_operation` | cancelar uma operação de backup/restauração em andamento |
 | `assistant_settings` / `save_assistant_settings` | configurações não secretas do Assistente |
 | `save_assistant_key` / `clear_assistant_key` | gerenciar chaves no Secret Service |
 | `assistant_history` / `clear_assistant_history` | histórico por conexão |
 | `assistant_send` | conversar e executar somente ferramentas de inspeção read-only |
+
+O painel Query Stats pode iniciar `assistant_send` com a SQL e suas métricas de
+`pg_stat_statements`; o fluxo continua limitado às ferramentas read-only do Assistente e nunca
+ganha uma operação de escrita por causa desse atalho.
+
+`check_for_updates` é o único comando que sai para a internet fora do Assistente de IA: ele faz uma
+requisição `GET` somente leitura para `api.github.com/repos/britors/Draco/releases/latest` a partir
+do backend (nunca do frontend) e nunca baixa nem instala nada — só devolve a tag mais recente e o
+link da release para o usuário decidir.
 
 Erros de driver, Secret Service e operações externas são convertidos para um envelope sem detalhes
 sensíveis antes de serem enviados pelo IPC. Logs de backup redigem os caminhos selecionados pelo

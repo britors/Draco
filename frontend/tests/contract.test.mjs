@@ -5,14 +5,16 @@ import { test } from 'node:test';
 const index = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8');
 const app = await readFile(new URL('../dist/app.js', import.meta.url), 'utf8');
 const style = await readFile(new URL('../dist/styles.css', import.meta.url), 'utf8');
+const pixQr = await readFile(new URL('../dist/pix-donation.svg', import.meta.url), 'utf8');
 
 test('shell contains every registered application view', () => {
-  for (const view of ['connections', 'explorer', 'dashboard', 'admin', 'backup', 'assistant', 'query', 'history', 'snippets']) {
+  for (const view of ['connections', 'explorer', 'dashboard', 'admin', 'backup', 'assistant', 'query', 'history', 'snippets', 'preferences']) {
     assert.match(index, new RegExp(`id="view-${view}"`));
   }
   assert.match(index, /id="command-palette"[^>]+role="dialog"/);
+  assert.match(index, /<script type="module" src="\.\/app\.js"><\/script>/);
   assert.match(index, /id="query-tabs"[^>]+role="tablist"/);
-  assert.match(index, /id="format-sql"/);
+  for (const control of ['format-sql', 'explain-query', 'copy-result']) assert.match(index, new RegExp(`id="${control}"`));
   for (const control of ['window-minimize', 'window-maximize', 'window-close']) assert.match(index, new RegExp(`id="${control}"`));
   assert.match(index, /data-tauri-drag-region/);
   assert.match(index, /id="sidebar-toggle"/);
@@ -22,15 +24,20 @@ test('shell contains every registered application view', () => {
   assert.match(index, /id="app-dialog"[^>]+role="dialog"/);
   for (const control of ['app-dialog-confirm', 'app-dialog-cancel', 'app-dialog-input']) assert.match(index, new RegExp(`id="${control}"`));
   assert.match(style, /\.app-dialog-input-wrap\[hidden\]\s*\{\s*display:\s*none;/);
+  for (const section of ['appearance', 'updates', 'about']) assert.match(index, new RegExp(`data-preference-section="${section}"`));
+  assert.match(index, /pix-donation\.svg/);
+  assert.doesNotMatch(index, /britors@live\.com/);
+  assert.match(pixQr, /viewBox="0 0 41 41"/);
 });
 
 test('frontend invokes only the typed local application bridge', () => {
-  for (const command of ['health', 'list_connections', 'global_search', 'execute_query', 'dashboard', 'run_backup', 'assistant_send']) {
+  for (const command of ['health', 'preferences', 'save_preferences', 'check_for_updates', 'list_connections', 'list_schema_objects', 'global_search', 'execute_query', 'execute_explain', 'rename_snippet', 'dashboard', 'cancel_activity', 'list_cron_jobs', 'set_cron_job_active', 'delete_cron_job', 'list_extensions', 'install_extension', 'drop_extension', 'query_stats', 'reset_query_stats', 'run_table_maintenance', 'list_roles', 'create_role', 'delete_role', 'run_backup', 'assistant_send']) {
     assert.match(app, new RegExp(`['"]${command}['"]`));
   }
   assert.doesNotMatch(app, /localStorage|sessionStorage|fetch\(|XMLHttpRequest|dangerouslySetInnerHTML/);
   assert.doesNotMatch(app, /window\.(alert|confirm|prompt)\s*\(/);
   assert.doesNotMatch(index, /<script[^>]+src=["']https?:|<link[^>]+href=["']https?:/);
+  assert.match(app, /import \{ resultRowToText, resultToTsv, serializeResult \} from '\.\/result-export\.js'/);
 });
 
 test('dark visual system is local and has explicit loading/error/empty surfaces', () => {
@@ -42,6 +49,11 @@ test('dark visual system is local and has explicit loading/error/empty surfaces'
   assert.match(style, /\.connection-card \{ grid-template-columns: 1fr; \}/);
   assert.match(style, /\.query-toolbar label \{ min-width: 0; \}/);
   assert.match(style, /\.button:disabled/);
+  assert.match(style, /html\[data-theme="light"\]/);
+  assert.match(app, /function applyAppearance/);
+  assert.match(app, /function checkForUpdates/);
+  assert.match(app, /check_updates_on_startup/);
+  assert.match(app, /PIX_COPY_AND_PASTE/);
   assert.match(index, /empty-state/);
   assert.match(index, /role="status"/);
   assert.match(app, /Loading dashboard/);
@@ -53,6 +65,10 @@ test('dark visual system is local and has explicit loading/error/empty surfaces'
   assert.match(app, /function filterExplorerTree/);
   assert.match(app, /function loadExplorerTablesForFilter/);
   assert.match(app, /invoke\('list_tables', \{ id, schema: schemaName \}\)/);
+  assert.match(app, /invoke\('list_schema_objects', \{ id, schema: schemaName \}\)/);
+  assert.match(app, /Functions & procedures/);
+  assert.match(app, /Sequences/);
+  assert.match(app, /Triggers/);
   assert.doesNotMatch(app, /:scope/);
   assert.match(app, /state\.explorerFilter/);
   assert.match(app, /formatEstimatedRows/);
@@ -63,12 +79,24 @@ test('dark visual system is local and has explicit loading/error/empty surfaces'
   assert.match(app, /connectButton\.className = `button small \$\{connection\.state === 'connected' \? 'disconnect-action' : 'connect-action'\}`/);
   assert.match(app, /connectButton\.addEventListener\('click', \(\) => connection\.state === 'connected' \? disconnect\(connection\.id\) : connect\(connection\.id\)\)/);
   assert.match(app, /selectedQueryText/);
+  assert.match(app, /className = 'button small row-detail-action'/);
+  assert.match(app, /showAlert\(resultRowToText\(row, result\.columns\)/);
+  assert.match(app, /navigator\.clipboard\.writeText\(resultToTsv\(state\.result\)\)/);
+  assert.match(app, /codePanel\('DDL', payload\.ddl\)/);
+  assert.match(app, /payload\.column_stats/);
+  assert.match(app, /function tableMaintenancePanel/);
+  assert.match(app, /ACCESS EXCLUSIVE lock/);
+  assert.match(app, /\['vacuum_full', 'Vacuum Full'\]/);
   assert.match(app, /formatSql/);
   assert.match(app, /event\.key === 'F8'/);
   assert.match(app, /event\.key === 'F10'/);
+  assert.match(app, /event\.key === 'F10'[^\n]+runQuery\('explain'\)/);
+  assert.doesNotMatch(app, /event\.key === 'F10'[^\n]+runQuery\('script'\)/);
   assert.match(app, /event\.key\.toLowerCase\(\) === 't'/);
   assert.match(app, /event\.key\.toLowerCase\(\) === 's'/);
   assert.match(app, /function saveCurrentSnippet/);
+  assert.match(app, /Rename snippet/);
+  assert.match(app, /Delete the snippet/);
   assert.match(app, /renderErdCanvas/);
   assert.match(app, /erd-node/);
   assert.match(app, /erd-relations-panel/);
@@ -84,6 +112,34 @@ test('dark visual system is local and has explicit loading/error/empty surfaces'
   assert.match(app, /currentQueryOperationId/);
   assert.match(app, /operationId: state\.currentQueryOperationId/);
   assert.match(app, /Confirm restore/);
+  assert.match(app, /'Confirm restore', true, 'Restore'/);
+  assert.match(app, /function renderRolesPanel/);
+  assert.match(app, /function renderActivityPanel/);
+  assert.match(app, /function renderCronJobsPanel/);
+  assert.match(app, /function renderExtensionsPanel/);
+  assert.match(app, /Promise\.allSettled/);
+  assert.match(app, /Scheduled jobs unavailable/);
+  assert.match(app, /Extensions unavailable/);
+  assert.match(app, /built-in plpgsql extension is protected/);
+  assert.match(app, /Extension installation executes SQL/);
+  assert.match(app, /function renderQueryStatsPanel/);
+  assert.match(app, /function askAssistantAboutQueryStat/);
+  assert.match(app, /Ask assistant/);
+  assert.match(app, /pg_stat_statements recorded/);
+  assert.match(app, /Reset all pg_stat_statements counters/);
+  assert.match(app, /openSqlInNewTab\(queryStat\.query, id\)/);
+  assert.match(app, /\['calls', 'Calls'\]/);
+  assert.match(app, /\['mean', 'Mean time'\]/);
+  assert.match(app, /pg_cron is not installed/);
+  assert.match(app, /Permanently delete the scheduled job/);
+  assert.match(app, /Only active queries can be cancelled/);
+  assert.match(app, /'Cancel active query', true, 'Cancel query'/);
+  assert.match(app, /function showDangerPrompt/);
+  assert.match(app, /function showPrompt[\s\S]{0,300}String\(accepted\)\.trim\(\)/);
+  assert.match(app, /confirmation !== role\.name/);
+  assert.match(app, /role\.name\.toLowerCase\(\)\.startsWith\('pg_'\)/);
+  assert.match(style, /\.roles-panel \{ grid-column: 1 \/ -1;/);
+  assert.match(style, /\.ddl-code/);
   assert.match(app, /run-backup', 'run-restore'/);
   for (const helper of ['showAlert', 'showConfirm', 'showPrompt']) assert.match(app, new RegExp(`function ${helper}`));
 });

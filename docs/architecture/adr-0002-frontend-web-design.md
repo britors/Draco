@@ -38,8 +38,12 @@ shell
         └── painéis de conteúdo, resultado ou estado
 ```
 
-O tema escuro é o padrão. O fundo usa `#08090d`, superfícies em camadas `#12141c`/`#1c202b`,
-ação coral `#d96558` e destaque `#ffb09a`. Não há tema claro no primeiro corte.
+O tema escuro é o padrão e continua sendo o que abre no primeiro uso. O fundo usa `#08090d`,
+superfícies em camadas `#12141c`/`#1c202b`, ação coral `#d96558` e destaque `#ffb09a`. Um tema
+claro (`html[data-theme="light"]`) e cinco cores de destaque selecionáveis (coral, azul, verde,
+roxo, âmbar) foram adicionados na tela de Preferências e persistidos em `AppSettings`; a paleta
+clara reusa os mesmos tokens semânticos (`--color-canvas`, `--color-surface`, …), então nenhum
+componente precisou de uma segunda implementação.
 
 ## Componentes do contrato visual
 
@@ -68,6 +72,10 @@ Todos os componentes devem:
 
 ## Fora de escopo
 
-Tema claro, anexos no Assistente, sincronização cross-window e biblioteca de componentes publicada
-ficam para depois da paridade funcional. A referência Kraken Studio é somente estética; nenhum
-fluxo, identidade ou código externo é copiado.
+Anexos no Assistente, sincronização cross-window e biblioteca de componentes publicada ficam para
+depois da paridade funcional. A referência Kraken Studio é somente estética; nenhum fluxo,
+identidade ou código externo é copiado.
+
+Tema claro saiu da lista de "fora de escopo" em 2026-08-04: ver tela de Preferências
+(`view-preferences` em `frontend/dist/index.html`) e a superfície correspondente na matriz de
+paridade (`docs/migration/rust-gtk-parity.md`, milestone M8).

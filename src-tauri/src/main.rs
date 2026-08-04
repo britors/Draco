@@ -1,8 +1,10 @@
 use draco_app::{
     AdminView, Application, ApplicationError, AssistantReplyView, BackupOptionsInput,
-    ConnectionInput, ConnectionView, DashboardView, ErdView, Health, HistoryView, QueryResult,
-    RestoreOptionsInput, SchemaView, SearchResultView, SnippetInput, SnippetView,
-    TableDetailView, TableView, ToolResultView,
+    ConnectionInput, ConnectionView, CreateRoleInput, CronJobsView, DashboardView, ErdView,
+    ExtensionsView, Health, HistoryView, PreferencesView, QueryResult, QueryStatsView,
+    RestoreOptionsInput, RoleView, SchemaObjectView, SchemaView, SearchResultView, SnippetInput,
+    SnippetView, TableDetailView, TableMaintenanceOperation, TableView, ToolResultView,
+    UpdateStatusView,
 };
 use draco_core::assistant::{AiMessage, Provider, Settings};
 use serde::{Deserialize, Serialize};
@@ -58,6 +60,26 @@ impl From<ApplicationError> for CommandError {
 #[tauri::command]
 async fn health(state: State<'_, Application>) -> Result<Health, CommandError> {
     Ok(state.health())
+}
+
+#[tauri::command]
+fn preferences(state: State<'_, Application>) -> Result<PreferencesView, CommandError> {
+    Ok(state.preferences())
+}
+
+#[tauri::command]
+fn save_preferences(
+    state: State<'_, Application>,
+    preferences: PreferencesView,
+) -> Result<PreferencesView, CommandError> {
+    state.save_preferences(preferences).map_err(Into::into)
+}
+
+#[tauri::command]
+async fn check_for_updates(
+    state: State<'_, Application>,
+) -> Result<UpdateStatusView, CommandError> {
+    state.check_for_updates().await.map_err(Into::into)
 }
 
 #[tauri::command]
@@ -141,9 +163,11 @@ async fn execute_query(
     operation_id: Option<String>,
 ) -> Result<QueryResult, CommandError> {
     match operation_id.as_deref() {
-        Some(operation_id) => state
-            .execute_query_with_operation(&id, operation_id, &sql)
-            .await,
+        Some(operation_id) => {
+            state
+                .execute_query_with_operation(&id, operation_id, &sql)
+                .await
+        }
         None => state.execute_query(&id, &sql).await,
     }
     .map_err(Into::into)
@@ -157,10 +181,30 @@ async fn execute_script(
     operation_id: Option<String>,
 ) -> Result<QueryResult, CommandError> {
     match operation_id.as_deref() {
-        Some(operation_id) => state
-            .execute_script_with_operation(&id, operation_id, &sql)
-            .await,
+        Some(operation_id) => {
+            state
+                .execute_script_with_operation(&id, operation_id, &sql)
+                .await
+        }
         None => state.execute_script(&id, &sql).await,
+    }
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn execute_explain(
+    state: State<'_, Application>,
+    id: String,
+    sql: String,
+    operation_id: Option<String>,
+) -> Result<QueryResult, CommandError> {
+    match operation_id.as_deref() {
+        Some(operation_id) => {
+            state
+                .execute_explain_with_operation(&id, operation_id, &sql)
+                .await
+        }
+        None => state.execute_explain(&id, &sql).await,
     }
     .map_err(Into::into)
 }
@@ -212,6 +256,15 @@ fn delete_snippet(state: State<'_, Application>, id: String) -> Result<(), Comma
 }
 
 #[tauri::command]
+fn rename_snippet(
+    state: State<'_, Application>,
+    id: String,
+    name: String,
+) -> Result<(), CommandError> {
+    state.rename_snippet(&id, &name).map_err(Into::into)
+}
+
+#[tauri::command]
 async fn list_schemas(
     state: State<'_, Application>,
     id: String,
@@ -226,6 +279,18 @@ async fn list_tables(
     schema: String,
 ) -> Result<Vec<TableView>, CommandError> {
     state.list_tables(&id, &schema).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn list_schema_objects(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+) -> Result<Vec<SchemaObjectView>, CommandError> {
+    state
+        .list_schema_objects(&id, &schema)
+        .await
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -273,6 +338,71 @@ async fn admin(state: State<'_, Application>, id: String) -> Result<AdminView, C
 }
 
 #[tauri::command]
+async fn cancel_activity(
+    state: State<'_, Application>,
+    id: String,
+    pid: i32,
+) -> Result<(), CommandError> {
+    state.cancel_activity(&id, pid).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn list_cron_jobs(
+    state: State<'_, Application>,
+    id: String,
+) -> Result<CronJobsView, CommandError> {
+    state.list_cron_jobs(&id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn set_cron_job_active(
+    state: State<'_, Application>,
+    id: String,
+    job_id: i64,
+    active: bool,
+) -> Result<(), CommandError> {
+    state
+        .set_cron_job_active(&id, job_id, active)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn delete_cron_job(
+    state: State<'_, Application>,
+    id: String,
+    job_id: i64,
+) -> Result<(), CommandError> {
+    state.delete_cron_job(&id, job_id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn list_roles(
+    state: State<'_, Application>,
+    id: String,
+) -> Result<Vec<RoleView>, CommandError> {
+    state.list_roles(&id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn create_role(
+    state: State<'_, Application>,
+    id: String,
+    input: CreateRoleInput,
+) -> Result<(), CommandError> {
+    state.create_role(&id, input).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn delete_role(
+    state: State<'_, Application>,
+    id: String,
+    name: String,
+) -> Result<(), CommandError> {
+    state.delete_role(&id, &name).await.map_err(Into::into)
+}
+
+#[tauri::command]
 async fn run_backup(
     state: State<'_, Application>,
     id: String,
@@ -281,6 +411,62 @@ async fn run_backup(
 ) -> Result<ToolResultView, CommandError> {
     state
         .run_backup(&id, &operation_id, options)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn list_extensions(
+    state: State<'_, Application>,
+    id: String,
+) -> Result<ExtensionsView, CommandError> {
+    state.list_extensions(&id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn install_extension(
+    state: State<'_, Application>,
+    id: String,
+    name: String,
+) -> Result<(), CommandError> {
+    state
+        .install_extension(&id, &name)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn drop_extension(
+    state: State<'_, Application>,
+    id: String,
+    name: String,
+) -> Result<(), CommandError> {
+    state.drop_extension(&id, &name).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn query_stats(
+    state: State<'_, Application>,
+    id: String,
+) -> Result<QueryStatsView, CommandError> {
+    state.query_stats(&id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn reset_query_stats(state: State<'_, Application>, id: String) -> Result<(), CommandError> {
+    state.reset_query_stats(&id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn run_table_maintenance(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    operation: TableMaintenanceOperation,
+) -> Result<(), CommandError> {
+    state
+        .run_table_maintenance(&id, &schema, &table, operation)
         .await
         .map_err(Into::into)
 }
@@ -375,6 +561,9 @@ fn builder() -> tauri::Builder<tauri::Wry> {
         .manage(Application::new())
         .invoke_handler(tauri::generate_handler![
             health,
+            preferences,
+            save_preferences,
+            check_for_updates,
             list_connections,
             save_connection,
             test_connection,
@@ -383,6 +572,7 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             disconnect,
             execute_query,
             execute_script,
+            execute_explain,
             cancel_query,
             list_history,
             delete_history_entry,
@@ -390,13 +580,28 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             list_snippets,
             save_snippet,
             delete_snippet,
+            rename_snippet,
             list_schemas,
             list_tables,
+            list_schema_objects,
             global_search,
             dashboard,
             table_detail,
             erd,
             admin,
+            cancel_activity,
+            list_cron_jobs,
+            set_cron_job_active,
+            delete_cron_job,
+            list_extensions,
+            install_extension,
+            drop_extension,
+            query_stats,
+            reset_query_stats,
+            run_table_maintenance,
+            list_roles,
+            create_role,
+            delete_role,
             run_backup,
             run_restore,
             cancel_operation,

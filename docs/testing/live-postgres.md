@@ -47,31 +47,39 @@ O cenário executado contra PostgreSQL 18.4 cobre:
   (`pg_stat_statements`, quando instalada);
 - jobs `pg_cron` quando a extensão estiver instalada; no banco de validação ela estava ausente;
 - `EXPLAIN` sem `ANALYZE`, execução de query, erro seguido de recuperação e busca global;
+- cancelamento de uma query longa pelo PID de `pg_stat_activity`, seguido de query válida na
+  mesma conexão de aplicação;
 - ERD e relações de FK.
-- contrato de aplicação consumido pelo Tauri (conexão, schemas, dashboard,
-  query e administração).
+- contrato de aplicação consumido pelo Tauri (conexão, schemas, funções/sequences/triggers,
+  detalhe de tabela com DDL/estatísticas, dashboard, query, EXPLAIN, administração e listagem de
+  roles); quando a conexão fonte é superuser, também cria, relê e exclui uma role temporária sem
+  login.
 
 DDL de teste é criado em um schema com prefixo `draco_live_`. O schema é removido com
 `CASCADE` ao final, inclusive quando uma asserção falha; sobras de uma execução interrompida
 são removidas no início da próxima. O teste de aplicação também remove sua conexão temporária
-em caso de falha. Nenhum objeto da aplicação é usado para mutação.
+em caso de falha. A role temporária usa o prefixo `draco_live_role_`, nunca recebe login ou senha
+e é excluída antes das asserções finais. Nenhum objeto da aplicação é usado para mutação.
 
-Resultado em 28/07/2026:
+Resultado conjunto mais recente em 04/08/2026, contra PostgreSQL 18.4:
 
 ```text
 test connects_and_introspects_the_real_database ... ok
 test result: ok. 1 passed; 0 failed
+test application_boundary_reaches_postgres_for_tauri_views ... ok
+test result: ok. 1 passed; 0 failed
 ```
 
-Esse resultado é do cenário `draco-core`. O cenário `draco-app` e a execução conjunta pelo
-script acima ficam reproduzíveis, mas não foram marcados como passados nesta sessão: em
-03/08/2026 `pg_isready -h localhost -p 5432` retornou `no response`.
+O cenário da aplicação inclui o comando de `EXPLAIN` puro e o ciclo administrativo de role
+consumidos pelo frontend Tauri. Essa execução valida o backend e a fronteira `draco-app`; ainda
+falta automatizar a interação com a webview Tauri instalada, além dos cenários que exigem
+endpoints SSH e chaves reais de IA.
 
 ## Checklist transversal
 
 | Cenário | Evidência |
 |---|---|
-| Nominal contra Postgres real | core passou em 28/07/2026; app aguarda servidor disponível nesta sessão |
+| Nominal contra Postgres real | core e `draco-app` passaram em 04/08/2026 contra PostgreSQL 18.4 |
 | Conexão ausente/perdida | `ConnectionManager`, editor e explorer exibem erro; recuperação após erro SQL coberta pelo teste |
 | SSH/jump host | suporte permanece coberto pelo `PostgresDriver`; não executado porque o ambiente E2E não possui endpoint SSH configurado |
 | Loading, vazio e erro | estados implementados nas views; vazio de `pg_cron`, activity e locks observado no teste |

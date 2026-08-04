@@ -39,6 +39,14 @@ cargo test --workspace --exclude draco-gtk
 (cd frontend && npm run check && npm test)
 ```
 
+O workflow `.github/workflows/ci.yml` executa os mesmos contratos em Ubuntu 24.04 com Rust estável,
+além de compilar o binário Tauri oficial e o frontend GTK de rollback. Todos os passos de `cargo`
+no CI usam `--locked`: qualquer PR que mude `version` em `Cargo.toml` ou adicione/atualize uma
+dependência precisa rodar `cargo check --workspace` localmente antes de commitar, para que
+`Cargo.lock` já saia sincronizado — senão o job falha com "cannot update the lock file". Testes que
+dependem de PostgreSQL, Secret Service ou sessão gráfica continuam no checklist E2E documentado em
+`docs/testing/live-postgres.md`.
+
 ## Estrutura do repositório
 
 ```

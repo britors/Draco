@@ -48,6 +48,6 @@ pub async fn ext_install(driver: &PostgresDriver, name: &str) -> Result<()> {
 }
 
 pub async fn ext_drop(driver: &PostgresDriver, name: &str) -> Result<()> {
-    driver.query(&format!("DROP EXTENSION IF EXISTS {}", quote_ident(name)), &[]).await?;
+    driver.query(&format!("DROP EXTENSION {}", quote_ident(name)), &[]).await?;
     Ok(())
 }

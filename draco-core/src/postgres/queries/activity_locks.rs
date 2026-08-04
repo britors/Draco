@@ -1,5 +1,5 @@
 use serde::Serialize;
-use crate::error::Result;
+use crate::error::{CoreError, Result};
 use crate::postgres::pool::PostgresDriver;
 use super::helpers::*;
 
@@ -42,8 +42,20 @@ pub async fn get_activity(driver: &PostgresDriver) -> Result<Vec<ActivityRow>> {
 }
 
 pub async fn cancel_activity(driver: &PostgresDriver, pid: i32) -> Result<()> {
-    driver.query("SELECT pg_cancel_backend($1)", &[&pid]).await?;
-    Ok(())
+    let rows = driver
+        .query("SELECT pg_cancel_backend($1) AS cancelled", &[&pid])
+        .await?;
+    if rows
+        .first()
+        .and_then(|row| row.try_get::<_, bool>("cancelled").ok())
+        .unwrap_or(false)
+    {
+        Ok(())
+    } else {
+        Err(CoreError::Other(
+            "PostgreSQL did not cancel the requested activity".to_string(),
+        ))
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

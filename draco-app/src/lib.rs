@@ -19,6 +19,7 @@ use draco_core::postgres::backup::{
 use draco_core::postgres::{backup, queries, test_connection_with_ssh, PostgresDriver};
 use draco_core::secrets;
 use draco_core::store;
+pub use draco_core::store::{AccentColor, AppTheme};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, watch, Mutex};
 
@@ -130,6 +131,22 @@ pub struct TableView {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+pub enum SchemaObjectKind {
+    Function,
+    Procedure,
+    Sequence,
+    Trigger,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SchemaObjectView {
+    pub name: String,
+    pub kind: SchemaObjectKind,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SearchObjectKind {
     Table,
     View,
@@ -157,6 +174,8 @@ pub struct TableDetailView {
     pub schema: String,
     pub table: String,
     pub detail: serde_json::Value,
+    pub ddl: String,
+    pub column_stats: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,8 +188,96 @@ pub struct ErdView {
 pub struct AdminView {
     pub activity: serde_json::Value,
     pub locks: serde_json::Value,
-    pub extensions: serde_json::Value,
-    pub query_stats: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoleView {
+    pub name: String,
+    pub superuser: bool,
+    pub create_database: bool,
+    pub create_role: bool,
+    pub login: bool,
+    pub connection_limit: i32,
+    pub valid_until: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateRoleInput {
+    pub name: String,
+    pub login: bool,
+    pub create_database: bool,
+    pub create_role: bool,
+    pub superuser: bool,
+    pub connection_limit: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CronJobView {
+    pub id: i64,
+    pub name: Option<String>,
+    pub schedule: String,
+    pub command: String,
+    pub database: Option<String>,
+    pub username: Option<String>,
+    pub active: bool,
+    pub last_status: Option<String>,
+    pub last_run: Option<String>,
+    pub last_message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CronJobsView {
+    pub installed: bool,
+    pub jobs: Vec<CronJobView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExtensionView {
+    pub name: String,
+    pub default_version: Option<String>,
+    pub installed_version: Option<String>,
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExtensionsView {
+    pub installed: Vec<ExtensionView>,
+    pub available: Vec<ExtensionView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct QueryStatView {
+    pub query: String,
+    pub calls: i64,
+    pub total_exec_ms: f64,
+    pub mean_exec_ms: f64,
+    pub rows: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct QueryStatsView {
+    pub installed: bool,
+    pub queries: Vec<QueryStatView>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TableMaintenanceOperation {
+    Vacuum,
+    Analyze,
+    VacuumAnalyze,
+    VacuumFull,
+}
+
+impl TableMaintenanceOperation {
+    fn sql(self) -> &'static str {
+        match self {
+            Self::Vacuum => "VACUUM",
+            Self::Analyze => "ANALYZE",
+            Self::VacuumAnalyze => "VACUUM ANALYZE",
+            Self::VacuumFull => "VACUUM FULL",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -259,6 +366,22 @@ pub struct Health {
     pub ready: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PreferencesView {
+    pub version: String,
+    pub theme: AppTheme,
+    pub accent: AccentColor,
+    pub check_updates_on_startup: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateStatusView {
+    pub current_version: String,
+    pub latest_version: String,
+    pub update_available: bool,
+    pub release_url: String,
+}
+
 /// Shared application state. The UI owns an `Arc<Application>` and never needs to know how the
 /// core manager or local storage is implemented.
 pub struct Application {
@@ -285,6 +408,41 @@ impl Application {
             service: "draco-app".to_string(),
             ready: true,
         }
+    }
+
+    pub fn preferences(&self) -> PreferencesView {
+        let settings = store::get_settings();
+        PreferencesView {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            theme: settings.theme,
+            accent: settings.accent,
+            check_updates_on_startup: settings.check_updates_on_startup,
+        }
+    }
+
+    pub fn save_preferences(&self, preferences: PreferencesView) -> Result<PreferencesView> {
+        let saved = store::patch_settings(|settings| {
+            settings.theme = preferences.theme;
+            settings.accent = preferences.accent;
+            settings.check_updates_on_startup = preferences.check_updates_on_startup;
+        })?;
+        Ok(PreferencesView {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            theme: saved.theme,
+            accent: saved.accent,
+            check_updates_on_startup: saved.check_updates_on_startup,
+        })
+    }
+
+    pub async fn check_for_updates(&self) -> Result<UpdateStatusView> {
+        let release = draco_core::updates::latest_release().await?;
+        let latest_version = release.tag_name.trim_start_matches(['v', 'V']).to_string();
+        Ok(UpdateStatusView {
+            current_version: env!("CARGO_PKG_VERSION").to_string(),
+            update_available: is_newer_version(&latest_version, env!("CARGO_PKG_VERSION")),
+            latest_version,
+            release_url: release.html_url,
+        })
     }
 
     pub async fn list_connections(&self) -> Vec<ConnectionView> {
@@ -496,6 +654,19 @@ impl Application {
         self.execute(id, sql, true, Some(operation_id)).await
     }
 
+    pub async fn execute_explain(&self, id: &str, sql: &str) -> Result<QueryResult> {
+        self.explain(id, sql, None).await
+    }
+
+    pub async fn execute_explain_with_operation(
+        &self,
+        id: &str,
+        operation_id: &str,
+        sql: &str,
+    ) -> Result<QueryResult> {
+        self.explain(id, sql, Some(operation_id)).await
+    }
+
     pub async fn cancel_query(&self, id: &str) -> Result<()> {
         let (driver, _) = self.connected_driver(id).await?;
         driver.cancel_active().await?;
@@ -532,11 +703,7 @@ impl Application {
     }
 
     pub fn save_snippet(&self, input: SnippetInput) -> Result<SnippetView> {
-        if input.name.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "Snippet name is required".to_string(),
-            ));
-        }
+        let name = validate_snippet_name(&input.name)?;
         if input.sql.trim().is_empty() {
             return Err(ApplicationError::InvalidInput(
                 "Snippet SQL must not be empty".to_string(),
@@ -549,7 +716,7 @@ impl Application {
             .map(|connection| connection.label);
         let saved = store::save_snippet(store::Snippet {
             id: String::new(),
-            name: input.name.trim().to_string(),
+            name,
             sql: input.sql,
             created_at: 0,
             conn_id: input.conn_id,
@@ -560,6 +727,25 @@ impl Application {
 
     pub fn delete_snippet(&self, id: &str) -> Result<()> {
         store::delete_snippet(id)?;
+        Ok(())
+    }
+
+    pub fn rename_snippet(&self, id: &str, name: &str) -> Result<()> {
+        if id.trim().is_empty() {
+            return Err(ApplicationError::InvalidInput(
+                "Snippet id is required".to_string(),
+            ));
+        }
+        let name = validate_snippet_name(name)?;
+        if !store::list_snippets()
+            .iter()
+            .any(|snippet| snippet.id == id)
+        {
+            return Err(ApplicationError::InvalidInput(
+                "Snippet not found".to_string(),
+            ));
+        }
+        store::rename_snippet(id, &name)?;
         Ok(())
     }
 
@@ -587,12 +773,47 @@ impl Application {
                     estimated_rows: estimates.get(&name).copied().unwrap_or_default(),
                     name,
                     kind: match table.kind {
-                    queries::TableKind::Table => ObjectKind::Table,
-                    queries::TableKind::View => ObjectKind::View,
+                        queries::TableKind::Table => ObjectKind::Table,
+                        queries::TableKind::View => ObjectKind::View,
                     },
                 }
             })
             .collect())
+    }
+
+    pub async fn list_schema_objects(
+        &self,
+        id: &str,
+        schema: &str,
+    ) -> Result<Vec<SchemaObjectView>> {
+        let (driver, _) = self.connected_driver(id).await?;
+        let (functions, sequences, triggers) = tokio::join!(
+            queries::get_functions(&driver, schema),
+            queries::get_sequences(&driver, schema),
+            queries::get_triggers(&driver, schema),
+        );
+        let mut objects = functions?
+            .into_iter()
+            .map(|routine| SchemaObjectView {
+                name: routine.name,
+                kind: match routine.kind {
+                    queries::RoutineKind::Function => SchemaObjectKind::Function,
+                    queries::RoutineKind::Procedure => SchemaObjectKind::Procedure,
+                },
+                detail: (!routine.return_type.is_empty()).then_some(routine.return_type),
+            })
+            .collect::<Vec<_>>();
+        objects.extend(sequences?.into_iter().map(|sequence| SchemaObjectView {
+            name: sequence.name,
+            kind: SchemaObjectKind::Sequence,
+            detail: None,
+        }));
+        objects.extend(triggers?.into_iter().map(|trigger| SchemaObjectView {
+            name: trigger.name,
+            kind: SchemaObjectKind::Trigger,
+            detail: Some(format!("on {}", trigger.table)),
+        }));
+        Ok(objects)
     }
 
     pub async fn global_search(&self, id: &str, term: &str) -> Result<Vec<SearchResultView>> {
@@ -640,11 +861,17 @@ impl Application {
         table: &str,
     ) -> Result<TableDetailView> {
         let (driver, _) = self.connected_driver(id).await?;
-        let detail = queries::get_table_detail(&driver, schema, table).await?;
+        let (detail, ddl, column_stats) = tokio::join!(
+            queries::get_table_detail(&driver, schema, table),
+            queries::get_table_ddl(&driver, schema, table),
+            queries::get_column_stats(&driver, schema, table),
+        );
         Ok(TableDetailView {
             schema: schema.to_string(),
             table: table.to_string(),
-            detail: serde_json::to_value(detail).unwrap_or(serde_json::Value::Null),
+            detail: serde_json::to_value(detail?).unwrap_or(serde_json::Value::Null),
+            ddl: ddl?,
+            column_stats: serde_json::to_value(column_stats?).unwrap_or(serde_json::Value::Null),
         })
     }
 
@@ -659,18 +886,185 @@ impl Application {
 
     pub async fn admin(&self, id: &str) -> Result<AdminView> {
         let (driver, _) = self.connected_driver(id).await?;
-        let (activity, locks, extensions, query_stats) = tokio::join!(
-            queries::get_activity(&driver),
-            queries::get_locks(&driver),
-            queries::get_extensions(&driver),
-            queries::get_query_stats(&driver),
-        );
+        let (activity, locks) =
+            tokio::join!(queries::get_activity(&driver), queries::get_locks(&driver),);
         Ok(AdminView {
             activity: serde_json::to_value(activity?).unwrap_or(serde_json::Value::Null),
             locks: serde_json::to_value(locks?).unwrap_or(serde_json::Value::Null),
-            extensions: serde_json::to_value(extensions?).unwrap_or(serde_json::Value::Null),
-            query_stats: serde_json::to_value(query_stats?).unwrap_or(serde_json::Value::Null),
         })
+    }
+
+    pub async fn cancel_activity(&self, id: &str, pid: i32) -> Result<()> {
+        if pid <= 0 {
+            return Err(ApplicationError::InvalidInput(
+                "Activity PID must be positive".to_string(),
+            ));
+        }
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::cancel_activity(&driver, pid).await?;
+        Ok(())
+    }
+
+    pub async fn list_cron_jobs(&self, id: &str) -> Result<CronJobsView> {
+        let (driver, _) = self.connected_driver(id).await?;
+        let jobs = queries::get_jobs(&driver).await?;
+        Ok(CronJobsView {
+            installed: jobs.installed,
+            jobs: jobs
+                .jobs
+                .into_iter()
+                .map(|job| CronJobView {
+                    id: job.jobid,
+                    name: job.jobname,
+                    schedule: job.schedule,
+                    command: job.command,
+                    database: job.database,
+                    username: job.username,
+                    active: job.active,
+                    last_status: job.last_status,
+                    last_run: job.last_run,
+                    last_message: job.last_msg,
+                })
+                .collect(),
+        })
+    }
+
+    pub async fn set_cron_job_active(&self, id: &str, job_id: i64, active: bool) -> Result<()> {
+        validate_job_id(job_id)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::toggle_job(&driver, job_id, active).await?;
+        Ok(())
+    }
+
+    pub async fn delete_cron_job(&self, id: &str, job_id: i64) -> Result<()> {
+        validate_job_id(job_id)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::delete_job(&driver, job_id).await?;
+        Ok(())
+    }
+
+    pub async fn list_extensions(&self, id: &str) -> Result<ExtensionsView> {
+        let (driver, _) = self.connected_driver(id).await?;
+        let extensions = queries::get_extensions(&driver).await?;
+        let to_view = |extension: queries::ExtensionInfo| ExtensionView {
+            name: extension.name,
+            default_version: extension.default_version,
+            installed_version: extension.installed_version,
+            comment: extension.comment,
+        };
+        Ok(ExtensionsView {
+            installed: extensions.installed.into_iter().map(to_view).collect(),
+            available: extensions.available.into_iter().map(to_view).collect(),
+        })
+    }
+
+    pub async fn install_extension(&self, id: &str, name: &str) -> Result<()> {
+        let name = validate_extension_name(name)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::ext_install(&driver, &name).await?;
+        Ok(())
+    }
+
+    pub async fn drop_extension(&self, id: &str, name: &str) -> Result<()> {
+        let name = validate_extension_name(name)?;
+        if name.eq_ignore_ascii_case("plpgsql") {
+            return Err(ApplicationError::InvalidInput(
+                "The built-in plpgsql extension is protected".to_string(),
+            ));
+        }
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::ext_drop(&driver, &name).await?;
+        Ok(())
+    }
+
+    pub async fn query_stats(&self, id: &str) -> Result<QueryStatsView> {
+        let (driver, _) = self.connected_driver(id).await?;
+        let stats = queries::get_query_stats(&driver).await?;
+        Ok(QueryStatsView {
+            installed: stats.installed,
+            queries: stats
+                .queries
+                .into_iter()
+                .map(|row| QueryStatView {
+                    query: row.query,
+                    calls: row.calls,
+                    total_exec_ms: row.total_exec_ms,
+                    mean_exec_ms: row.mean_exec_ms,
+                    rows: row.rows,
+                })
+                .collect(),
+        })
+    }
+
+    pub async fn reset_query_stats(&self, id: &str) -> Result<()> {
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::reset_query_stats(&driver).await?;
+        Ok(())
+    }
+
+    pub async fn run_table_maintenance(
+        &self,
+        id: &str,
+        schema: &str,
+        table: &str,
+        operation: TableMaintenanceOperation,
+    ) -> Result<()> {
+        if schema.is_empty() || table.is_empty() || schema.contains('\0') || table.contains('\0') {
+            return Err(ApplicationError::InvalidInput(
+                "Schema and table are required for maintenance".to_string(),
+            ));
+        }
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::run_vacuum(&driver, schema, table, operation.sql()).await?;
+        Ok(())
+    }
+
+    pub async fn list_roles(&self, id: &str) -> Result<Vec<RoleView>> {
+        let (driver, _) = self.connected_driver(id).await?;
+        Ok(queries::get_roles(&driver)
+            .await?
+            .into_iter()
+            .map(|role| RoleView {
+                name: role.rolname,
+                superuser: role.rolsuper,
+                create_database: role.rolcreatedb,
+                create_role: role.rolcreaterole,
+                login: role.rolcanlogin,
+                connection_limit: role.rolconnlimit,
+                valid_until: role.rolvaliduntil,
+            })
+            .collect())
+    }
+
+    pub async fn create_role(&self, id: &str, input: CreateRoleInput) -> Result<()> {
+        let name = validate_role_name(&input.name)?;
+        if input.connection_limit < -1 {
+            return Err(ApplicationError::InvalidInput(
+                "Role connection limit must be -1 or greater".to_string(),
+            ));
+        }
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::create_role(
+            &driver,
+            &queries::NewRole {
+                name,
+                login: input.login,
+                createdb: input.create_database,
+                createrole: input.create_role,
+                superuser: input.superuser,
+                conn_limit: input.connection_limit,
+                ..Default::default()
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn delete_role(&self, id: &str, name: &str) -> Result<()> {
+        let name = validate_role_name(name)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::drop_role(&driver, &name).await?;
+        Ok(())
     }
 
     /// Runs `pg_dump` with credentials supplied through Secret Service and returns bounded logs.
@@ -970,6 +1364,50 @@ impl Application {
         })
     }
 
+    async fn explain(
+        &self,
+        id: &str,
+        sql: &str,
+        operation_id: Option<&str>,
+    ) -> Result<QueryResult> {
+        if sql.trim().is_empty() {
+            return Err(ApplicationError::InvalidInput(
+                "SQL must not be empty".to_string(),
+            ));
+        }
+        let (driver, conn_label) = self.connected_driver(id).await?;
+        let cancel_rx = match operation_id {
+            Some(operation_id) => Some(self.register_operation(operation_id).await?),
+            None => None,
+        };
+        let started = Instant::now();
+        let core_result = match cancel_rx {
+            Some(cancel_rx) => queries::execute_explain_cancelable(&driver, sql, cancel_rx).await,
+            None => queries::execute_explain(&driver, sql).await,
+        };
+        if let Some(operation_id) = operation_id {
+            self.finish_operation(operation_id).await;
+        }
+        let plan = core_result?;
+        let duration_ms = started.elapsed().as_millis() as i64;
+        let _ = store::add_history(store::HistoryEntry {
+            id: String::new(),
+            sql: sql.to_string(),
+            conn_id: id.to_string(),
+            conn_label,
+            timestamp: now_millis(),
+            duration_ms,
+            row_count: 1,
+        });
+        let mut row = serde_json::Map::new();
+        row.insert("QUERY PLAN".to_string(), plan);
+        Ok(QueryResult {
+            columns: vec!["QUERY PLAN".to_string()],
+            rows: vec![row],
+            duration_ms: duration_ms as u64,
+        })
+    }
+
     async fn register_operation(&self, operation_id: &str) -> Result<watch::Receiver<bool>> {
         if operation_id.trim().is_empty() {
             return Err(ApplicationError::InvalidInput(
@@ -1093,6 +1531,76 @@ fn validate_file_path(value: &str, label: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_role_name(value: &str) -> Result<String> {
+    let name = value.trim();
+    if name.is_empty() {
+        return Err(ApplicationError::InvalidInput(
+            "Role name is required".to_string(),
+        ));
+    }
+    if name.len() > 63 {
+        return Err(ApplicationError::InvalidInput(
+            "Role name must be at most 63 bytes".to_string(),
+        ));
+    }
+    if name.contains('\0') || name.chars().any(char::is_control) {
+        return Err(ApplicationError::InvalidInput(
+            "Role name contains invalid characters".to_string(),
+        ));
+    }
+    if name.to_ascii_lowercase().starts_with("pg_") {
+        return Err(ApplicationError::InvalidInput(
+            "Roles beginning with pg_ are reserved by PostgreSQL".to_string(),
+        ));
+    }
+    Ok(name.to_string())
+}
+
+fn validate_snippet_name(value: &str) -> Result<String> {
+    let name = value.trim();
+    if name.is_empty() {
+        return Err(ApplicationError::InvalidInput(
+            "Snippet name is required".to_string(),
+        ));
+    }
+    if name.chars().count() > 120 {
+        return Err(ApplicationError::InvalidInput(
+            "Snippet name must be at most 120 characters".to_string(),
+        ));
+    }
+    if name.chars().any(char::is_control) {
+        return Err(ApplicationError::InvalidInput(
+            "Snippet name contains invalid characters".to_string(),
+        ));
+    }
+    Ok(name.to_string())
+}
+
+fn validate_job_id(job_id: i64) -> Result<()> {
+    if job_id <= 0 {
+        Err(ApplicationError::InvalidInput(
+            "Scheduled job id must be positive".to_string(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_extension_name(value: &str) -> Result<String> {
+    let name = value.trim();
+    if name.is_empty() {
+        return Err(ApplicationError::InvalidInput(
+            "Extension name is required".to_string(),
+        ));
+    }
+    if name.len() > 63 || name.chars().any(char::is_control) {
+        return Err(ApplicationError::InvalidInput(
+            "Extension name contains invalid characters".to_string(),
+        ));
+    }
+    Ok(name.to_string())
+}
+
 impl Default for Application {
     fn default() -> Self {
         Self::new()
@@ -1170,6 +1678,24 @@ fn now_millis() -> i64 {
         .unwrap_or_default()
 }
 
+fn is_newer_version(candidate: &str, current: &str) -> bool {
+    fn parse(value: &str) -> Option<Vec<u64>> {
+        value
+            .trim_start_matches(['v', 'V'])
+            .split_once('-')
+            .map_or(value.trim_start_matches(['v', 'V']), |(stable, _)| stable)
+            .split('.')
+            .map(str::parse::<u64>)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .ok()
+    }
+
+    match (parse(candidate), parse(current)) {
+        (Some(candidate), Some(current)) => candidate > current,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1210,6 +1736,18 @@ mod tests {
     }
 
     #[test]
+    fn schema_object_kinds_use_stable_lowercase_values() {
+        assert_eq!(
+            serde_json::to_string(&SchemaObjectKind::Procedure).unwrap(),
+            "\"procedure\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SchemaObjectKind::Sequence).unwrap(),
+            "\"sequence\""
+        );
+    }
+
+    #[test]
     fn invalid_input_is_rejected_before_storage() {
         let mut input = valid_input();
         input.host.clear();
@@ -1232,6 +1770,91 @@ mod tests {
     }
 
     #[test]
+    fn role_names_are_normalized_and_reserved_names_are_rejected() {
+        assert_eq!(validate_role_name("  analyst  ").unwrap(), "analyst");
+        assert!(validate_role_name("").is_err());
+        assert!(validate_role_name("pg_read_all_data").is_err());
+        assert!(validate_role_name(&"a".repeat(64)).is_err());
+        assert!(validate_role_name("line\nbreak").is_err());
+    }
+
+    #[test]
+    fn role_input_has_no_password_or_secret_field() {
+        let input = CreateRoleInput {
+            name: "analyst".to_string(),
+            login: true,
+            create_database: false,
+            create_role: false,
+            superuser: false,
+            connection_limit: -1,
+        };
+        let json = serde_json::to_string(&input).expect("role input serializes");
+        assert!(!json.contains("password"));
+        assert!(!json.contains("secret"));
+    }
+
+    #[test]
+    fn snippet_names_are_normalized_and_bounded() {
+        assert_eq!(
+            validate_snippet_name("  Daily report  ").unwrap(),
+            "Daily report"
+        );
+        assert!(validate_snippet_name("  ").is_err());
+        assert!(validate_snippet_name("line\nbreak").is_err());
+        assert!(validate_snippet_name(&"a".repeat(121)).is_err());
+    }
+
+    #[tokio::test]
+    async fn invalid_activity_pid_is_rejected_before_connection_lookup() {
+        let error = Application::new()
+            .cancel_activity("missing", 0)
+            .await
+            .expect_err("zero PID must be rejected");
+        assert!(matches!(error, ApplicationError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
+    async fn invalid_cron_job_id_is_rejected_before_connection_lookup() {
+        let app = Application::new();
+        assert!(matches!(
+            app.set_cron_job_active("missing", 0, false).await,
+            Err(ApplicationError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            app.delete_cron_job("missing", -1).await,
+            Err(ApplicationError::InvalidInput(_))
+        ));
+    }
+
+    #[test]
+    fn extension_names_are_normalized_and_bounded() {
+        assert_eq!(validate_extension_name("  pg_trgm  ").unwrap(), "pg_trgm");
+        assert!(validate_extension_name("").is_err());
+        assert!(validate_extension_name("line\nbreak").is_err());
+        assert!(validate_extension_name(&"a".repeat(64)).is_err());
+    }
+
+    #[tokio::test]
+    async fn built_in_plpgsql_is_protected_before_connection_lookup() {
+        let error = Application::new()
+            .drop_extension("missing", "PLPGSQL")
+            .await
+            .expect_err("plpgsql must be protected");
+        assert!(matches!(error, ApplicationError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn maintenance_operations_have_stable_values_and_allowlisted_sql() {
+        assert_eq!(
+            serde_json::to_string(&TableMaintenanceOperation::VacuumAnalyze).unwrap(),
+            "\"vacuum_analyze\""
+        );
+        assert_eq!(TableMaintenanceOperation::Vacuum.sql(), "VACUUM");
+        assert_eq!(TableMaintenanceOperation::Analyze.sql(), "ANALYZE");
+        assert_eq!(TableMaintenanceOperation::VacuumFull.sql(), "VACUUM FULL");
+    }
+
+    #[test]
     fn file_operation_errors_do_not_echo_private_paths() {
         let error = validate_file_path("relative/private-secret.dump", "Backup output")
             .expect_err("relative paths must be rejected");
@@ -1245,6 +1868,34 @@ mod tests {
             &["/home/user/private.dump".to_string()],
         );
         assert_eq!(line, "could not open <selected-path>");
+    }
+
+    #[test]
+    fn appearance_defaults_are_dark_and_legacy_settings_still_load() {
+        let settings: store::AppSettings = serde_json::from_str(
+            r#"{"query_timeout":10000,"preview_row_limit":50,"show_row_count":true}"#,
+        )
+        .expect("legacy settings deserialize");
+        assert_eq!(settings.theme, AppTheme::Dark);
+        assert_eq!(settings.accent, AccentColor::Coral);
+        assert!(settings.check_updates_on_startup);
+        assert_eq!(
+            serde_json::to_string(&AppTheme::Light).unwrap(),
+            "\"light\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AccentColor::Blue).unwrap(),
+            "\"blue\""
+        );
+    }
+
+    #[test]
+    fn update_versions_are_compared_numerically() {
+        assert!(is_newer_version("v1.2.0", "1.1.9"));
+        assert!(is_newer_version("2.0.0", "1.99.99"));
+        assert!(!is_newer_version("1.1.3", "1.1.3"));
+        assert!(!is_newer_version("1.1.2", "1.1.3"));
+        assert!(!is_newer_version("not-a-version", "1.1.3"));
     }
 
     #[tokio::test]

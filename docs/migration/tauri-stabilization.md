@@ -18,7 +18,8 @@ rollback e confundiria falhas de paridade com falhas de empacotamento.
       destrutivas;
 - [ ] uma versão de rollback do pacote GTK publicada e testada.
 
-Até todos os itens serem marcados, o CI mantém um job separado de `cargo check -p draco-gtk`.
+Até todos os itens serem marcados, o CI mantém a etapa separada de `cargo check -p draco-gtk` no
+job Linux, além de lint/testes do workspace, contratos frontend e build do binário Tauri.
 
 ## Rollback
 

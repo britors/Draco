@@ -1,5 +1,5 @@
 use serde::Serialize;
-use crate::error::Result;
+use crate::error::{CoreError, Result};
 use crate::postgres::pool::PostgresDriver;
 use super::helpers::*;
 
@@ -79,13 +79,32 @@ pub async fn update_job(driver: &PostgresDriver, job_id: i64, schedule: &str, co
 }
 
 pub async fn toggle_job(driver: &PostgresDriver, job_id: i64, active: bool) -> Result<()> {
-    driver.query("UPDATE cron.job SET active = $1 WHERE jobid = $2", &[&active, &job_id]).await?;
-    Ok(())
+    let rows = driver
+        .query(
+            "UPDATE cron.job SET active = $1 WHERE jobid = $2 RETURNING jobid",
+            &[&active, &job_id],
+        )
+        .await?;
+    if rows.is_empty() {
+        Err(CoreError::Other("Scheduled job was not found".to_string()))
+    } else {
+        Ok(())
+    }
 }
 
 pub async fn delete_job(driver: &PostgresDriver, job_id: i64) -> Result<()> {
-    driver.query("SELECT cron.unschedule($1)", &[&job_id]).await?;
-    Ok(())
+    let rows = driver
+        .query("SELECT cron.unschedule($1) AS deleted", &[&job_id])
+        .await?;
+    if rows
+        .first()
+        .and_then(|row| row.try_get::<_, bool>("deleted").ok())
+        .unwrap_or(false)
+    {
+        Ok(())
+    } else {
+        Err(CoreError::Other("Scheduled job was not found".to_string()))
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

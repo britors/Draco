@@ -1,5 +1,6 @@
 /target
 .claude/
+node_modules/
 
 # artefatos de build do makepkg
 aur/pkg/

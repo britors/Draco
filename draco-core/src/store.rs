@@ -171,11 +171,34 @@ fn chrono_now_millis() -> i64 {
 
 // ── Settings ─────────────────────────────────────────────────────────────────────
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AppTheme {
+    #[default]
+    Dark,
+    Light,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AccentColor {
+    #[default]
+    Coral,
+    Blue,
+    Green,
+    Purple,
+    Amber,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppSettings {
     pub query_timeout: u32,
     pub preview_row_limit: u32,
     pub show_row_count: bool,
+    pub theme: AppTheme,
+    pub accent: AccentColor,
+    pub check_updates_on_startup: bool,
 }
 
 impl Default for AppSettings {
@@ -184,6 +207,9 @@ impl Default for AppSettings {
             query_timeout: 30_000,
             preview_row_limit: 100,
             show_row_count: false,
+            theme: AppTheme::Dark,
+            accent: AccentColor::Coral,
+            check_updates_on_startup: true,
         }
     }
 }
