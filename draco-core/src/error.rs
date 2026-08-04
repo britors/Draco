@@ -23,7 +23,9 @@ pub enum CoreError {
     #[error(transparent)]
     TomlSer(#[from] toml::ser::Error),
     #[error(transparent)]
-    Secret(#[from] oo7::Error),
+    Secret(#[from] keyring::Error),
+    #[error("secret store task failed: {0}")]
+    SecretTask(#[from] tokio::task::JoinError),
     #[error("{0}")]
     Other(String),
 }

@@ -46,9 +46,16 @@ async fn application_boundary_reaches_postgres_for_tauri_views() {
         app.save_connection(input)
             .await
             .expect("save temporary connection metadata");
+        let rejected = app
+            .connect(&id, "draco-invalid-password", 3_000, None, None)
+            .await;
+        assert!(
+            rejected.is_err(),
+            "invalid credentials unexpectedly connected through application boundary"
+        );
         app.connect(&id, &password, 30_000, None, None)
             .await
-            .expect("connect through application boundary");
+            .expect("recover from invalid credentials through application boundary");
 
         let schemas = app.list_schemas(&id).await.expect("list schemas");
         assert!(schemas.iter().any(|schema| schema.name == "public"));
@@ -118,6 +125,24 @@ async fn application_boundary_reaches_postgres_for_tauri_views() {
             .expect("connection remains usable after activity cancellation");
         assert_eq!(recovery.rows[0]["recovered"].as_i64(), Some(2));
 
+        app.disconnect(&id)
+            .await
+            .expect("disconnect through application boundary");
+        assert!(
+            app.execute_query(&id, "SELECT 3 AS disconnected")
+                .await
+                .is_err(),
+            "database operation unexpectedly succeeded while disconnected"
+        );
+        app.connect(&id, &password, 30_000, None, None)
+            .await
+            .expect("reconnect after connection loss through application boundary");
+        let reconnected = app
+            .execute_query(&id, "SELECT 4 AS reconnected")
+            .await
+            .expect("query succeeds after reconnecting");
+        assert_eq!(reconnected.rows[0]["reconnected"].as_i64(), Some(4));
+
         let _ = app.admin(&id).await.expect("load administration");
         let cron = app
             .list_cron_jobs(&id)
@@ -166,6 +191,7 @@ async fn application_boundary_reaches_postgres_for_tauri_views() {
                     create_role: false,
                     superuser: false,
                     connection_limit: 2,
+                    valid_until: None,
                 },
             )
             .await
@@ -189,8 +215,8 @@ async fn application_boundary_reaches_postgres_for_tauri_views() {
     match scenario {
         Ok(()) => cleanup.expect("remove temporary metadata"),
         Err(payload) => {
-            if let Err(error) = cleanup {
-                eprintln!("application live-test cleanup failed: {error}");
+            if cleanup.is_err() {
+                eprintln!("application live-test cleanup failed");
             }
             std::panic::resume_unwind(payload);
         }

@@ -1,11 +1,13 @@
 import { resultRowToText, resultToTsv, serializeResult } from './result-export.js';
-import { highlightSql } from './sql-highlight.js';
+import { highlightSqlIncremental } from './sql-highlight.js';
 import { applySuggestion, buildCompletionIndex, suggest } from './sql-autocomplete.js';
 import { visibleRange } from './virtual-list.js';
+import { schemaObjectSql } from './explorer-navigation.js';
+import { clampResultColumnWidth } from './result-columns.js';
 
 const invoke = window.__TAURI__?.core?.invoke;
 const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
-const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.0.3', theme: 'dark', accent: 'coral', check_updates_on_startup: true }, releaseUrl: '', queryTabs: [{ id: 1, label: 'Query 1', sql: '' }], currentQueryTabId: 1 };
+const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.0.3', theme: 'dark', accent: 'coral', check_updates_on_startup: true }, releaseUrl: '', queryTabs: [{ id: 1, label: 'Query 1', sql: '' }], currentQueryTabId: 1 };
 let dialogResolver = null;
 
 const PIX_KEY = 'britors@live.com';
@@ -68,6 +70,157 @@ async function savePreferences(patch) {
   }
 }
 
+let assistantSettingsDraft = null;
+let activeAssistantProvider = 'anthropic';
+let assistantModelsRequest = 0;
+
+function assistantModelField(provider) {
+  return `${provider}_model`;
+}
+
+function assistantProviderLabel(provider) {
+  return { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini' }[provider] || provider;
+}
+
+function renderAssistantSettings(settings) {
+  assistantSettingsDraft = { ...settings };
+  activeAssistantProvider = settings.provider;
+  byId('ai-provider').value = settings.provider;
+  byId('ai-model').value = settings[assistantModelField(settings.provider)] || '';
+  byId('ai-daily-limit').value = String(settings.max_messages_per_day);
+  byId('ai-round-limit').value = String(settings.max_rounds_per_message);
+  byId('ai-key-title').textContent = `${assistantProviderLabel(settings.provider)} credential`;
+}
+
+async function loadAssistantModels(provider = byId('ai-provider').value) {
+  const request = ++assistantModelsRequest;
+  const status = byId('ai-settings-status');
+  const refresh = byId('refresh-ai-models');
+  refresh.disabled = true;
+  status.textContent = `Loading ${assistantProviderLabel(provider)} models…`;
+  status.className = 'form-status';
+  try {
+    const models = await invoke('assistant_models', { provider });
+    if (request !== assistantModelsRequest || byId('ai-provider').value !== provider) return;
+    const list = byId('ai-model-list');
+    list.replaceChildren();
+    for (const model of models) {
+      const option = document.createElement('option');
+      option.value = model;
+      list.append(option);
+    }
+    status.textContent = `${models.length} ${assistantProviderLabel(provider)} models available. Start typing to filter the list.`;
+    status.className = 'form-status success';
+  } catch (error) {
+    if (request !== assistantModelsRequest || byId('ai-provider').value !== provider) return;
+    byId('ai-model-list').replaceChildren();
+    status.textContent = error?.message || `Could not load ${assistantProviderLabel(provider)} models. Save a valid API key and try again.`;
+    status.className = 'form-status error';
+  } finally {
+    if (request === assistantModelsRequest) refresh.disabled = false;
+  }
+}
+
+async function loadAssistantSettings() {
+  const status = byId('ai-settings-status');
+  status.textContent = 'Loading AI settings…';
+  status.className = 'form-status';
+  try {
+    renderAssistantSettings(await invoke('assistant_settings'));
+    status.textContent = 'API keys remain protected by the system Secret Service.';
+    void loadAssistantModels(activeAssistantProvider);
+  } catch (error) {
+    status.textContent = error?.message || 'Could not load AI settings';
+    status.className = 'form-status error';
+  }
+}
+
+function changeAssistantProvider(provider) {
+  if (!assistantSettingsDraft) return;
+  assistantSettingsDraft[assistantModelField(activeAssistantProvider)] = value('ai-model');
+  activeAssistantProvider = provider;
+  assistantSettingsDraft.provider = provider;
+  byId('ai-model').value = assistantSettingsDraft[assistantModelField(provider)] || '';
+  byId('ai-api-key').value = '';
+  byId('ai-key-title').textContent = `${assistantProviderLabel(provider)} credential`;
+  byId('ai-settings-status').textContent = `Configure ${assistantProviderLabel(provider)} and save when ready.`;
+  byId('ai-settings-status').className = 'form-status';
+  void loadAssistantModels(provider);
+}
+
+async function saveAssistantSettings(event) {
+  event.preventDefault();
+  if (!assistantSettingsDraft) return;
+  const model = value('ai-model');
+  const dailyLimit = Number(value('ai-daily-limit'));
+  const roundLimit = Number(value('ai-round-limit'));
+  const status = byId('ai-settings-status');
+  if (!model || !Number.isInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > 10000 || !Number.isInteger(roundLimit) || roundLimit < 1 || roundLimit > 32) {
+    status.textContent = 'Enter a model, a daily limit from 1 to 10000, and tool rounds from 1 to 32.';
+    status.className = 'form-status error';
+    return;
+  }
+  assistantSettingsDraft.provider = activeAssistantProvider;
+  assistantSettingsDraft[assistantModelField(activeAssistantProvider)] = model;
+  assistantSettingsDraft.max_messages_per_day = dailyLimit;
+  assistantSettingsDraft.max_rounds_per_message = roundLimit;
+  byId('save-ai-settings').disabled = true;
+  status.textContent = 'Saving AI settings…';
+  status.className = 'form-status';
+  try {
+    renderAssistantSettings(await invoke('save_assistant_settings', { settings: assistantSettingsDraft }));
+    status.textContent = 'AI settings saved locally.';
+    status.className = 'form-status success';
+  } catch (error) {
+    status.textContent = error?.message || 'Could not save AI settings';
+    status.className = 'form-status error';
+  } finally {
+    byId('save-ai-settings').disabled = false;
+  }
+}
+
+async function saveAssistantKey() {
+  const provider = byId('ai-provider').value;
+  const key = value('ai-api-key');
+  const status = byId('ai-settings-status');
+  if (!key) { status.textContent = 'Paste an API key before saving.'; status.className = 'form-status error'; return; }
+  byId('save-ai-key').disabled = true;
+  status.textContent = `Saving ${assistantProviderLabel(provider)} key securely…`;
+  status.className = 'form-status';
+  try {
+    await invoke('save_assistant_key', { provider, key });
+    byId('ai-api-key').value = '';
+    status.textContent = `${assistantProviderLabel(provider)} key saved in Secret Service.`;
+    status.className = 'form-status success';
+    void loadAssistantModels(provider);
+  } catch (error) {
+    status.textContent = error?.message || 'Could not save the API key';
+    status.className = 'form-status error';
+  } finally {
+    byId('save-ai-key').disabled = false;
+  }
+}
+
+async function clearAssistantKey() {
+  const provider = byId('ai-provider').value;
+  if (!await showConfirm(`Remove the saved ${assistantProviderLabel(provider)} API key from Secret Service?`, 'Remove AI credential', true, 'Remove key')) return;
+  const status = byId('ai-settings-status');
+  byId('clear-ai-key').disabled = true;
+  try {
+    await invoke('clear_assistant_key', { provider });
+    byId('ai-api-key').value = '';
+    ++assistantModelsRequest;
+    byId('ai-model-list').replaceChildren();
+    status.textContent = `${assistantProviderLabel(provider)} key removed.`;
+    status.className = 'form-status success';
+  } catch (error) {
+    status.textContent = error?.message || 'Could not remove the API key';
+    status.className = 'form-status error';
+  } finally {
+    byId('clear-ai-key').disabled = false;
+  }
+}
+
 async function checkForUpdates(manual = true) {
   const button = byId('check-updates');
   button.disabled = true;
@@ -93,12 +246,17 @@ function showPreferenceSection(name) {
     tab.setAttribute('aria-selected', String(active));
   }
   for (const panel of document.querySelectorAll('[data-preference-panel]')) panel.hidden = panel.dataset.preferencePanel !== name;
+  if (name === 'ai') void loadAssistantSettings();
 }
+
+let sqlHighlightCache = [];
 
 function syncEditorHighlight() {
   const editor = byId('sql-editor');
   const overlay = byId('sql-editor-highlight');
-  overlay.innerHTML = highlightSql(editor.value);
+  const highlighted = highlightSqlIncremental(editor.value, sqlHighlightCache);
+  sqlHighlightCache = highlighted.cache;
+  overlay.innerHTML = highlighted.html;
   overlay.scrollTop = editor.scrollTop;
   overlay.scrollLeft = editor.scrollLeft;
 }
@@ -309,14 +467,15 @@ async function renameQueryTab(id) {
   renderQueryTabs();
 }
 
-function openSqlInNewTab(sql, connectionId) {
+function openSqlInNewTab(sql, connectionId, label = null) {
   switchView('query');
+  showQueryWorkspaceSection('editor');
   newQueryTab();
   const tab = state.queryTabs.find((item) => item.id === state.currentQueryTabId);
   const firstLine = sql.split(/\r?\n/, 1)[0].trim();
   if (tab) {
     tab.sql = sql;
-    tab.label = firstLine.length > 28 ? `${firstLine.slice(0, 28)}…` : firstLine || tab.label;
+    tab.label = label || (firstLine.length > 28 ? `${firstLine.slice(0, 28)}…` : firstLine || tab.label);
   }
   setEditorValue(sql);
   byId('query-connection').value = connectionId;
@@ -516,6 +675,8 @@ async function connect(id) {
     renderExplorerConnections();
     renderQueryConnections();
     renderAdvancedConnections();
+    byId('dashboard-connection').value = id;
+    switchView('dashboard');
   } catch (error) {
     connection.state = 'error';
     connection.error = 'Connection failed';
@@ -676,7 +837,7 @@ async function runBackup(restore = false) {
   const id = byId('backup-connection').value; if (!id) { byId('backup-status').textContent = 'Select a connected connection'; return; }
   if (restore && !await showConfirm('Restore will write data into the selected database. Continue only if the input and target are correct.', 'Confirm restore', true, 'Restore')) return;
   const operation = operationId(); state.currentOperationId = operation; byId('cancel-operation').hidden = false; byId('backup-status').textContent = restore ? 'Restoring…' : 'Creating backup…'; byId('backup-log').textContent = '';
-  for (const control of ['run-backup', 'run-restore', 'backup-connection', 'backup-output', 'backup-format', 'restore-input', 'restore-database']) byId(control).disabled = true;
+  for (const control of ['run-backup', 'run-restore', 'choose-backup-output', 'choose-restore-input', 'backup-connection', 'backup-output', 'backup-format', 'restore-input', 'restore-database']) byId(control).disabled = true;
   const options = restore ? { input: value('restore-input'), target_database: value('restore-database'), clean: false, single_transaction: true } : { output: value('backup-output'), format: byId('backup-format').value, compression: null, schemas: [], tables: [] };
   try {
     const result = await invoke(restore ? 'run_restore' : 'run_backup', { id, operationId: operation, options });
@@ -684,8 +845,18 @@ async function runBackup(restore = false) {
   } catch (error) { byId('backup-status').textContent = 'Backup operation failed. Check the path and connection.'; }
   finally {
     state.currentOperationId = null; byId('cancel-operation').hidden = true;
-    for (const control of ['run-backup', 'run-restore', 'backup-connection', 'backup-output', 'backup-format', 'restore-input', 'restore-database']) byId(control).disabled = false;
+    for (const control of ['run-backup', 'run-restore', 'choose-backup-output', 'choose-restore-input', 'backup-connection', 'backup-output', 'backup-format', 'restore-input', 'restore-database']) byId(control).disabled = false;
   }
+}
+
+async function chooseBackupOutput() {
+  try { const path = await invoke('choose_backup_output', { format: byId('backup-format').value }); if (path) byId('backup-output').value = path; }
+  catch { byId('backup-status').textContent = 'Could not open the native file picker.'; }
+}
+
+async function chooseRestoreInput() {
+  try { const path = await invoke('choose_restore_input'); if (path) byId('restore-input').value = path; }
+  catch { byId('backup-status').textContent = 'Could not open the native file picker.'; }
 }
 
 async function cancelOperation() { if (!state.currentOperationId) return; byId('backup-status').textContent = 'Cancelling…'; try { await invoke('cancel_operation', { operationId: state.currentOperationId }); } catch (error) {} }
@@ -730,13 +901,231 @@ function codePanel(title, text) {
   return panel;
 }
 
-function tableMaintenancePanel(id, schema, table) {
+function labeledControl(labelText, control) {
+  const label = document.createElement('label'); label.append(document.createTextNode(labelText), control); return label;
+}
+
+function textInput(value = '', placeholder = '') {
+  const input = document.createElement('input'); input.value = value ?? ''; input.placeholder = placeholder; input.autocomplete = 'off'; return input;
+}
+
+function selectInput(options, value) {
+  const select = document.createElement('select');
+  for (const optionValue of options) { const option = document.createElement('option'); option.value = optionValue; option.textContent = optionValue || '—'; select.append(option); }
+  select.value = value ?? options[0]; return select;
+}
+
+function objectDialog(title) {
+  const returnFocus = document.activeElement;
+  const root = document.createElement('section'); root.className = 'object-dialog'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true');
+  const backdrop = document.createElement('div'); backdrop.className = 'object-dialog-backdrop';
+  const panel = document.createElement('div'); panel.className = 'object-dialog-panel';
+  const heading = document.createElement('div'); heading.className = 'object-dialog-heading';
+  const name = document.createElement('h2'); name.textContent = title;
+  const closeButton = document.createElement('button'); closeButton.className = 'button small'; closeButton.type = 'button'; closeButton.textContent = 'Close';
+  const body = document.createElement('div'); body.className = 'object-dialog-body';
+  const actions = document.createElement('div'); actions.className = 'object-dialog-actions';
+  const status = document.createElement('div'); status.className = 'form-status'; status.setAttribute('role', 'status');
+  actions.append(status); heading.append(name, closeButton); panel.append(heading, body, actions); root.append(backdrop, panel); document.body.append(root);
+  const close = () => { document.removeEventListener('keydown', onKeydown); root.remove(); if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true }); };
+  const onKeydown = (event) => { if (event.key === 'Escape') close(); };
+  closeButton.addEventListener('click', close); backdrop.addEventListener('click', close); document.addEventListener('keydown', onKeydown);
+  window.setTimeout(() => body.querySelector('input, textarea, select, button')?.focus(), 0);
+  return { root, body, actions, status, close };
+}
+
+const TABLE_COLUMN_TYPES = ['text', 'varchar(255)', 'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'boolean', 'numeric(10,2)', 'real', 'double precision', 'date', 'timestamp with time zone', 'uuid', 'jsonb'];
+
+function checkboxControl(labelText, checked = false) {
+  const label = document.createElement('label'); label.className = 'check-row';
+  const input = document.createElement('input'); input.type = 'checkbox'; input.checked = checked;
+  label.append(input, document.createTextNode(labelText)); return { label, input };
+}
+
+function columnEditorRow(initial = {}, mode = 'create') {
+  const row = document.createElement('div'); row.className = 'column-editor-row'; row.dataset.originalName = initial.original_name ?? initial.name ?? '';
+  const name = textInput(initial.name || '', 'column_name');
+  const type = selectInput(TABLE_COLUMN_TYPES, TABLE_COLUMN_TYPES.includes(initial.data_type || initial.full_type) ? (initial.data_type || initial.full_type) : 'text');
+  if (initial.full_type && !TABLE_COLUMN_TYPES.includes(initial.full_type)) { const option = document.createElement('option'); option.value = initial.full_type; option.textContent = initial.full_type; type.prepend(option); type.value = initial.full_type; }
+  const nullable = checkboxControl('Null', initial.nullable ?? initial.is_nullable ?? true);
+  const primary = checkboxControl('PK', initial.primary_key ?? initial.is_primary_key ?? false);
+  const unique = checkboxControl('Unique', initial.unique ?? false);
+  const defaultValue = textInput(initial.default ?? initial.column_default ?? '', 'default expression');
+  const reference = textInput('', 'schema.table.column');
+  const onDelete = selectInput(['', 'NO ACTION', 'RESTRICT', 'CASCADE', 'SET NULL', 'SET DEFAULT'], '');
+  const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = mode === 'alter' ? 'Remove' : 'Delete';
+  if (mode === 'alter') { unique.label.hidden = true; reference.parentElement?.remove(); }
+  row.append(labeledControl('Name', name), labeledControl('Type', type), nullable.label, primary.label);
+  if (mode === 'create') row.append(unique.label);
+  row.append(labeledControl('Default', defaultValue));
+  if (mode === 'create') row.append(labeledControl('References', reference), labeledControl('On delete', onDelete));
+  row.append(remove);
+  remove.addEventListener('click', () => {
+    if (mode === 'create' || !row.dataset.originalName) { row.remove(); return; }
+    const removed = row.dataset.removed !== 'true'; row.dataset.removed = String(removed); row.classList.toggle('removed', removed); remove.textContent = removed ? 'Undo' : 'Remove';
+    for (const control of row.querySelectorAll('input, select')) control.disabled = removed;
+    remove.disabled = false;
+  });
+  return { row, name, type, nullable: nullable.input, primary: primary.input, unique: unique.input, defaultValue, reference, onDelete };
+}
+
+function readCreateColumn(editor) {
+  const referenceText = editor.reference.value.trim();
+  let references = null;
+  if (referenceText) {
+    const parts = referenceText.split('.');
+    if (parts.length !== 3 || parts.some((part) => !part.trim())) throw new Error('References must use schema.table.column');
+    references = { schema: parts[0].trim(), table: parts[1].trim(), column: parts[2].trim(), on_delete: editor.onDelete.value || null };
+  }
+  return { name: editor.name.value.trim(), data_type: editor.type.value, nullable: editor.nullable.checked, primary_key: editor.primary.checked, unique: editor.unique.checked, default: editor.defaultValue.value.trim() || null, references };
+}
+
+function quotePreviewIdentifier(value) { return `"${String(value).replaceAll('"', '""')}"`; }
+
+function createTablePreview(input) {
+  const definitions = input.columns.map((column) => {
+    let sql = `${quotePreviewIdentifier(column.name)} ${column.data_type}`;
+    if (!column.nullable) sql += ' NOT NULL';
+    if (column.unique) sql += ' UNIQUE';
+    if (column.default) sql += ` DEFAULT ${column.default}`;
+    if (column.references) sql += ` REFERENCES ${quotePreviewIdentifier(column.references.schema)}.${quotePreviewIdentifier(column.references.table)}(${quotePreviewIdentifier(column.references.column)})${column.references.on_delete ? ` ON DELETE ${column.references.on_delete}` : ''}`;
+    return sql;
+  });
+  const primary = input.columns.filter((column) => column.primary_key).map((column) => quotePreviewIdentifier(column.name));
+  if (primary.length) definitions.push(`PRIMARY KEY (${primary.join(', ')})`);
+  return `CREATE TABLE ${quotePreviewIdentifier(input.schema)}.${quotePreviewIdentifier(input.table)} (\n  ${definitions.join(',\n  ')}\n);`;
+}
+
+function openCreateTableDialog(id, schema) {
+  const dialog = objectDialog('New table');
+  const basics = document.createElement('div'); basics.className = 'object-form-grid';
+  const schemaInput = textInput(schema || 'public', 'schema'); const tableInput = textInput('', 'table_name');
+  basics.append(labeledControl('Schema', schemaInput), labeledControl('Table', tableInput));
+  const columns = document.createElement('div'); columns.className = 'column-editor-list';
+  const editors = [];
+  const addColumn = (initial = {}) => { const editor = columnEditorRow(initial, 'create'); editors.push(editor); columns.append(editor.row); return editor; };
+  addColumn({ name: 'id', data_type: 'bigint', nullable: false, primary_key: true }); addColumn({ name: 'name', data_type: 'text', nullable: true });
+  const add = document.createElement('button'); add.className = 'button small'; add.type = 'button'; add.textContent = 'Add column'; add.addEventListener('click', () => addColumn());
+  const preview = document.createElement('pre'); preview.className = 'object-sql-preview';
+  const readInput = () => {
+    const activeEditors = editors.filter((editor) => editor.row.isConnected);
+    const input = { schema: schemaInput.value.trim(), table: tableInput.value.trim(), columns: activeEditors.map(readCreateColumn) };
+    if (!input.schema || !input.table || !input.columns.length || input.columns.some((column) => !column.name)) throw new Error('Schema, table, and every column name are required');
+    return input;
+  };
+  const refreshPreview = () => { try { preview.textContent = createTablePreview(readInput()); dialog.status.textContent = ''; } catch (error) { preview.textContent = '-- Complete the form to preview CREATE TABLE'; dialog.status.textContent = error.message; } };
+  dialog.body.append(basics, columns, add, preview); dialog.body.addEventListener('input', refreshPreview); dialog.body.addEventListener('change', refreshPreview); refreshPreview();
+  const create = document.createElement('button'); create.className = 'button primary'; create.type = 'button'; create.textContent = 'Create table';
+  create.addEventListener('click', async () => {
+    let input; try { input = readInput(); } catch (error) { dialog.status.textContent = error.message; dialog.status.className = 'form-status error'; return; }
+    create.disabled = true; dialog.status.textContent = 'Creating table…'; dialog.status.className = 'form-status';
+    try { await invoke('create_table', { id, input }); dialog.close(); await openExplorer(id); openTable(id, input.schema, input.table); }
+    catch (error) { dialog.status.textContent = error?.message || 'Could not create table'; dialog.status.className = 'form-status error'; create.disabled = false; }
+  });
+  dialog.actions.append(create);
+}
+
+function alterTableInput(table, editors) {
+  const columns = editors.filter((editor) => editor.row.isConnected).map((editor) => ({
+    original_name: editor.row.dataset.originalName || null,
+    name: editor.name.value.trim(), data_type: editor.type.value, nullable: editor.nullable.checked, primary_key: editor.primary.checked,
+    default: editor.defaultValue.value.trim() || null, removed: editor.row.dataset.removed === 'true',
+  }));
+  if (!table.trim() || columns.some((column) => !column.removed && !column.name)) throw new Error('Table and active column names are required');
+  return { new_table_name: table.trim(), columns };
+}
+
+function openAlterTableDialog(id, schema, table, detail, options = {}) {
+  const dialog = objectDialog(`Edit table · ${schema}.${table}`);
+  const tableName = textInput(table); dialog.body.append(labeledControl('Table name', tableName));
+  const list = document.createElement('div'); list.className = 'column-editor-list'; const editors = [];
+  const addColumn = (initial = {}) => { const editor = columnEditorRow(initial, 'alter'); editors.push(editor); list.append(editor.row); return editor; };
+  for (const column of detail.columns || []) addColumn({ ...column, original_name: column.name });
+  const add = document.createElement('button'); add.className = 'button small'; add.type = 'button'; add.textContent = 'Add column'; add.addEventListener('click', () => addColumn());
+  const preview = document.createElement('pre'); preview.className = 'object-sql-preview'; preview.textContent = '-- Refresh preview after editing the structure';
+  dialog.body.append(list, add, preview);
+  const previewButton = document.createElement('button'); previewButton.className = 'button'; previewButton.type = 'button'; previewButton.textContent = 'Refresh preview';
+  const loadPreview = async () => {
+    const input = alterTableInput(tableName.value, editors); const result = await invoke('preview_alter_table', { id, schema, table, input }); preview.textContent = result.sql; return { input, result };
+  };
+  previewButton.addEventListener('click', async () => { previewButton.disabled = true; dialog.status.textContent = 'Building preview…'; try { await loadPreview(); dialog.status.textContent = 'Preview updated'; dialog.status.className = 'form-status success'; } catch (error) { dialog.status.textContent = error?.message || error.message || 'Could not build preview'; dialog.status.className = 'form-status error'; } finally { previewButton.disabled = false; } });
+  const apply = document.createElement('button'); apply.className = 'button primary'; apply.type = 'button'; apply.textContent = 'Apply changes';
+  apply.addEventListener('click', async () => {
+    apply.disabled = true;
+    try {
+      const { input, result } = await loadPreview();
+      if (!result.statements.length) { await showAlert('There are no structural changes to apply.', 'Table unchanged'); return; }
+      const confirmed = await showConfirm(`${result.destructive ? 'These changes can remove data or replace the primary key.' : 'Apply this structural change atomically?'}\n\n${result.sql}`, 'Apply table changes', result.destructive, 'Apply');
+      if (!confirmed) return;
+      dialog.status.textContent = 'Applying table changes…'; dialog.status.className = 'form-status';
+      await invoke('alter_table', { id, schema, table, input });
+      dialog.close();
+      if (options.preserveExplorer) {
+        options.onApplied?.(input.new_table_name);
+        filterExplorerTree();
+      } else {
+        await openTable(id, schema, input.new_table_name);
+      }
+    } catch (error) { dialog.status.textContent = error?.message || error.message || 'Could not alter table'; dialog.status.className = 'form-status error'; }
+    finally { apply.disabled = false; }
+  });
+  dialog.actions.append(previewButton, apply);
+}
+
+async function createSchemaFromExplorer() {
+  const id = state.selectedConnectionId; if (!id) return;
+  const schema = await showPrompt('Choose a PostgreSQL schema name.', 'New schema', 'Schema name', 'app'); if (!schema) return;
+  try { await invoke('create_schema', { id, schema }); await openExplorer(id); }
+  catch (error) { await showAlert(error?.message || 'Could not create schema', 'Schema not created'); }
+}
+
+async function createSequenceFromExplorer() {
+  const id = state.selectedConnectionId; const schema = state.selectedSchema; if (!id || !schema) return;
+  const name = await showPrompt(`Create a sequence in “${schema}”.`, 'New sequence', 'Sequence name', 'items_id_seq'); if (!name) return;
+  try { await invoke('create_sequence', { id, schema, name }); await openExplorer(id); }
+  catch (error) { await showAlert(error?.message || 'Could not create sequence', 'Sequence not created'); }
+}
+
+function openTriggerCreator(id, schema) {
+  const dialog = objectDialog(`New trigger · ${schema}`); const grid = document.createElement('div'); grid.className = 'object-form-grid';
+  const name = textInput('', 'audit_change'); const table = textInput('', 'table'); const timing = selectInput(['BEFORE', 'AFTER', 'INSTEAD OF'], 'BEFORE'); const events = textInput('INSERT', 'INSERT UPDATE'); const func = textInput('', 'schema.function_name');
+  grid.append(labeledControl('Trigger name', name), labeledControl('Table', table), labeledControl('Timing', timing), labeledControl('Events', events), labeledControl('Function', func)); dialog.body.append(grid);
+  const create = document.createElement('button'); create.className = 'button primary'; create.type = 'button'; create.textContent = 'Create trigger';
+  create.addEventListener('click', async () => { create.disabled = true; dialog.status.textContent = 'Creating trigger…'; try { await invoke('create_trigger', { id, schema, input: { name: name.value.trim(), table: table.value.trim(), timing: timing.value, events: events.value.trim(), function: func.value.trim() } }); dialog.close(); await openExplorer(id); } catch (error) { dialog.status.textContent = error?.message || 'Could not create trigger'; dialog.status.className = 'form-status error'; create.disabled = false; } });
+  dialog.actions.append(create);
+}
+
+function functionTemplate(schema) {
+  return `CREATE OR REPLACE FUNCTION ${quotePreviewIdentifier(schema)}.${quotePreviewIdentifier('function_name')}()\nRETURNS void\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  -- function body\nEND;\n$$;`;
+}
+
+function definitionEditorDialog(id, title, ddl, kind) {
+  const dialog = objectDialog(title); const editor = document.createElement('textarea'); editor.className = 'definition-editor'; editor.value = ddl; editor.spellcheck = false; dialog.body.append(editor);
+  if (kind === 'function') {
+    const validate = document.createElement('button'); validate.className = 'button'; validate.type = 'button'; validate.textContent = 'Validate';
+    validate.addEventListener('click', async () => { validate.disabled = true; dialog.status.textContent = 'Validating in a rolled-back transaction…'; try { const error = await invoke('validate_function_definition', { id, ddl: editor.value }); dialog.status.textContent = error || 'Definition is valid'; dialog.status.className = `form-status ${error ? 'error' : 'success'}`; } catch (error) { dialog.status.textContent = error?.message || 'Validation failed'; dialog.status.className = 'form-status error'; } finally { validate.disabled = false; } });
+    dialog.actions.append(validate);
+  }
+  const save = document.createElement('button'); save.className = 'button primary'; save.type = 'button'; save.textContent = kind === 'function' ? 'Save definition' : 'Save trigger';
+  save.addEventListener('click', async () => { save.disabled = true; dialog.status.textContent = 'Saving definition…'; try { await invoke(kind === 'function' ? 'save_function_definition' : 'save_trigger_definition', { id, ddl: editor.value }); dialog.close(); await openExplorer(id); } catch (error) { dialog.status.textContent = error?.message || 'Could not save definition'; dialog.status.className = 'form-status error'; save.disabled = false; } });
+  dialog.actions.append(save);
+}
+
+async function editFunctionDefinition(id, schema, name) {
+  try { const definitions = await invoke('function_definitions', { id, schema, name }); if (!definitions.length) throw new Error('Definition not found'); let selected = definitions[0]; if (definitions.length > 1) { const args = await showPrompt(`This name has ${definitions.length} overloads. Enter the exact identity arguments of the overload to edit.\n\n${definitions.map((item) => item.args || '(no arguments)').join('\n')}`, 'Choose function overload', 'Identity arguments', '', definitions[0].args); if (args === null) return; selected = definitions.find((item) => item.args === args) || null; if (!selected) { await showAlert('No overload matched those identity arguments.', 'Function not opened'); return; } } definitionEditorDialog(id, `Function · ${schema}.${name}(${selected.args})`, selected.ddl, 'function'); }
+  catch (error) { await showAlert(error?.message || 'Could not load function definition', 'Function unavailable'); }
+}
+
+function tableMaintenancePanel(id, schema, table, detail) {
   const panel = document.createElement('section'); panel.className = 'data-panel maintenance-panel';
   const heading = document.createElement('div'); heading.className = 'maintenance-heading';
   const title = document.createElement('h3'); title.textContent = 'Table maintenance';
   const actions = document.createElement('div'); actions.className = 'maintenance-actions';
   const status = document.createElement('div'); status.className = 'form-status maintenance-status'; status.setAttribute('role', 'status');
   const operations = [['vacuum', 'Vacuum'], ['analyze', 'Analyze'], ['vacuum_analyze', 'Vacuum + Analyze'], ['vacuum_full', 'Vacuum Full']];
+  const editStructure = document.createElement('button'); editStructure.className = 'button small'; editStructure.type = 'button'; editStructure.textContent = 'Edit structure';
+  editStructure.addEventListener('click', () => openAlterTableDialog(id, schema, table, detail));
+  actions.append(editStructure);
   for (const [operation, label] of operations) {
     const button = document.createElement('button'); button.className = `button small ${operation === 'vacuum_full' ? 'danger' : ''}`; button.type = 'button'; button.textContent = label;
     button.addEventListener('click', async () => {
@@ -761,6 +1150,166 @@ function tableMaintenancePanel(id, schema, table) {
     actions.append(button);
   }
   heading.append(title, actions); panel.append(heading, status);
+  return panel;
+}
+
+function formatTableCell(valueJson) {
+  if (valueJson === 'null') return 'NULL';
+  if (typeof valueJson !== 'string') return '—';
+  if (valueJson.startsWith('"')) {
+    try { return JSON.parse(valueJson); } catch { return valueJson; }
+  }
+  return valueJson;
+}
+
+function tableDataPanel(id, schema, table) {
+  const pageSize = 50;
+  let offset = 0;
+  let requestSequence = 0;
+  let loading = false;
+  const panel = document.createElement('section'); panel.className = 'data-panel table-data-panel';
+  const heading = document.createElement('div'); heading.className = 'table-data-heading';
+  const headingCopy = document.createElement('div');
+  const title = document.createElement('h3'); title.textContent = 'Table data';
+  const summary = document.createElement('small'); summary.textContent = 'Loading rows…';
+  headingCopy.append(title, summary);
+  const controls = document.createElement('div'); controls.className = 'table-data-controls';
+  const insert = document.createElement('button'); insert.className = 'button small'; insert.type = 'button'; insert.textContent = 'Insert row';
+  const refresh = document.createElement('button'); refresh.className = 'button small'; refresh.type = 'button'; refresh.textContent = 'Refresh';
+  const previous = document.createElement('button'); previous.className = 'button small'; previous.type = 'button'; previous.textContent = 'Previous';
+  const next = document.createElement('button'); next.className = 'button small'; next.type = 'button'; next.textContent = 'Next';
+  controls.append(insert, refresh, previous, next); heading.append(headingCopy, controls);
+  const status = document.createElement('div'); status.className = 'form-status table-data-status'; status.setAttribute('role', 'status');
+  const grid = document.createElement('div'); grid.className = 'table-data-grid';
+  panel.append(heading, status, grid);
+  let canPrevious = false;
+  let canNext = false;
+
+  const setLoading = (value) => {
+    loading = value;
+    insert.disabled = value; refresh.disabled = value;
+    previous.disabled = value || !canPrevious; next.disabled = value || !canNext;
+  };
+  const rowKeys = (row, primaryKeys) => primaryKeys.map((column) => ({ column, value_json: row[column] }));
+  const parseJsonInput = async (value, context) => {
+    try { return JSON.parse(value); }
+    catch { await showAlert(`${context} must use valid JSON. Text values require double quotes and SQL NULL is written as null.`, 'Invalid JSON'); return undefined; }
+  };
+
+  const loadPage = async () => {
+    if (loading) return;
+    const request = ++requestSequence;
+    setLoading(true); status.textContent = 'Loading rows…'; status.className = 'form-status table-data-status';
+    try {
+      const result = await invoke('browse_table_data', { id, schema, table, offset, limit: pageSize });
+      if (request !== requestSequence || !panel.isConnected) return;
+      const columns = result.columns || [];
+      const rows = result.rows || [];
+      const primaryKeys = result.primary_key_columns || [];
+      const first = result.total ? offset + 1 : 0;
+      const last = Math.min(offset + rows.length, result.total);
+      summary.textContent = `${first}–${last} of ${result.total}${primaryKeys.length ? ` · key: ${primaryKeys.join(', ')}` : ' · read-only without a primary key'}`;
+      canPrevious = offset > 0;
+      canNext = offset + rows.length < result.total;
+      grid.replaceChildren();
+      if (!rows.length) { grid.append(errorState('No rows', 'Insert a row or refresh after data is added.')); return; }
+      const tableElement = document.createElement('table');
+      const head = document.createElement('thead'); const header = document.createElement('tr');
+      for (const column of columns) { const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = column; header.append(cell); }
+      if (primaryKeys.length) { const actions = document.createElement('th'); actions.scope = 'col'; actions.textContent = 'Actions'; header.append(actions); }
+      head.append(header); tableElement.append(head);
+      const body = document.createElement('tbody');
+      for (const row of rows) {
+        const tr = document.createElement('tr');
+        for (const column of columns) {
+          const td = document.createElement('td');
+          if (primaryKeys.length) {
+            td.className = 'editable-table-cell';
+            const edit = document.createElement('button'); edit.className = 'table-cell-button'; edit.type = 'button'; edit.textContent = formatTableCell(row[column]); edit.title = `Edit ${column}`;
+            edit.addEventListener('click', async () => {
+              const valueJson = await showPrompt(`Enter the new value for “${column}” as JSON. Text requires double quotes; use null for SQL NULL.`, 'Edit table cell', column, '', row[column]);
+              if (valueJson === null) return;
+              if (await parseJsonInput(valueJson, 'The cell value') === undefined) return;
+              setLoading(true); status.textContent = `Updating ${column}…`;
+              try {
+                await invoke('update_table_cell', { id, schema, table, input: { keys: rowKeys(row, primaryKeys), column, value_json: valueJson } });
+                status.textContent = `${column} updated`; status.className = 'form-status table-data-status success';
+                setLoading(false); await loadPage();
+              } catch (error) {
+                status.textContent = error?.message || 'Could not update the cell'; status.className = 'form-status table-data-status error'; setLoading(false);
+              }
+            });
+            td.append(edit);
+          } else {
+            td.textContent = formatTableCell(row[column]);
+          }
+          tr.append(td);
+        }
+        if (primaryKeys.length) {
+          const td = document.createElement('td'); td.className = 'table-row-actions';
+          const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = 'Delete';
+          remove.addEventListener('click', async () => {
+            const identity = primaryKeys.map((column) => `${column}=${formatTableCell(row[column])}`).join(', ');
+            if (!await showConfirm(`Permanently delete the row identified by ${identity}?`, 'Delete table row', true)) return;
+            setLoading(true); status.textContent = 'Deleting row…';
+            try {
+              await invoke('delete_table_row', { id, schema, table, input: { keys: rowKeys(row, primaryKeys) } });
+              if (rows.length === 1 && offset > 0) offset = Math.max(0, offset - pageSize);
+              status.textContent = 'Row deleted'; status.className = 'form-status table-data-status success'; setLoading(false); await loadPage();
+            } catch (error) {
+              status.textContent = error?.message || 'Could not delete the row'; status.className = 'form-status table-data-status error'; setLoading(false);
+            }
+          });
+          td.append(remove); tr.append(td);
+        }
+        body.append(tr);
+      }
+      tableElement.append(body); grid.append(tableElement);
+    } catch (error) {
+      if (request !== requestSequence || !panel.isConnected) return;
+      summary.textContent = 'Rows unavailable';
+      grid.replaceChildren(errorState('Could not load table data', 'Check table permissions and refresh.'));
+      status.textContent = error?.message || 'Could not load table data'; status.className = 'form-status table-data-status error';
+    } finally {
+      if (request === requestSequence) setLoading(false);
+    }
+  };
+
+  insert.addEventListener('click', async () => {
+    const valuesJson = await showPrompt('Enter a JSON object with the columns to insert. Omitted columns keep their PostgreSQL defaults. Use {} for DEFAULT VALUES.', 'Insert table row', 'JSON row', '{"column":"value"}', '{}');
+    if (valuesJson === null) return;
+    const value = await parseJsonInput(valuesJson, 'The table row');
+    if (value === undefined) return;
+    if (value === null || Array.isArray(value) || typeof value !== 'object') { await showAlert('A new table row must be a JSON object.', 'Invalid table row'); return; }
+    setLoading(true); status.textContent = 'Inserting row…'; status.className = 'form-status table-data-status';
+    try {
+      await invoke('insert_table_row', { id, schema, table, input: { values_json: valuesJson } });
+      status.textContent = 'Row inserted'; status.className = 'form-status table-data-status success'; setLoading(false); await loadPage();
+    } catch (error) {
+      status.textContent = error?.message || 'Could not insert the row'; status.className = 'form-status table-data-status error'; setLoading(false);
+    }
+  });
+  refresh.addEventListener('click', () => void loadPage());
+  previous.addEventListener('click', () => { offset = Math.max(0, offset - pageSize); void loadPage(); });
+  next.addEventListener('click', () => { offset += pageSize; void loadPage(); });
+  window.setTimeout(() => void loadPage(), 0);
+  return panel;
+}
+
+function foreignKeyMapPanel(id, rows) {
+  const panel = document.createElement('section'); panel.className = 'data-panel fk-map-panel';
+  const heading = document.createElement('h3'); heading.textContent = 'Foreign keys'; panel.append(heading);
+  if (!rows.length) { panel.append(errorState('No foreign keys', 'No incoming or outgoing relationships were found.')); return panel; }
+  for (const row of rows) {
+    const button = document.createElement('button'); button.className = 'fk-map-row'; button.type = 'button';
+    const copy = document.createElement('span');
+    const name = document.createElement('strong'); name.textContent = row.constraint_name;
+    const detail = document.createElement('small'); detail.textContent = `${row.direction} · ${row.foreign_schema}.${row.foreign_table}.${row.foreign_column}`;
+    const arrow = document.createElement('span'); arrow.className = 'fk-map-arrow'; arrow.textContent = '→'; arrow.setAttribute('aria-hidden', 'true');
+    copy.append(name, detail); button.append(copy, arrow);
+    button.addEventListener('click', () => openTable(id, row.foreign_schema, row.foreign_table));
+    panel.append(button);
+  }
   return panel;
 }
 
@@ -797,23 +1346,51 @@ function renderRolesPanel(id, roles) {
   heading.append(title, count);
 
   const form = document.createElement('form'); form.className = 'role-form';
+  let editingRole = null;
   const nameLabel = document.createElement('label'); nameLabel.textContent = 'Role name';
   const name = document.createElement('input'); name.id = 'admin-role-name'; name.required = true; name.maxLength = 63; name.autocomplete = 'off'; name.placeholder = 'reporting_reader'; nameLabel.append(name);
+  const expirationLabel = document.createElement('label'); expirationLabel.textContent = 'Valid until';
+  const expiration = document.createElement('input'); expiration.id = 'admin-role-valid-until'; expiration.type = 'date'; expirationLabel.append(expiration);
   const limitLabel = document.createElement('label'); limitLabel.textContent = 'Connection limit';
   const limit = document.createElement('input'); limit.id = 'admin-role-limit'; limit.type = 'number'; limit.min = '-1'; limit.value = '-1'; limitLabel.append(limit);
   const options = document.createElement('div'); options.className = 'role-options';
-  options.append(roleCheckbox('admin-role-login', 'Can login'), roleCheckbox('admin-role-createdb', 'Create databases'), roleCheckbox('admin-role-createrole', 'Create roles'), roleCheckbox('admin-role-superuser', 'Superuser'));
-  const create = document.createElement('button'); create.className = 'button primary'; create.type = 'submit'; create.textContent = 'Create role';
+  const loginOption = roleCheckbox('admin-role-login', 'Can login');
+  const createDbOption = roleCheckbox('admin-role-createdb', 'Create databases');
+  const createRoleOption = roleCheckbox('admin-role-createrole', 'Create roles');
+  const superuserOption = roleCheckbox('admin-role-superuser', 'Superuser');
+  options.append(loginOption, createDbOption, createRoleOption, superuserOption);
+  const login = loginOption.querySelector('input');
+  const createDatabase = createDbOption.querySelector('input');
+  const createRole = createRoleOption.querySelector('input');
+  const superuser = superuserOption.querySelector('input');
+  const formActions = document.createElement('div'); formActions.className = 'form-actions role-form-actions';
+  const submit = document.createElement('button'); submit.className = 'button primary'; submit.type = 'submit'; submit.textContent = 'Create role';
+  const cancelEdit = document.createElement('button'); cancelEdit.className = 'button'; cancelEdit.type = 'button'; cancelEdit.textContent = 'Cancel edit'; cancelEdit.hidden = true;
+  formActions.append(submit, cancelEdit);
   const status = document.createElement('div'); status.className = 'form-status role-status'; status.setAttribute('role', 'status');
-  form.append(nameLabel, limitLabel, options, create, status);
+  form.append(nameLabel, expirationLabel, limitLabel, options, formActions, status);
+  const resetForm = () => {
+    editingRole = null;
+    form.reset();
+    limit.value = '-1';
+    name.disabled = false;
+    submit.textContent = 'Create role';
+    cancelEdit.hidden = true;
+    status.textContent = '';
+    status.className = 'form-status role-status';
+  };
+  cancelEdit.addEventListener('click', resetForm);
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    create.disabled = true; status.textContent = 'Creating role…'; status.className = 'form-status role-status';
+    const input = { login: login.checked, create_database: createDatabase.checked, create_role: createRole.checked, superuser: superuser.checked, connection_limit: Number(limit.value), valid_until: expiration.value || null };
+    if (editingRole && !await showConfirm(`Apply the selected attributes to role “${editingRole}”?`, 'Update role', false, 'Update')) return;
+    submit.disabled = true; status.textContent = editingRole ? 'Updating role…' : 'Creating role…'; status.className = 'form-status role-status';
     try {
-      await invoke('create_role', { id, input: { name: name.value.trim(), login: byId('admin-role-login').checked, create_database: byId('admin-role-createdb').checked, create_role: byId('admin-role-createrole').checked, superuser: byId('admin-role-superuser').checked, connection_limit: Number(limit.value) } });
+      if (editingRole) await invoke('update_role', { id, name: editingRole, input });
+      else await invoke('create_role', { id, input: { name: name.value.trim(), ...input } });
       await loadAdmin(id);
     } catch (error) {
-      create.disabled = false; status.textContent = error?.message || 'Could not create role'; status.className = 'form-status role-status error';
+      submit.disabled = false; status.textContent = error?.message || (editingRole ? 'Could not update role' : 'Could not create role'); status.className = 'form-status role-status error';
     }
   });
 
@@ -824,16 +1401,35 @@ function renderRolesPanel(id, roles) {
     const roleName = document.createElement('strong'); roleName.textContent = role.name;
     const attributes = document.createElement('small'); attributes.textContent = roleAttributes(role);
     detail.append(roleName, attributes);
+    const actions = document.createElement('div'); actions.className = 'role-actions';
+    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = 'Edit';
     const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = 'Delete';
     const reserved = role.name.toLowerCase().startsWith('pg_');
+    edit.disabled = reserved; edit.title = reserved ? 'PostgreSQL system roles cannot be edited here' : `Edit ${role.name}`;
     remove.disabled = reserved; remove.title = reserved ? 'PostgreSQL system roles cannot be deleted here' : `Delete ${role.name}`;
+    edit.addEventListener('click', () => {
+      editingRole = role.name;
+      name.value = role.name;
+      name.disabled = true;
+      expiration.value = /^\d{4}-\d{2}-\d{2}$/.test(role.valid_until || '') ? role.valid_until : '';
+      limit.value = String(role.connection_limit);
+      login.checked = role.login;
+      createDatabase.checked = role.create_database;
+      createRole.checked = role.create_role;
+      superuser.checked = role.superuser;
+      submit.textContent = 'Save changes';
+      cancelEdit.hidden = false;
+      status.textContent = `Editing ${role.name}`;
+      form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
     remove.addEventListener('click', async () => {
       const confirmation = await showDangerPrompt(`Type ${role.name} to permanently delete this PostgreSQL role. Roles that own objects cannot be deleted.`, 'Delete role', 'Role name', role.name);
       if (confirmation !== role.name) { if (confirmation !== null) await showAlert('The role name did not match. Nothing was deleted.', 'Role not deleted'); return; }
       try { await invoke('delete_role', { id, name: role.name }); await loadAdmin(id); }
       catch (error) { await showAlert(error?.message || 'Could not delete role', 'Role not deleted'); }
     });
-    row.append(detail, remove); list.append(row);
+    actions.append(edit, remove);
+    row.append(detail, actions); list.append(row);
   }
   panel.append(heading, form, list);
   return panel;
@@ -844,7 +1440,7 @@ function renderActivityPanel(id, rows) {
   const heading = document.createElement('h3'); heading.textContent = 'Activity'; panel.append(heading);
   if (!rows.length) { panel.append(errorState('No other sessions', 'PostgreSQL reported no activity for this database.')); return panel; }
   for (const activity of rows.slice(0, 20)) {
-    const row = document.createElement('div'); row.className = 'activity-item';
+    const row = document.createElement('div'); row.className = 'activity-item'; row.dataset.pid = String(activity.pid); row.tabIndex = -1;
     const detail = document.createElement('div');
     const title = document.createElement('strong'); title.textContent = `PID ${activity.pid} · ${activity.usename || 'unknown user'} · ${activity.state || 'unknown'}`;
     const query = document.createElement('small'); query.textContent = activity.query || 'No current query'; query.title = activity.query || '';
@@ -861,6 +1457,29 @@ function renderActivityPanel(id, rows) {
   return panel;
 }
 
+function renderLocksPanel(rows) {
+  const panel = document.createElement('section'); panel.className = 'data-panel locks-panel';
+  const heading = document.createElement('h3'); heading.textContent = 'Locks'; panel.append(heading);
+  if (!rows.length) { panel.append(errorState('No blocking locks', 'PostgreSQL reported no blocked sessions.')); return panel; }
+  for (const lock of rows.slice(0, 20)) {
+    const row = document.createElement('div'); row.className = 'activity-item';
+    const detail = document.createElement('div');
+    const title = document.createElement('strong'); title.textContent = `PID ${lock.blocked_pid} blocked by PID ${lock.blocking_pid}`;
+    const metadata = document.createElement('small'); metadata.textContent = `${lock.locktype || 'lock'} · ${lock.wait_sec ? `${lock.wait_sec}s` : 'waiting'} · ${lock.blocking_user || 'unknown user'}`;
+    detail.append(title, metadata);
+    const locate = document.createElement('button'); locate.className = 'button small'; locate.type = 'button'; locate.textContent = 'Show blocker';
+    locate.addEventListener('click', async () => {
+      const activity = document.querySelector(`.activity-item[data-pid="${lock.blocking_pid}"]`);
+      if (!activity) { await showAlert(`Blocking PID ${lock.blocking_pid} is no longer visible. Refresh Administration to inspect its current state.`, 'Blocking session changed'); return; }
+      showAdminPanel('activity');
+      activity.classList.add('located'); activity.focus(); activity.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => activity.classList.remove('located'), 2400);
+    });
+    row.append(detail, locate); panel.append(row);
+  }
+  return panel;
+}
+
 function renderCronJobsPanel(id, cron) {
   const panel = document.createElement('section'); panel.className = 'data-panel cron-panel';
   const heading = document.createElement('div'); heading.className = 'roles-heading';
@@ -868,7 +1487,49 @@ function renderCronJobsPanel(id, cron) {
   const status = document.createElement('span'); status.className = 'badge'; status.textContent = cron.installed ? `${cron.jobs.length} jobs` : 'Not installed';
   heading.append(title, status); panel.append(heading);
   if (!cron.installed) { panel.append(errorState('pg_cron is not installed', 'Install and preload pg_cron in PostgreSQL to manage scheduled jobs.')); return panel; }
-  if (!cron.jobs.length) { panel.append(errorState('No scheduled jobs', 'pg_cron is available, but this database has no jobs.')); return panel; }
+
+  const form = document.createElement('form'); form.className = 'cron-form';
+  let editingJob = null;
+  const nameLabel = document.createElement('label'); nameLabel.textContent = 'Name (optional)';
+  const jobName = document.createElement('input'); jobName.maxLength = 63; jobName.placeholder = 'nightly_cleanup'; nameLabel.append(jobName);
+  const scheduleLabel = document.createElement('label'); scheduleLabel.textContent = 'Schedule';
+  const schedule = document.createElement('input'); schedule.required = true; schedule.maxLength = 100; schedule.placeholder = '0 2 * * * or @daily'; scheduleLabel.append(schedule);
+  const commandLabel = document.createElement('label'); commandLabel.textContent = 'SQL command';
+  const commandInput = document.createElement('textarea'); commandInput.required = true; commandInput.maxLength = 100000; commandInput.rows = 2; commandInput.placeholder = 'VACUUM ANALYZE public.events;'; commandLabel.append(commandInput);
+  const formActions = document.createElement('div'); formActions.className = 'form-actions cron-form-actions';
+  const submit = document.createElement('button'); submit.className = 'button primary'; submit.type = 'submit'; submit.textContent = 'Create job';
+  const cancelEdit = document.createElement('button'); cancelEdit.className = 'button'; cancelEdit.type = 'button'; cancelEdit.textContent = 'Cancel edit'; cancelEdit.hidden = true;
+  formActions.append(submit, cancelEdit);
+  const formStatus = document.createElement('div'); formStatus.className = 'form-status cron-form-status'; formStatus.setAttribute('role', 'status');
+  form.append(nameLabel, scheduleLabel, commandLabel, formActions, formStatus);
+  const resetForm = () => {
+    editingJob = null;
+    form.reset();
+    jobName.disabled = false;
+    submit.textContent = 'Create job';
+    cancelEdit.hidden = true;
+    formStatus.textContent = '';
+    formStatus.className = 'form-status cron-form-status';
+  };
+  cancelEdit.addEventListener('click', resetForm);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = { name: jobName.value.trim() || null, schedule: schedule.value.trim(), command: commandInput.value.trim() };
+    if (editingJob && !await showConfirm(`Update the schedule and SQL command for “${editingJob.name || `Job ${editingJob.id}`}”?`, 'Update scheduled job', false, 'Update')) return;
+    submit.disabled = true;
+    formStatus.textContent = editingJob ? 'Updating job…' : 'Creating job…';
+    try {
+      if (editingJob) await invoke('update_cron_job', { id, jobId: editingJob.id, input });
+      else await invoke('create_cron_job', { id, input });
+      await loadAdmin(id);
+    } catch (error) {
+      submit.disabled = false;
+      formStatus.textContent = error?.message || (editingJob ? 'Could not update the job' : 'Could not create the job');
+      formStatus.className = 'form-status cron-form-status error';
+    }
+  });
+  panel.append(form);
+  if (!cron.jobs.length) { panel.append(errorState('No scheduled jobs', 'pg_cron is available. Use the form above to create the first job.')); return panel; }
   for (const job of cron.jobs) {
     const row = document.createElement('div'); row.className = 'cron-item';
     const detail = document.createElement('div');
@@ -877,6 +1538,31 @@ function renderCronJobsPanel(id, cron) {
     const command = document.createElement('code'); command.textContent = job.command; command.title = job.command;
     detail.append(name, metadata, command);
     const actions = document.createElement('div'); actions.className = 'cron-actions';
+    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = 'Edit';
+    edit.addEventListener('click', () => {
+      editingJob = job;
+      jobName.value = job.name || '';
+      jobName.disabled = true;
+      schedule.value = job.schedule;
+      commandInput.value = job.command;
+      submit.textContent = 'Save changes';
+      cancelEdit.hidden = false;
+      formStatus.textContent = `Editing ${job.name || `Job ${job.id}`}`;
+      form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    const history = document.createElement('button'); history.className = 'button small'; history.type = 'button'; history.textContent = 'Runs';
+    history.addEventListener('click', async () => {
+      history.disabled = true;
+      try {
+        const runs = await invoke('cron_job_runs', { id, jobId: job.id });
+        const summary = runs.length ? runs.map((run) => `#${run.id} · ${run.status || 'unknown'} · ${run.start_time || 'no start time'} UTC${run.duration_seconds ? ` · ${run.duration_seconds}s` : ''}${run.return_message ? `\n${run.return_message}` : ''}`).join('\n\n') : 'No executions were recorded for this job.';
+        await showAlert(summary, `Runs · ${job.name || `Job ${job.id}`}`);
+      } catch (error) {
+        await showAlert(error?.message || 'Could not load job executions', 'Job history unavailable');
+      } finally {
+        history.disabled = false;
+      }
+    });
     const toggle = document.createElement('button'); toggle.className = 'button small'; toggle.type = 'button'; toggle.textContent = job.active ? 'Pause' : 'Resume';
     toggle.addEventListener('click', async () => {
       toggle.disabled = true;
@@ -889,7 +1575,7 @@ function renderCronJobsPanel(id, cron) {
       try { await invoke('delete_cron_job', { id, jobId: job.id }); await loadAdmin(id); }
       catch (error) { await showAlert(error?.message || 'Could not delete the scheduled job', 'Job not deleted'); }
     });
-    actions.append(toggle, remove); row.append(detail, actions); panel.append(row);
+    actions.append(edit, history, toggle, remove); row.append(detail, actions); panel.append(row);
   }
   return panel;
 }
@@ -961,40 +1647,109 @@ function renderQueryStatsPanel(id, stats, sortBy = 'total') {
     const analyze = document.createElement('button'); analyze.className = 'button small'; analyze.type = 'button'; analyze.textContent = 'Ask assistant'; analyze.addEventListener('click', () => void askAssistantAboutQueryStat(id, queryStat));
     actions.append(open, analyze); row.append(detail, actions); panel.append(row);
   }
-  sort.addEventListener('change', () => panel.replaceWith(renderQueryStatsPanel(id, stats, sort.value)));
+  sort.addEventListener('change', () => {
+    const replacement = renderQueryStatsPanel(id, stats, sort.value);
+    replacement.dataset.adminPanel = 'query-stats';
+    panel.replaceWith(replacement);
+  });
   return panel;
+}
+
+let currentAdminPanel = 'roles';
+
+function showAdminPanel(section) {
+  currentAdminPanel = section;
+  for (const button of byId('admin-tabs').querySelectorAll('[data-admin-tool]')) {
+    const active = button.dataset.adminTool === section;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+  }
+  for (const panel of byId('admin-content').querySelectorAll('[data-admin-panel]')) panel.hidden = panel.dataset.adminPanel !== section;
+}
+
+function renderAdminPanels(sections) {
+  const tabs = byId('admin-tabs');
+  const content = byId('admin-content');
+  tabs.replaceChildren();
+  content.replaceChildren();
+  for (const [key, label, panel] of sections) {
+    const tab = document.createElement('button');
+    tab.className = 'admin-tool-tab';
+    tab.type = 'button';
+    tab.role = 'tab';
+    tab.dataset.adminTool = key;
+    tab.textContent = label;
+    tab.addEventListener('click', () => showAdminPanel(key));
+    panel.dataset.adminPanel = key;
+    tabs.append(tab);
+    content.append(panel);
+  }
+  tabs.hidden = false;
+  showAdminPanel(sections.some(([key]) => key === currentAdminPanel) ? currentAdminPanel : sections[0][0]);
 }
 
 async function loadAdmin(id) {
   const content = byId('admin-content'); content.replaceChildren();
+  const tabs = byId('admin-tabs'); tabs.hidden = true; tabs.replaceChildren();
   if (!id) { content.append(errorState('Choose a connected connection', 'Activity and locks are read from PostgreSQL.')); return; }
   content.append(errorState('Loading administration…', ''));
   const [adminResult, rolesResult, cronResult, extensionsResult, queryStatsResult] = await Promise.allSettled([invoke('admin', { id }), invoke('list_roles', { id }), invoke('list_cron_jobs', { id }), invoke('list_extensions', { id }), invoke('query_stats', { id })]);
   if (byId('admin-connection').value !== id) return;
-  content.replaceChildren();
-  content.append(rolesResult.status === 'fulfilled' ? renderRolesPanel(id, rolesResult.value) : unavailablePanel('Roles unavailable', 'The connected role may not have permission to inspect PostgreSQL roles.'));
-  content.append(cronResult.status === 'fulfilled' ? renderCronJobsPanel(id, cronResult.value) : unavailablePanel('Scheduled jobs unavailable', 'Check pg_cron permissions and configuration.'));
-  content.append(extensionsResult.status === 'fulfilled' ? renderExtensionsPanel(id, extensionsResult.value) : unavailablePanel('Extensions unavailable', 'The connected role may not have permission to inspect extensions.'));
-  content.append(queryStatsResult.status === 'fulfilled' ? renderQueryStatsPanel(id, queryStatsResult.value) : unavailablePanel('Query statistics unavailable', 'Check pg_stat_statements configuration and monitoring permissions.'));
+  const sections = [
+    ['roles', 'Roles', rolesResult.status === 'fulfilled' ? renderRolesPanel(id, rolesResult.value) : unavailablePanel('Roles unavailable', 'The connected role may not have permission to inspect PostgreSQL roles.')],
+    ['jobs', 'Scheduled Jobs', cronResult.status === 'fulfilled' ? renderCronJobsPanel(id, cronResult.value) : unavailablePanel('Scheduled jobs unavailable', 'Check pg_cron permissions and configuration.')],
+    ['extensions', 'Extensions', extensionsResult.status === 'fulfilled' ? renderExtensionsPanel(id, extensionsResult.value) : unavailablePanel('Extensions unavailable', 'The connected role may not have permission to inspect extensions.')],
+    ['query-stats', 'Query Stats', queryStatsResult.status === 'fulfilled' ? renderQueryStatsPanel(id, queryStatsResult.value) : unavailablePanel('Query statistics unavailable', 'Check pg_stat_statements configuration and monitoring permissions.')],
+  ];
   if (adminResult.status === 'fulfilled') {
     const payload = adminResult.value;
-    content.append(renderActivityPanel(id, payload.activity || []));
-    content.append(dataPanel('Locks', (payload.locks || []).slice(0, 12).map((row) => [`${row.blocked_pid} → ${row.blocking_pid}`, row.wait_sec ? `${row.wait_sec}s` : 'waiting'])));
+    sections.push(['activity', 'Activity', renderActivityPanel(id, payload.activity || [])]);
+    sections.push(['locks', 'Locks', renderLocksPanel(payload.locks || [])]);
   } else {
-    content.append(unavailablePanel('Activity and locks unavailable', 'Check monitoring permissions and reconnect.'));
+    sections.push(['activity', 'Activity', unavailablePanel('Activity unavailable', 'Check monitoring permissions and reconnect.')]);
+    sections.push(['locks', 'Locks', unavailablePanel('Locks unavailable', 'Check monitoring permissions and reconnect.')]);
   }
+  renderAdminPanels(sections);
+}
+
+let explorerReturnState = null;
+
+function rememberExplorerState() {
+  if (byId('view-explorer').hidden) return;
+  const workspace = document.querySelector('.workspace-content');
+  explorerReturnState = {
+    focus: document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    scrollTop: workspace?.scrollTop || 0,
+  };
+}
+
+function restoreExplorerState() {
+  byId('explorer-filter').value = state.explorerFilter;
+  filterExplorerTree();
+  const workspace = document.querySelector('.workspace-content');
+  if (workspace && explorerReturnState) workspace.scrollTop = explorerReturnState.scrollTop;
+  const focus = explorerReturnState?.focus;
+  if (focus?.isConnected && !focus.hidden) focus.focus();
+  else byId('explorer-filter').focus();
+}
+
+function returnToExplorer() {
+  switchView('explorer');
+  restoreExplorerState();
 }
 
 async function openTable(id, schema, table) {
+  rememberExplorerState();
   switchView('table-detail'); byId('detail-title').textContent = table; byId('detail-eyebrow').textContent = `${schema.toUpperCase()} · TABLE DETAIL`; byId('detail-summary').textContent = 'Loading';
   const content = byId('detail-content'); content.replaceChildren(errorState('Loading table detail…', ''));
   try {
     const payload = await invoke('table_detail', { id, schema, table }); const detail = payload.detail; content.replaceChildren(); byId('detail-summary').textContent = `${detail.row_estimate ?? 0} estimated rows`;
-    content.append(tableMaintenancePanel(id, schema, table));
+    content.append(tableMaintenancePanel(id, schema, table, detail));
+    content.append(tableDataPanel(id, schema, table));
     content.append(dataPanel('Columns', (detail.columns || []).map((row) => [row.name, `${row.full_type || row.data_type}${row.is_nullable ? '' : ' · NOT NULL'}${row.is_primary_key ? ' · PK' : ''}`])));
     content.append(dataPanel('Constraints', (detail.constraints || []).map((row) => [row.name, `${row.type}: ${row.definition}`])));
     content.append(dataPanel('Indexes', (detail.indexes || []).map((row) => [row.name, row.definition])));
-    content.append(dataPanel('Foreign keys', (detail.fk_map || []).map((row) => [row.constraint_name, `${row.direction} · ${row.foreign_table}.${row.foreign_column}`])));
+    content.append(foreignKeyMapPanel(id, detail.fk_map || []));
     content.append(dataPanel('Column statistics', (payload.column_stats || []).map((row) => [row.column, `${row.null_frac == null ? '—' : `${(row.null_frac * 100).toFixed(1)}% null`} · ${row.n_distinct == null ? '—' : `${row.n_distinct} distinct`}`])));
     content.append(codePanel('DDL', payload.ddl));
   } catch (error) { content.replaceChildren(errorState('Table detail unavailable', 'The object may have been removed or permission denied.')); }
@@ -1085,7 +1840,60 @@ function renderErdCanvas(data) {
 
 const RESULT_ROW_HEIGHT = 35;
 const RESULT_OVERSCAN = 10;
+const RESULT_DEFAULT_COLUMN_WIDTH = 180;
 let resultVirtualCleanup = null;
+
+function buildResultHeader(column, index, columnElement) {
+  const cell = document.createElement('th');
+  cell.className = 'result-column-header';
+  const label = document.createElement('span');
+  label.textContent = column;
+  const resizer = document.createElement('span');
+  resizer.className = 'result-column-resizer';
+  resizer.tabIndex = 0;
+  resizer.setAttribute('role', 'separator');
+  resizer.setAttribute('aria-orientation', 'vertical');
+  resizer.setAttribute('aria-label', `Resize column ${column}`);
+  resizer.setAttribute('aria-valuemin', '80');
+  resizer.setAttribute('aria-valuemax', '640');
+  let pointerId = null;
+  let startX = 0;
+  let startWidth = RESULT_DEFAULT_COLUMN_WIDTH;
+  const setWidth = (width) => {
+    const next = clampResultColumnWidth(width);
+    columnElement.style.width = `${next}px`;
+    resizer.setAttribute('aria-valuenow', String(next));
+  };
+  resizer.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    pointerId = event.pointerId;
+    startX = event.clientX;
+    startWidth = Number.parseFloat(columnElement.style.width) || RESULT_DEFAULT_COLUMN_WIDTH;
+    resizer.setPointerCapture(pointerId);
+    resizer.classList.add('resizing');
+  });
+  resizer.addEventListener('pointermove', (event) => {
+    if (pointerId !== event.pointerId) return;
+    setWidth(startWidth + event.clientX - startX);
+  });
+  const finishResize = (event) => {
+    if (pointerId !== event.pointerId) return;
+    pointerId = null;
+    resizer.classList.remove('resizing');
+  };
+  resizer.addEventListener('pointerup', finishResize);
+  resizer.addEventListener('pointercancel', finishResize);
+  resizer.addEventListener('keydown', (event) => {
+    if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+    event.preventDefault();
+    const current = Number.parseFloat(columnElement.style.width) || RESULT_DEFAULT_COLUMN_WIDTH;
+    setWidth(current + (event.key === 'ArrowRight' ? 16 : -16));
+  });
+  setWidth(RESULT_DEFAULT_COLUMN_WIDTH);
+  cell.dataset.columnIndex = String(index);
+  cell.append(label, resizer);
+  return cell;
+}
 
 function buildResultRow(result, rowIndex) {
   const row = result.rows[rowIndex];
@@ -1187,15 +1995,23 @@ function renderResult(result) {
     return;
   }
   const table = document.createElement('table');
+  const columnGroup = document.createElement('colgroup');
   const head = document.createElement('thead');
   const headerRow = document.createElement('tr');
-  for (const column of result.columns) { const cell = document.createElement('th'); cell.textContent = column; headerRow.append(cell); }
+  for (const [index, column] of result.columns.entries()) {
+    const columnElement = document.createElement('col');
+    columnGroup.append(columnElement);
+    headerRow.append(buildResultHeader(column, index, columnElement));
+  }
+  const actionColumn = document.createElement('col');
+  actionColumn.className = 'result-action-column';
+  columnGroup.append(actionColumn);
   const actionHeader = document.createElement('th');
   actionHeader.textContent = 'Row';
   headerRow.append(actionHeader);
   head.append(headerRow);
   const body = document.createElement('tbody');
-  table.append(head, body);
+  table.append(columnGroup, head, body);
   grid.append(table);
   resultVirtualCleanup = renderVirtualizedRows(body, result, result.columns.length + 1);
 }
@@ -1275,7 +2091,7 @@ async function loadHistory() {
     const meta = document.createElement('small'); meta.textContent = `${entry.conn_label} · ${entry.row_count} rows · ${entry.duration_ms} ms`;
     const remove = document.createElement('button'); remove.className = 'button small danger history-meta'; remove.type = 'button'; remove.textContent = 'Delete';
     remove.addEventListener('click', async (event) => { event.stopPropagation(); await invoke('delete_history_entry', { id: entry.id }); loadHistory(); });
-    item.append(sql, meta, remove); item.addEventListener('click', () => { setEditorValue(entry.sql); switchView('query'); }); list.append(item);
+    item.append(sql, meta, remove); item.addEventListener('click', () => { setEditorValue(entry.sql); switchView('query'); showQueryWorkspaceSection('editor'); }); list.append(item);
   }
 }
 
@@ -1305,7 +2121,32 @@ async function loadSnippets() {
       catch (error) { await showAlert(error?.message || 'Could not delete snippet', 'Snippet not deleted'); }
     });
     actions.append(rename, remove);
-    item.append(name, sql, meta, actions); item.addEventListener('click', () => { setEditorValue(snippet.sql); switchView('query'); }); list.append(item);
+    item.append(name, sql, meta, actions); item.addEventListener('click', () => { setEditorValue(snippet.sql); switchView('query'); showQueryWorkspaceSection('editor'); }); list.append(item);
+  }
+}
+
+function showQueryWorkspaceSection(section) {
+  for (const button of document.querySelectorAll('[data-query-workspace]')) {
+    const active = button.dataset.queryWorkspace === section;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+  }
+  for (const panel of document.querySelectorAll('[data-query-workspace-panel]')) panel.hidden = panel.dataset.queryWorkspacePanel !== section;
+  if (section === 'history') void loadHistory();
+  if (section === 'snippets') void loadSnippets();
+}
+
+function showAdminWorkspaceSection(section) {
+  for (const button of document.querySelectorAll('[data-admin-workspace]')) {
+    const active = button.dataset.adminWorkspace === section;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+  }
+  for (const panel of document.querySelectorAll('[data-admin-workspace-panel]')) panel.hidden = panel.dataset.adminWorkspacePanel !== section;
+  if (section === 'backup' && !byId('backup-connection').value && byId('admin-connection').value) {
+    byId('backup-connection').value = byId('admin-connection').value;
+    const connection = state.connections.find((item) => item.id === byId('backup-connection').value);
+    if (connection) byId('restore-database').value = connection.database;
   }
 }
 
@@ -1319,11 +2160,20 @@ function filterExplorerTree() {
     let tableMatches = false;
     for (const item of tableItems) {
       const matches = !query || item.textContent.toLowerCase().includes(query);
-      item.hidden = !matches;
+      const row = item.closest('.tree-object-row, .tree-table-row');
+      if (row) row.hidden = !matches; else item.hidden = !matches;
       tableMatches ||= matches;
     }
-    group.hidden = Boolean(query) && !schemaMatches && !tableMatches;
+    const loadFailed = group.dataset.loadState === 'error';
+    group.hidden = Boolean(query) && !schemaMatches && !tableMatches && !loadFailed;
   }
+}
+
+function updateExplorerObjectActions() {
+  const connected = state.connections.some((connection) => connection.id === state.selectedConnectionId && connection.state === 'connected');
+  const hasSchema = connected && Boolean(state.selectedSchema);
+  byId('new-schema').disabled = !connected;
+  for (const id of ['new-table', 'new-function', 'new-sequence', 'new-trigger']) byId(id).disabled = !hasSchema;
 }
 
 function formatEstimatedRows(value) {
@@ -1337,11 +2187,102 @@ function explorerSection(children, label) {
   children.append(heading);
 }
 
+function openAdminForConnection(id) {
+  state.selectedConnectionId = id;
+  byId('admin-connection').value = id;
+  switchView('admin');
+  showAdminWorkspaceSection('administration');
+}
+
+function openSchemaObject(id, schema, object) {
+  state.selectedConnectionId = id;
+  state.selectedSchema = schema;
+  if (object.kind === 'trigger' && object.parent_table) {
+    openTable(id, schema, object.parent_table);
+    return;
+  }
+  const sql = schemaObjectSql(schema, object);
+  if (sql) {
+    openSqlInNewTab(sql, id, object.name);
+    return;
+  }
+  void showAlert('This object does not have a navigable surface yet.', 'Object unavailable');
+}
+
+async function advanceSequence(id, schema, name) {
+  if (!await showConfirm(`Advance sequence “${schema}.${name}” and return its next value? This changes the sequence state.`, 'Advance sequence', false, 'Advance')) return;
+  try {
+    const value = await invoke('next_sequence_value', { id, schema, name });
+    await showAlert(`Next value: ${value}`, `Sequence · ${schema}.${name}`);
+  } catch (error) {
+    await showAlert(error?.message || 'Could not advance the sequence', 'Sequence not changed');
+  }
+}
+
+async function resetSequence(id, schema, name) {
+  const value = await showPrompt(`Choose the value for sequence “${schema}.${name}”.`, 'Reset sequence', 'Signed 64-bit integer', '1');
+  if (value === null) return;
+  if (!/^-?\d+$/.test(value)) { await showAlert('Enter a whole number without decimals.', 'Invalid sequence value'); return; }
+  if (!await showConfirm(`Set sequence “${schema}.${name}” to ${value}? Existing table values are not checked.`, 'Confirm sequence reset', true, 'Reset')) return;
+  try {
+    await invoke('set_sequence_value', { id, schema, name, value });
+    await showAlert(`Sequence set to ${value}.`, `Sequence · ${schema}.${name}`);
+  } catch (error) {
+    await showAlert(error?.message || 'Could not reset the sequence', 'Sequence not changed');
+  }
+}
+
+function renderExplorerExtensions(id, tree, extensions) {
+  const installed = extensions?.installed || [];
+  if (!installed.length) return;
+  const group = document.createElement('div');
+  group.className = 'tree-group';
+  group.dataset.loaded = 'true';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'tree-item';
+  button.textContent = `▾ Extensions (${installed.length})`;
+  const children = document.createElement('div');
+  children.className = 'tree-children';
+  button.addEventListener('click', () => {
+    children.hidden = !children.hidden;
+    button.textContent = `${children.hidden ? '▸' : '▾'} Extensions (${installed.length})`;
+  });
+  for (const extension of installed) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'tree-item schema-object';
+    const name = document.createElement('span');
+    name.className = 'tree-item-label';
+    name.textContent = `⬡ ${extension.name}`;
+    const detail = document.createElement('small');
+    detail.textContent = extension.installed_version || 'installed';
+    item.append(name, detail);
+    item.addEventListener('click', () => openAdminForConnection(id));
+    children.append(item);
+  }
+  group.append(button, children);
+  tree.append(group);
+}
+
+function renderExplorerRetry(id, title, message) {
+  const tree = byId('explorer-tree');
+  const failure = errorState(title, message);
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'button small';
+  retry.textContent = 'Retry';
+  retry.addEventListener('click', () => void openExplorer(id));
+  failure.append(retry);
+  tree.replaceChildren(failure);
+}
+
 function renderExplorerTables(id, schemaName, children, tables, objects = []) {
   children.replaceChildren();
   if (tables.length) explorerSection(children, 'Tables & views');
   for (const table of tables) {
-    const tableItem = document.createElement('div');
+    const tableItem = document.createElement('button');
+    tableItem.type = 'button';
     tableItem.className = 'tree-item';
     const tableName = document.createElement('span');
     tableName.className = 'tree-item-label';
@@ -1350,7 +2291,27 @@ function renderExplorerTables(id, schemaName, children, tables, objects = []) {
     estimate.textContent = formatEstimatedRows(table.estimated_rows);
     tableItem.append(tableName, estimate);
     tableItem.addEventListener('click', () => openTable(id, schemaName, table.name));
-    children.append(tableItem);
+    if (table.kind === 'table') {
+      const row = document.createElement('div'); row.className = 'tree-table-row';
+      const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = 'Edit';
+      edit.addEventListener('click', async () => {
+        edit.disabled = true;
+        try {
+          const payload = await invoke('table_detail', { id, schema: schemaName, table: table.name });
+          openAlterTableDialog(id, schemaName, table.name, payload.detail, {
+            preserveExplorer: true,
+            onApplied: (newName) => { table.name = newName; tableName.textContent = `▦ ${newName}`; },
+          });
+        } catch (error) {
+          await showAlert(error?.message || 'Could not load the table structure', 'Table editor unavailable');
+        } finally {
+          edit.disabled = false;
+        }
+      });
+      row.append(tableItem, edit); children.append(row);
+    } else {
+      children.append(tableItem);
+    }
   }
   const groups = [
     ['Functions & procedures', ['function', 'procedure'], { function: 'ƒ', procedure: '⚙' }],
@@ -1362,7 +2323,8 @@ function renderExplorerTables(id, schemaName, children, tables, objects = []) {
     if (!matching.length) continue;
     explorerSection(children, label);
     for (const object of matching) {
-      const item = document.createElement('div');
+      const item = document.createElement('button');
+      item.type = 'button';
       item.className = 'tree-item schema-object';
       const name = document.createElement('span');
       name.className = 'tree-item-label';
@@ -1370,7 +2332,29 @@ function renderExplorerTables(id, schemaName, children, tables, objects = []) {
       const detail = document.createElement('small');
       detail.textContent = object.detail || object.kind;
       item.append(name, detail);
-      children.append(item);
+      item.addEventListener('click', () => openSchemaObject(id, schemaName, object));
+      if (['sequence', 'function', 'procedure', 'trigger'].includes(object.kind)) {
+        const row = document.createElement('div'); row.className = 'tree-object-row';
+        if (object.kind === 'sequence') {
+          const next = document.createElement('button'); next.className = 'button small tree-object-action'; next.type = 'button'; next.textContent = 'Next';
+          next.addEventListener('click', () => void advanceSequence(id, schemaName, object.name));
+          const reset = document.createElement('button'); reset.className = 'button small danger tree-object-action'; reset.type = 'button'; reset.textContent = 'Reset';
+          reset.addEventListener('click', () => void resetSequence(id, schemaName, object.name));
+          row.append(item, next, reset);
+        } else {
+          const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = 'Edit';
+          edit.addEventListener('click', () => {
+            if (object.kind === 'trigger') {
+              const ddl = (object.definition || '').replace(/^CREATE\s+TRIGGER/i, 'CREATE OR REPLACE TRIGGER');
+              definitionEditorDialog(id, `Trigger · ${schemaName}.${object.name}`, ddl, 'trigger');
+            } else void editFunctionDefinition(id, schemaName, object.name);
+          });
+          row.append(item, edit);
+        }
+        children.append(row);
+      } else {
+        children.append(item);
+      }
     }
   }
   if (!tables.length && !objects.length) {
@@ -1381,43 +2365,82 @@ function renderExplorerTables(id, schemaName, children, tables, objects = []) {
   }
 }
 
+function cancelExplorerSchemaLoad(group, schemaName) {
+  group.dataset.requestToken = String(Number(group.dataset.requestToken || 0) + 1);
+  group.dataset.loadState = 'idle';
+  group.dataset.loaded = 'false';
+  const button = group.firstElementChild;
+  const children = group.querySelector('.tree-children');
+  if (button) button.textContent = `▸ ${schemaName}`;
+  if (children) {
+    children.hidden = true;
+    children.replaceChildren();
+  }
+}
+
+async function loadExplorerSchemaGroup(id, schemaName, group) {
+  const token = Number(group.dataset.requestToken || 0) + 1;
+  group.dataset.requestToken = String(token);
+  group.dataset.loadState = 'loading';
+  group.dataset.loaded = 'false';
+  const button = group.firstElementChild;
+  const children = group.querySelector('.tree-children');
+  button.textContent = `× ${schemaName} · loading`;
+  children.hidden = false;
+  children.replaceChildren(errorState('Loading schema objects…', 'Click the schema again to cancel.'));
+  try {
+    const [tables, objects] = await Promise.all([
+      invoke('list_tables', { id, schema: schemaName }),
+      invoke('list_schema_objects', { id, schema: schemaName }),
+    ]);
+    if (Number(group.dataset.requestToken) !== token || state.selectedConnectionId !== id || !group.isConnected) return false;
+    renderExplorerTables(id, schemaName, children, tables, objects);
+    group.dataset.loadState = 'loaded';
+    group.dataset.loaded = 'true';
+    button.textContent = `▾ ${schemaName}`;
+    return true;
+  } catch (error) {
+    if (Number(group.dataset.requestToken) !== token || state.selectedConnectionId !== id || !group.isConnected) return false;
+    group.dataset.loadState = 'error';
+    group.dataset.loaded = 'false';
+    button.textContent = `↻ ${schemaName}`;
+    children.replaceChildren(errorState('Could not load schema objects', 'Click the schema to retry.'));
+    return false;
+  }
+}
+
 async function loadExplorerTablesForFilter(id) {
   const request = ++state.explorerFilterRequest;
   const groups = [...byId('explorer-tree').querySelectorAll('.tree-group')];
-  await Promise.all(groups.filter((group) => group.dataset.loaded !== 'true').map(async (group) => {
+  await Promise.all(groups.filter((group) => group.dataset.schema && !['loaded', 'loading'].includes(group.dataset.loadState)).map(async (group) => {
     const schemaName = group.dataset.schema;
-    if (!schemaName) return;
-    try {
-      const [tables, objects] = await Promise.all([
-        invoke('list_tables', { id, schema: schemaName }),
-        invoke('list_schema_objects', { id, schema: schemaName }),
-      ]);
-      if (request !== state.explorerFilterRequest) return;
-      renderExplorerTables(id, schemaName, group.querySelector('.tree-children'), tables, objects);
-      group.dataset.loaded = 'true';
-    } catch {
-      group.dataset.loaded = 'true';
-    }
+    await loadExplorerSchemaGroup(id, schemaName, group);
   }));
   if (request === state.explorerFilterRequest) filterExplorerTree();
 }
 
 async function openExplorer(id) {
+  const request = ++state.explorerConnectionRequest;
+  ++state.explorerFilterRequest;
   state.selectedConnectionId = id;
   state.selectedSchema = null;
+  updateExplorerObjectActions();
   state.explorerFilter = '';
   byId('explorer-filter').value = '';
   byId('open-erd').disabled = true;
   const connection = state.connections.find((item) => item.id === id);
   if (!connection) return;
   if (connection.state !== 'connected') await connect(id);
+  if (request !== state.explorerConnectionRequest || state.selectedConnectionId !== id) return;
   renderExplorerConnections();
   const current = state.connections.find((item) => item.id === id);
   if (current?.state !== 'connected') {
     byId('explorer-status').textContent = 'Connect failed';
+    renderExplorerRetry(id, 'Could not connect', 'Check the connection settings and try again.');
     return;
   }
   byId('explorer-status').textContent = current.label;
+  updateExplorerObjectActions();
   const tree = byId('explorer-tree');
   tree.replaceChildren();
   const loading = document.createElement('div');
@@ -1425,13 +2448,22 @@ async function openExplorer(id) {
   loading.textContent = 'Loading schemas…';
   tree.append(loading);
   try {
-    const schemas = await invoke('list_schemas', { id });
+    const [schemasResult, extensionsResult] = await Promise.allSettled([
+      invoke('list_schemas', { id }),
+      invoke('list_extensions', { id }),
+    ]);
+    if (request !== state.explorerConnectionRequest || state.selectedConnectionId !== id) return;
+    if (schemasResult.status === 'rejected') throw schemasResult.reason;
+    const schemas = schemasResult.value;
     tree.replaceChildren();
+    if (extensionsResult.status === 'fulfilled') renderExplorerExtensions(id, tree, extensionsResult.value);
     for (const schema of schemas) {
       const group = document.createElement('div');
       group.className = 'tree-group';
       group.dataset.schema = schema.name;
       group.dataset.loaded = 'false';
+      group.dataset.loadState = 'idle';
+      group.dataset.requestToken = '0';
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'tree-item';
@@ -1441,27 +2473,27 @@ async function openExplorer(id) {
       button.addEventListener('click', async () => {
         state.selectedSchema = schema.name;
         byId('open-erd').disabled = false;
-        if (group.dataset.loaded === 'true') {
+        updateExplorerObjectActions();
+        if (group.dataset.loadState === 'loading') {
+          cancelExplorerSchemaLoad(group, schema.name);
+          return;
+        }
+        if (group.dataset.loadState === 'loaded') {
           children.hidden = !children.hidden;
           button.textContent = `${children.hidden ? '▸' : '▾'} ${schema.name}`;
           return;
         }
-        button.textContent = `▾ ${schema.name}`;
-        const [tables, objects] = await Promise.all([
-          invoke('list_tables', { id, schema: schema.name }),
-          invoke('list_schema_objects', { id, schema: schema.name }),
-        ]);
-        renderExplorerTables(id, schema.name, children, tables, objects);
-        group.dataset.loaded = 'true';
+        await loadExplorerSchemaGroup(id, schema.name, group);
         filterExplorerTree();
       });
       group.append(button, children);
       tree.append(group);
       filterExplorerTree();
     }
-    if (!schemas.length) tree.innerHTML = '<div class="empty-state"><strong>No schemas</strong></div>';
+    if (!schemas.length) tree.append(errorState('No schemas', 'This database did not expose any schemas.'));
   } catch (error) {
-    tree.innerHTML = '<div class="empty-state"><strong>Could not load schemas</strong><span>Retry after reconnecting.</span></div>';
+    if (request !== state.explorerConnectionRequest || state.selectedConnectionId !== id) return;
+    renderExplorerRetry(id, 'Could not load schemas', 'Reconnect and try loading the Explorer again.');
   }
 }
 
@@ -1471,11 +2503,9 @@ function switchView(name) {
     button.classList.toggle('active', active);
     if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   }
-  for (const view of ['connections', 'explorer', 'dashboard', 'admin', 'backup', 'assistant', 'query', 'history', 'snippets', 'preferences', 'table-detail', 'erd']) byId(`view-${view}`).hidden = view !== name;
+  for (const view of ['connections', 'explorer', 'dashboard', 'admin', 'assistant', 'query', 'preferences', 'table-detail', 'erd']) byId(`view-${view}`).hidden = view !== name;
   byId('page-title').textContent = name === 'preferences' ? 'Preferences' : name[0].toUpperCase() + name.slice(1);
   if (name === 'explorer') renderExplorerConnections();
-  if (name === 'history') loadHistory();
-  if (name === 'snippets') loadSnippets();
   if (name === 'dashboard') loadDashboard(byId('dashboard-connection').value);
   if (name === 'admin') loadAdmin(byId('admin-connection').value);
   if (name === 'assistant') loadAssistant(byId('assistant-connection').value);
@@ -1485,10 +2515,11 @@ const paletteCommands = [
   ['Connections', 'Manage saved PostgreSQL connections', 'connections'],
   ['Explorer', 'Browse schemas and tables', 'explorer'],
   ['Dashboard', 'Inspect database health and metrics', 'dashboard'],
-  ['Administration', 'Review activity, locks and extensions', 'admin'],
-  ['SQL Editor', 'Open a query workspace', 'query'],
-  ['History', 'Reopen a recent query', 'history'],
-  ['Snippets', 'Open reusable SQL snippets', 'snippets'],
+  ['Administration', 'Review activity, locks and extensions', 'admin', null, 'administration'],
+  ['Backup & Restore', 'Protect or restore PostgreSQL data', 'admin', null, 'backup'],
+  ['SQL Editor', 'Open a query workspace', 'query', 'editor'],
+  ['History', 'Reopen a recent query in SQL Editor', 'query', 'history'],
+  ['Snippets', 'Open reusable SQL snippets in SQL Editor', 'query', 'snippets'],
   ['Preferences', 'Theme, colors, updates and about Draco', 'preferences'],
 ];
 
@@ -1500,14 +2531,14 @@ async function renderCommandPalette(filter = '') {
   const query = filter.trim().toLowerCase();
   const commands = paletteCommands.filter(([name, description]) => `${name} ${description}`.toLowerCase().includes(query));
   if (!commands.length && query.length < 2) { list.append(errorState('No commands found', 'Try another search term.')); return; }
-  for (const [name, description, view] of commands) {
+  for (const [name, description, view, querySection, adminSection] of commands) {
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'command-item';
     const title = document.createElement('strong'); title.textContent = name;
     const hint = document.createElement('small'); hint.textContent = description;
     item.append(title, hint);
-    item.addEventListener('click', () => { closeCommandPalette(); switchView(view); });
+    item.addEventListener('click', () => { closeCommandPalette(); switchView(view); if (querySection) showQueryWorkspaceSection(querySection); if (adminSection) showAdminWorkspaceSection(adminSection); });
     list.append(item);
   }
   if (query.length < 2 || !state.selectedConnectionId) {
@@ -1680,11 +2711,11 @@ byId('open-command-palette').addEventListener('click', openCommandPalette);
 for (const element of document.querySelectorAll('[data-close-command-palette]')) element.addEventListener('click', closeCommandPalette);
 byId('command-search').addEventListener('input', (event) => renderCommandPalette(event.target.value));
 document.addEventListener('keydown', (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openCommandPalette(); }
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 't') { event.preventDefault(); switchView('query'); newQueryTab(); }
-  if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 's') { event.preventDefault(); switchView('query'); void saveCurrentSnippet(); }
-  if (event.key === 'F8') { event.preventDefault(); switchView('query'); runQuery(); }
-  if (event.key === 'F10') { event.preventDefault(); switchView('query'); runQuery('explain'); }
+  if ((event.ctrlKey || event.metaKey) && ['k', 'p'].includes(event.key.toLowerCase())) { event.preventDefault(); openCommandPalette(); }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 't') { event.preventDefault(); switchView('query'); showQueryWorkspaceSection('editor'); newQueryTab(); }
+  if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 's') { event.preventDefault(); switchView('query'); showQueryWorkspaceSection('editor'); void saveCurrentSnippet(); }
+  if (event.key === 'F8') { event.preventDefault(); switchView('query'); showQueryWorkspaceSection('editor'); runQuery(); }
+  if (event.key === 'F10') { event.preventDefault(); switchView('query'); showQueryWorkspaceSection('editor'); runQuery('explain'); }
   if (event.key === 'Escape' && !byId('command-palette').hidden) closeCommandPalette();
 });
 byId('cancel-connection').addEventListener('click', hideForm);
@@ -1736,6 +2767,12 @@ document.addEventListener('click', (event) => {
   if (!byId('sql-autocomplete').hidden && !event.target.closest('.sql-editor-wrap')) hideAutocomplete();
 });
 byId('open-erd').addEventListener('click', openErd);
+byId('back-to-explorer').addEventListener('click', returnToExplorer);
+byId('new-schema').addEventListener('click', () => void createSchemaFromExplorer());
+byId('new-table').addEventListener('click', () => openCreateTableDialog(state.selectedConnectionId, state.selectedSchema));
+byId('new-function').addEventListener('click', () => definitionEditorDialog(state.selectedConnectionId, `New function · ${state.selectedSchema}`, functionTemplate(state.selectedSchema), 'function'));
+byId('new-sequence').addEventListener('click', () => void createSequenceFromExplorer());
+byId('new-trigger').addEventListener('click', () => openTriggerCreator(state.selectedConnectionId, state.selectedSchema));
 byId('explorer-filter').addEventListener('input', (event) => {
   state.explorerFilter = event.target.value;
   filterExplorerTree();
@@ -1747,10 +2784,20 @@ byId('backup-connection').addEventListener('change', () => { const connection = 
 byId('assistant-connection').addEventListener('change', () => loadAssistant(byId('assistant-connection').value));
 byId('run-backup').addEventListener('click', () => runBackup(false));
 byId('run-restore').addEventListener('click', () => runBackup(true));
+byId('choose-backup-output').addEventListener('click', () => void chooseBackupOutput());
+byId('choose-restore-input').addEventListener('click', () => void chooseRestoreInput());
+byId('backup-format').addEventListener('change', () => { byId('backup-output').value = ''; });
 byId('cancel-operation').addEventListener('click', cancelOperation);
 byId('send-assistant').addEventListener('click', sendAssistant);
 byId('clear-assistant').addEventListener('click', async () => { const id = byId('assistant-connection').value; if (!id) return; await invoke('clear_assistant_history', { id }); loadAssistant(id); });
 for (const button of document.querySelectorAll('[data-preference-section]')) button.addEventListener('click', () => showPreferenceSection(button.dataset.preferenceSection));
+byId('ai-settings-form').addEventListener('submit', saveAssistantSettings);
+byId('ai-provider').addEventListener('change', (event) => changeAssistantProvider(event.target.value));
+byId('refresh-ai-models').addEventListener('click', () => void loadAssistantModels());
+byId('save-ai-key').addEventListener('click', () => void saveAssistantKey());
+byId('clear-ai-key').addEventListener('click', () => void clearAssistantKey());
+for (const button of document.querySelectorAll('[data-query-workspace]')) button.addEventListener('click', () => showQueryWorkspaceSection(button.dataset.queryWorkspace));
+for (const button of document.querySelectorAll('[data-admin-workspace]')) button.addEventListener('click', () => showAdminWorkspaceSection(button.dataset.adminWorkspace));
 for (const button of document.querySelectorAll('[data-theme-choice]')) button.addEventListener('click', () => void savePreferences({ theme: button.dataset.themeChoice }));
 for (const button of document.querySelectorAll('[data-accent-choice]')) button.addEventListener('click', () => void savePreferences({ accent: button.dataset.accentChoice }));
 byId('check-updates-startup').addEventListener('change', (event) => void savePreferences({ check_updates_on_startup: event.target.checked }));
@@ -1758,7 +2805,7 @@ byId('check-updates').addEventListener('click', () => void checkForUpdates(true)
 byId('copy-release-link').addEventListener('click', async () => { if (!state.releaseUrl) return; await navigator.clipboard.writeText(state.releaseUrl); byId('update-detail').textContent = 'Release link copied'; });
 byId('copy-pix-key').addEventListener('click', async () => { await navigator.clipboard.writeText(PIX_KEY); byId('pix-status').textContent = 'Pix key copied'; });
 byId('copy-pix-code').addEventListener('click', async () => { await navigator.clipboard.writeText(PIX_COPY_AND_PASTE); byId('pix-status').textContent = 'Pix copy-and-paste code copied'; });
-for (const button of document.querySelectorAll('[data-view]')) button.addEventListener('click', () => switchView(button.dataset.view));
+for (const button of document.querySelectorAll('[data-view]')) button.addEventListener('click', () => { switchView(button.dataset.view); if (button.dataset.view === 'query') showQueryWorkspaceSection('editor'); if (button.dataset.view === 'admin') showAdminWorkspaceSection('administration'); });
 bindWindowControls();
 bindSidebarToggle();
 bindAppDialog();

@@ -29,7 +29,7 @@ qualquer distribuição Linux moderna, com integração visual prioritária ao L
   fallback compilável durante a estabilização.
 - Nenhuma senha ou passphrase é manuseada em texto plano — armazenamento
   delegado ao Serviço de Segredos do sistema (GNOME Keyring/KWallet, via
-  `oo7`), já integrado ao sistema.
+  `keyring`), já integrado ao sistema.
 
 > **Status**: Tauri 2 é o artefato oficial; o `draco-gtk` permanece compilável
 > durante a transição. Veja
@@ -58,7 +58,8 @@ qualquer distribuição Linux moderna, com integração visual prioritária ao L
 ## Compilando
 
 Dependências de sistema para o app oficial (nomes Fedora/openSUSE): WebKitGTK
-4.1, GTK3, OpenSSL e librsvg, além de um compilador Rust estável recente
+4.1, GTK3, OpenSSL, librsvg e `xdg-desktop-portal` (seletores de arquivo
+nativos), além de um compilador Rust estável recente
 (`cargo`, `rustc` ≥ 1.85). Para compilar o fallback GTK, instale também
 GTK4, libadwaita e GtkSourceView5.
 
@@ -96,6 +97,11 @@ pacote não é "draco" simples porque esse nome já é usado pelo projeto
 oficial `extra/draco` do Arch — o app continua se chamando Draco, só o nome
 de distribuição do pacote muda. Não há build Windows — nenhum app do
 ecossistema Lyra OS sustenta essa plataforma hoje.
+
+> **Release em preparação:** o worktree `2.0.3` já usa Tauri, mas os metadados
+> publicados ainda estão em `1.1.3`, cuja tag é anterior ao shell Tauri. Não
+> use esse tarball para validar o app atual; o checklist de publicação está em
+> [`packaging/RELEASE_PENDING.md`](packaging/RELEASE_PENDING.md).
 
 ## Licença
 

@@ -100,10 +100,8 @@ async fn connects_and_introspects_the_real_database() {
     assert!(schemas.iter().any(|s| s.name == test_schema), "created test schema is missing from introspection");
 
     let tables = queries::get_tables(&driver, "public").await.expect("get_tables");
-    println!("public tables: {tables:?}");
 
-    let public_functions = queries::get_functions(&driver, "public").await.expect("get_functions");
-    println!("public functions: {} found", public_functions.len());
+    let _ = queries::get_functions(&driver, "public").await.expect("get_functions");
 
     let result = queries::execute_query(&driver, "SELECT 1 AS one, 'draco' AS label").await.expect("execute_query");
     assert_eq!(result.columns, vec!["one".to_string(), "label".to_string()]);
@@ -112,22 +110,17 @@ async fn connects_and_introspects_the_real_database() {
 
     if let Some(table) = tables.first() {
         let columns = queries::get_columns(&driver, "public", &table.name).await.expect("get_columns");
-        println!("columns of {}: {columns:?}", table.name);
         assert!(!columns.is_empty(), "a real table should have at least one column");
 
         // Same functions the M4 table-detail tab drives.
         let ddl = queries::get_table_ddl(&driver, "public", &table.name).await.expect("get_table_ddl");
         assert!(ddl.starts_with("CREATE TABLE"), "unexpected DDL: {ddl}");
-        println!("DDL of {}:\n{ddl}", table.name);
 
-        let indexes = queries::get_indexes(&driver, "public", &table.name).await.expect("get_indexes");
-        println!("indexes of {}: {indexes:?}", table.name);
+        let _ = queries::get_indexes(&driver, "public", &table.name).await.expect("get_indexes");
 
-        let constraints = queries::get_constraints(&driver, "public", &table.name).await.expect("get_constraints");
-        println!("constraints of {}: {constraints:?}", table.name);
+        let _ = queries::get_constraints(&driver, "public", &table.name).await.expect("get_constraints");
 
-        let fk_map = queries::get_fk_map(&driver, "public", &table.name).await.expect("get_fk_map");
-        println!("fk_map of {}: {fk_map:?}", table.name);
+        let _ = queries::get_fk_map(&driver, "public", &table.name).await.expect("get_fk_map");
 
         let detail = queries::get_table_detail(&driver, "public", &table.name).await.expect("get_table_detail");
         assert_eq!(detail.columns.len(), columns.len(), "get_table_detail should see the same columns as get_columns");
@@ -135,12 +128,10 @@ async fn connects_and_introspects_the_real_database() {
 
     // Same functions the M5 connection dashboard drives.
     let dashboard = queries::get_dashboard(&driver).await.expect("get_dashboard");
-    println!("dashboard: {dashboard:?}");
     assert!(!dashboard.pg_version.is_empty());
     assert!(dashboard.max_conn > 0);
 
     let stats = queries::get_db_stats(&driver).await.expect("get_db_stats");
-    println!("db_stats: {stats:?}");
     assert!(stats.db.is_some());
 
     // Same functions the M6 table creator, table editor and data grid drive. Everything lives
@@ -171,6 +162,7 @@ async fn connects_and_introspects_the_real_database() {
             data_type: id_type,
             nullable: false,
             default: None,
+            primary_key: true,
             removed: false,
         },
         queries::ColumnEdit {
@@ -179,6 +171,7 @@ async fn connects_and_introspects_the_real_database() {
             data_type: label_type,
             nullable: true,
             default: None,
+            primary_key: false,
             removed: false,
         },
         queries::ColumnEdit {
@@ -187,6 +180,7 @@ async fn connects_and_introspects_the_real_database() {
             data_type: parent_id_type,
             nullable: true,
             default: None,
+            primary_key: false,
             removed: false,
         },
         queries::ColumnEdit {
@@ -195,10 +189,23 @@ async fn connects_and_introspects_the_real_database() {
             data_type: "text".to_string(),
             nullable: false,
             default: Some("'new'".to_string()),
+            primary_key: false,
             removed: false,
         },
     ];
-    let alter_statements = queries::build_alter_table_statements(&test_schema, table, table, &detail_before.columns, &edits);
+    let primary_key_constraint = detail_before
+        .constraints
+        .iter()
+        .find(|constraint| constraint.kind == "PRIMARY KEY")
+        .map(|constraint| constraint.name.as_str());
+    let alter_statements = queries::build_alter_table_statements(
+        &test_schema,
+        table,
+        table,
+        &detail_before.columns,
+        &edits,
+        primary_key_constraint,
+    );
     assert!(!queries::alter_table_is_destructive(&alter_statements));
     queries::alter_table(&driver, &alter_statements).await.expect("alter test table");
     let detail_after = queries::get_table_detail(&driver, &test_schema, table).await.expect("get_table_detail after alter");
@@ -240,7 +247,6 @@ async fn connects_and_introspects_the_real_database() {
 
     let overloads = queries::get_function_ddl(&driver, &test_schema, function_name).await.expect("get_function_ddl");
     assert_eq!(overloads.len(), 1);
-    println!("function ddl: {}", overloads[0].ddl);
     let functions = queries::get_functions(&driver, &test_schema).await.expect("get_functions after create");
     assert!(functions.iter().any(|function| function.name == function_name));
 
@@ -281,31 +287,27 @@ async fn connects_and_introspects_the_real_database() {
     // Same functions the M7 admin tab drives. Job mutation is exercised only when pg_cron is
     // installed; the live database used in CI may legitimately not have that extension.
     let roles = queries::get_roles(&driver).await.expect("get_roles");
-    println!("roles: {} found, e.g. {:?}", roles.len(), roles.first());
     assert!(!roles.is_empty(), "pg_roles should never be empty");
 
-    let activity = queries::get_activity(&driver).await.expect("get_activity");
-    println!("activity: {activity:?}");
+    let _ = queries::get_activity(&driver).await.expect("get_activity");
 
-    let locks = queries::get_locks(&driver).await.expect("get_locks");
-    println!("locks: {locks:?}");
+    let _ = queries::get_locks(&driver).await.expect("get_locks");
 
     let extensions = queries::get_extensions(&driver).await.expect("get_extensions");
-    println!("extensions: {} installed, {} available", extensions.installed.len(), extensions.available.len());
     assert!(!extensions.available.is_empty());
 
     // pg_stat_statements may legitimately be absent (needs shared_preload_libraries + a server
     // restart, outside what CREATE EXTENSION alone can do), same tolerance as pg_cron below.
     let query_stats = queries::get_query_stats(&driver).await.expect("get_query_stats");
-    println!("query stats: installed={} count={}", query_stats.installed, query_stats.queries.len());
+    if !query_stats.installed {
+        assert!(query_stats.queries.is_empty());
+    }
 
     let sequences = queries::get_sequences(&driver, &test_schema).await.expect("get_sequences");
     assert!(sequences.iter().any(|sequence| sequence.name == "draco_live_test_seq"));
-    println!("test sequences: {sequences:?}");
 
     let triggers = queries::get_triggers(&driver, &test_schema).await.expect("get_triggers");
     assert!(triggers.iter().any(|trigger| trigger.name == "draco_live_test_trigger"));
-    println!("test triggers: {} found", triggers.len());
 
     let completion = queries::get_completion_data(&driver).await.expect("get_completion_data");
     assert!(!completion.schemas.is_empty());
@@ -315,7 +317,6 @@ async fn connects_and_introspects_the_real_database() {
     assert!(completion.functions.iter().any(|entry| entry.schema == test_schema && entry.name == function_name));
 
     let jobs = queries::get_jobs(&driver).await.expect("get_jobs");
-    println!("jobs: installed={} count={}", jobs.installed, jobs.jobs.len());
     if jobs.installed {
         let job_name = format!("draco_live_{}_job", std::process::id());
         queries::create_job(&driver, Some(&job_name), "@once", "SELECT 1").await.expect("create temporary cron job");
@@ -338,12 +339,10 @@ async fn connects_and_introspects_the_real_database() {
 
     // Same functions the M8 ERD and global search drive.
     let erd = queries::get_erd_data(&driver, "public").await.expect("get_erd_data");
-    println!("erd: {} tables, {} relations", erd.tables.len(), erd.relations.len());
     assert_eq!(erd.tables.len(), tables.len());
     assert!(!erd.relations.is_empty(), "api_appointments alone has 3 outgoing FKs, expected at least one relation");
 
     let search_results = queries::global_search(&driver, "appointment").await.expect("global_search");
-    println!("search 'appointment': {search_results:?}");
     assert!(search_results.iter().any(|r| r.name.contains("appointment")));
 
     })
@@ -362,8 +361,8 @@ async fn connects_and_introspects_the_real_database() {
             cleanup.expect("cleanup: drop isolated test schema");
         }
         Err(payload) => {
-            if let Err(error) = cleanup {
-                eprintln!("live PostgreSQL cleanup failed: {error}");
+            if cleanup.is_err() {
+                eprintln!("live PostgreSQL cleanup failed");
             }
             std::panic::resume_unwind(payload);
         }

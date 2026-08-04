@@ -30,6 +30,7 @@ BuildRequires:  desktop-file-utils
 BuildRequires:  appstream-glib
 BuildRequires:  fdupes
 BuildRequires:  zstd
+Requires:       xdg-desktop-portal
 
 %description
 Draco é o cliente de banco de dados do ecossistema Lyra OS: explorador de

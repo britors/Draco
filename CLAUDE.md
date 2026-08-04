@@ -1,75 +1,196 @@
 # Draco
 
-Cliente de banco de dados (explorador de esquemas, editor SQL, administração)
-para PostgreSQL, app do ecossistema **Lyra OS**.
-GitHub: https://github.com/britors/Draco
+Cliente desktop PostgreSQL do ecossistema **Lyra OS** para Linux. O artefato
+oficial é o app **Tauri 2**; a implementação GTK4/libadwaita continua no
+workspace apenas como fallback de estabilização.
 
-## Stack
+- Repositório: <https://github.com/britors/Draco>
+- Identificador desktop: `org.lyraos.Draco`
+- Versão do workspace: `2.0.3`
+- Licença: GPL-3.0-or-later
+- Binário oficial: `target/release/draco`
+- Binário de fallback: `target/debug/draco-gtk`
 
-- **Linguagem**: Rust
-- **Plataforma**: desktop Linux, Tauri 2 + WebKitGTK 4.1; GTK4 legado em transição
-- **Driver**: `tokio-postgres` — sem dependência de CLI externo (`psql`)
-- **Túnel SSH**: `russh` (em processo, sem shell out pro binário `ssh`)
-- **Editor SQL**: frontend local HTML/CSS/JavaScript (sem framework/CDN)
-- **Segredos**: `oo7` (Secret Service / GNOME Keyring) — nunca texto plano
-- **Build**: `cargo` (workspace)
+## Stack e restrições de produto
 
-O build oficial é `cargo build --locked --release -p draco-tauri`; use
-`cargo check -p draco-gtk` somente para verificar o fallback de transição.
+- Rust 2021, Tauri 2 + WebKitGTK 4.1 no shell oficial.
+- `tokio-postgres` + `deadpool-postgres` para conexões e pool (máximo de 5
+  conexões por driver); TLS via `rustls`.
+- Túnel SSH e jump host em processo via `russh`; não chamar o executável `ssh`.
+- Frontend oficial em HTML/CSS/JavaScript local, sem framework, bundler, CDN ou
+  dependência de rede em runtime. Os fontes servidos pelo Tauri estão
+  diretamente em `frontend/dist`.
+- Credenciais via crate `keyring`: Secret Service (GNOME Keyring/KWallet) no
+  Linux. Nunca persistir senha, passphrase ou chave de IA nos arquivos TOML,
+  DOM, storage do navegador ou logs.
+- Queries normais não dependem de `psql`. Backup/restauração são a exceção
+  deliberada e usam `pg_dump`, `pg_restore` ou `psql` por meio de
+  `draco-core::postgres::backup`.
+- O produto e o empacotamento são somente Linux (RPM/OBS e AUR); não reintroduzir
+  suporte Windows sem nova decisão de produto.
 
-Reescrito de Electron/TypeScript para Rust/Tauri 2 seguindo o mesmo padrão de
-separação de núcleo e frontend dos outros apps do ecossistema.
+## Arquitetura e dependências entre camadas
 
-## Arquitetura
+O workspace possui quatro crates:
 
-Workspace Cargo com núcleo, aplicação e dois frontends:
-- `draco-core` — pool Postgres, túnel SSH, queries de introspecção/DDL/stats,
-  storage local (TOML/XDG via `directories`) e segredos. **Sem dependência de
-  nenhum toolkit gráfico** — deve compilar e ser testável isoladamente.
-- `draco-app` — casos de uso e DTOs sem toolkit.
-- `src-tauri` — shell oficial Tauri 2, binário `draco`.
-- `draco-gtk` — frontend GTK4/libadwaita de fallback, binário `draco-gtk`.
+- `draco-core`: motor independente de GUI. Contém conexões, pool, TLS, SSH,
+  introspecção/DDL/administração PostgreSQL, backup/restauração, Assistente de
+  IA, parser `schema.draco`, persistência XDG/TOML e credenciais.
+- `draco-app`: camada de casos de uso usada pelo Tauri. É dona do
+  `ConnectionManager`, do registro de operações canceláveis e dos DTOs
+  serializáveis. Credenciais só entram como argumentos transitórios e nunca
+  fazem parte dos DTOs.
+- `src-tauri` (`draco-tauri`): bridge IPC fina e shell oficial. Comandos devem
+  delegar para `draco-app`; não expor `PostgresDriver` ou acesso genérico a
+  filesystem/processo.
+- `draco-gtk`: frontend legado/fallback. Ainda usa `draco-core` diretamente e
+  deve permanecer compilável até o checklist de estabilização ser concluído.
 
-Bridging async → GTK (ver `draco-gtk/src/main.rs`): um runtime `tokio`
-multi-thread roda numa thread própria (`draco-tokio`); o loop GTK fica na
-main thread. Trabalho que precisa do reactor tokio (`tokio-postgres`, `russh`)
-é disparado com `runtime_handle.spawn(...)` e o `JoinHandle` é aguardado
-dentro de `glib::MainContext::default().spawn_local(...)` na thread GTK —
-nunca se bloqueia uma thread na outra.
+Fluxo oficial:
 
-## Regras do frontend oficial — obrigatórias
+```text
+frontend/dist -> comandos Tauri -> draco-app -> draco-core -> PostgreSQL/SSH/XDG/keyring
+```
 
-A UI deve parecer **dark-first, local e acessível**:
-- assets, fontes e scripts somente locais; nenhum CDN ou recurso remoto;
-- estados de loading, vazio, erro e confirmação destrutiva explícitos;
-- dados inseridos pelo usuário sempre via `textContent`, nunca HTML não confiável;
-- IPC somente por comandos registrados no `src-tauri`;
-- segredos nunca entram no DOM, storage do navegador ou logs.
+No fallback GTK, o loop GTK fica na main thread e um runtime Tokio multi-thread
+é mantido na thread `draco-tokio`. I/O assíncrono é iniciado com
+`runtime_handle.spawn(...)` e o `JoinHandle` é aguardado em
+`glib::MainContext::spawn_local(...)`; não bloquear um loop esperando o outro.
 
-O frontend GTK segue as regras nativas abaixo somente enquanto existir como fallback.
+## Estado funcional atual do Tauri
 
-## Segredos e logs
+A bridge registrada em `src-tauri/src/main.rs` oferece:
 
-- Senhas de conexão, SSH e jump host: `oo7` (Secret Service). Nunca gravar em
-  disco em texto plano nem logar.
-- O fallback GTK usa `tracing` com nível controlado por `DRACO_LOG`; o shell
-  Tauri deve ser depurado pelo stderr do processo. Conteúdo de query e
-  credenciais nunca aparecem em log.
+- criação, teste obrigatório, edição, favoritos, conexão/desconexão e exclusão
+  de conexões, incluindo SSH/jump host;
+- Explorer lazy de schemas, tabelas, views, funções, procedures, sequences e
+  triggers, mais busca global;
+- Editor SQL com abas, seleção/buffer completo, execução de query ou script,
+  `EXPLAIN` sem `ANALYZE`, cancelamento por `operationId`, highlighting local e
+  autocomplete obtido do schema;
+- grid de resultados virtualizado, detalhe de linha, cópia TSV e exportação
+  CSV/JSON;
+- histórico (máximo 50) e snippets por conexão;
+- Dashboard, estatísticas, detalhe de tabela (colunas, constraints, índices,
+  FKs, DDL e estatísticas de coluna) e ERD navegável;
+- Activity/Locks, roles, `pg_cron`, extensões, `pg_stat_statements` e manutenção
+  allowlisted (`VACUUM`/`ANALYZE`);
+- backup/restauração canceláveis;
+- preferências de tema/destaque, About/Pix e checagem somente leitura da release
+  mais recente no GitHub;
+- Assistente de IA por conexão com Anthropic, OpenAI ou Gemini.
 
-## Progresso da reescrita
+A UI Tauri já cobre browse/edit paginado por PK, criação/alteração visual de
+tabelas (incluindo FK inline e troca de PK), criação de schema/sequence/trigger,
+edição validada de funções/procedures/triggers, edição de roles e jobs e reset
+de sequences. Os DTOs nunca aceitam um lote de `ALTER TABLE` pronto: o serviço
+reconsulta a estrutura atual, valida os campos e reconstrói o diff no Rust.
+Antes de ampliar uma superfície, conferir a matriz em
+`docs/migration/rust-gtk-parity.md` e os comandos registrados em
+`src-tauri/src/main.rs`.
 
-A matriz de paridade funcional (o que já foi portado da versão Electron, o
-que falta) fica em
-[`docs/migration/rust-gtk-parity.md`](docs/migration/rust-gtk-parity.md).
-Atualize a linha do módulo correspondente ao terminar de portar uma
-superfície.
+## Invariantes de segurança
 
-## Build e escopo confirmado
+- Arquivos XDG/TOML armazenam somente metadados, preferências, histórico,
+  snippets, configurações/histórico do Assistente e seu contador de uso.
+- Senhas PostgreSQL, SSH/jump host e chaves de API ficam no credential store sob
+  os serviços `draco` e `draco-ai`. Chamadas síncronas do crate `keyring` devem
+  continuar dentro de `tokio::task::spawn_blocking`.
+- `draco-core::legacy_secrets` é a ponte Linux de uso único para entradas antigas
+  do `oo7`: copia, relê para verificar e só então remove o item legado. Não
+  remover essa compatibilidade antes do período de upgrade da linha `2.x`.
+- SQL, resultados, credenciais e passphrases não devem aparecer em logs ou
+  envelopes de erro. Logs de ferramentas externas devem redigir caminhos
+  escolhidos pelo usuário.
+- Conteúdo fornecido pelo usuário vai ao DOM com `textContent`/DOM APIs, nunca
+  como HTML não confiável.
+- A capability Tauri é restrita à janela `main`; a CSP permite apenas assets
+  locais/data e IPC. Não adicionar plugin genérico de shell ou filesystem.
+- Mutações destrutivas exigem confirmação explícita e, quando aplicável,
+  confirmação nominal.
+- O Assistente só pode inspecionar o banco. Suas ferramentas são
+  `list_schemas`, `list_tables`, `describe_table`, `explain_query`,
+  `run_select` (máximo 50 linhas) e `get_performance_health`. Não adicionar DDL
+  ou DML ao tool loop; sugestões SQL devem ser texto para revisão manual.
+- `EXPLAIN` do editor e do Assistente nunca usa `ANALYZE`.
 
-- Só Linux (Tauri/WebKitGTK via OBS + AUR) — sem build Windows. Nenhum app do
-  ecossistema Lyra OS sustenta Windows hoje.
-- O binário oficial é `target/release/draco`; o GTK permanece compilável até o
-  checklist de [`docs/migration/tauri-stabilization.md`](docs/migration/tauri-stabilization.md).
-- v1 mira paridade ampla com a versão Electron anterior (dashboard, ERD,
-  editores de tabela/função, roles, pg_cron, activity/locks, stats — ver
-  matriz de paridade), não um MVP deliberadamente reduzido.
+## Persistência e estado
+
+`draco-core/src/store.rs` usa `directories::ProjectDirs` e arquivos TOML no
+diretório de configuração XDG. Os arquivos atuais cobrem conexões, histórico,
+snippets, preferências e estado do Assistente (`ai-settings.toml`,
+`ai-history.toml`, `ai-usage.toml`). O histórico de IA é separado por ID de
+conexão e o limite diário usa dias UTC.
+
+`Application` mantém drivers vivos por ID de conexão e clona o handle do
+driver antes de queries longas para não segurar o mutex do manager durante todo
+o I/O. Queries, scripts, `EXPLAIN`, backup e restore podem registrar um
+`operationId`; o registro deve ser removido ao concluir, falhar ou cancelar.
+Cancelamento de query é direcionado ao PID do backend da operação, evitando
+cancelar outra query concorrente da mesma conexão.
+
+## Regras do frontend oficial
+
+- Alterar primeiro os tokens em `frontend/dist/styles.css`; temas claro/escuro
+  e as cinco cores de destaque dependem deles.
+- Manter estados explícitos de loading, vazio, sucesso e erro, navegação por
+  teclado e foco visível.
+- O frontend usa o global Tauri (`window.__TAURI__`) e somente comandos
+  registrados em `src-tauri/src/main.rs`.
+- Não introduzir `fetch` no frontend. As únicas saídas de rede atuais ficam no
+  backend: checagem de atualização e provedores do Assistente.
+- Módulos testáveis isoladamente vivem em arquivos como `sql-highlight.js`,
+  `sql-autocomplete.js`, `virtual-list.js` e `result-export.js`.
+
+## Build, lint e testes
+
+Build oficial:
+
+```sh
+cargo build --locked --release -p draco-tauri
+./target/release/draco
+```
+
+Validação equivalente à CI:
+
+```sh
+(cd frontend && npm ci --ignore-scripts && npm run check && npm test)
+cargo fmt --check -p draco-app -p draco-tauri
+cargo clippy --locked --workspace --exclude draco-gtk --all-targets -- -D warnings
+cargo test --locked --workspace --exclude draco-gtk
+cargo build --locked -p draco-tauri
+cargo check --locked -p draco-gtk
+desktop-file-validate data/org.lyraos.Draco.desktop
+appstreamcli validate --no-net data/org.lyraos.Draco.metainfo.xml
+```
+
+O teste contra PostgreSQL real é ignorado por padrão e busca a senha no
+credential store a partir de `DRACO_TEST_CONN_ID`:
+
+```sh
+./scripts/test-live-postgres.sh
+```
+
+Ele aceita também `DRACO_TEST_HOST`, `DRACO_TEST_DB` e `DRACO_TEST_USER`; nunca
+colocar a senha no ambiente. A última execução documentada passou contra
+PostgreSQL 18.4, mas ainda não cobre webview instalada, SSH/jump host real nem
+as três APIs de IA.
+
+O worktree está em `2.0.3`, enquanto RPM/AUR/AppStream continuam em `1.1.3`.
+Essa tag antiga não contém `src-tauri`; seguir `packaging/RELEASE_PENDING.md`
+e nunca publicar o pacote Tauri com `SKIP`, uma tag reutilizada ou um checksum
+de `main`.
+
+## Documentação que acompanha mudanças
+
+- Paridade e lacunas: `docs/migration/rust-gtk-parity.md`.
+- Critérios para remover o GTK: `docs/migration/tauri-stabilization.md`.
+- Contrato `draco-app`/IPC: `docs/architecture/tauri-application-contract.md`.
+- Ameaças e invariantes: `docs/security/threat-model.md`.
+- Design system: `docs/design/frontend-design-system.md`.
+- Desenvolvimento e distribuição Linux: `docs/development/tauri.md`.
+- Teste real: `docs/testing/live-postgres.md`.
+
+Ao concluir uma superfície, atualizar a matriz de paridade e a documentação do
+contrato correspondente. O código e os comandos registrados são a fonte de
+verdade quando um documento estiver defasado.

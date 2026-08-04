@@ -5,6 +5,7 @@
 pub mod assistant;
 pub mod connection;
 pub mod error;
+mod legacy_secrets;
 pub mod manager;
 pub mod parser;
 pub mod postgres;

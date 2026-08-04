@@ -7,7 +7,6 @@
 use std::path::PathBuf;
 use std::process::Stdio;
 
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{mpsc, watch};
 
@@ -56,6 +55,8 @@ pub struct ToolConnection<'a> {
     pub ssl: bool,
 }
 
+/// Compatibility event stream for the GTK fallback. Raw stdout/stderr variants remain in the
+/// contract but the hardened runner never emits them; only `Finished` is sent.
 #[derive(Debug, Clone)]
 pub enum ToolEvent {
     Stdout(String),
@@ -174,31 +175,13 @@ async fn run_tool(
             "PGSSLMODE",
             if connection.ssl { "require" } else { "disable" },
         )
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        // Never forward tool output: psql scripts can deliberately or accidentally print SQL
+        // values, and PostgreSQL errors can echo object data. The application reports only the
+        // exit status/cancellation state.
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
 
     let mut child = command.spawn()?;
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-
-    let stdout_task = stdout.map(|stream| {
-        let events = events.clone();
-        tokio::spawn(async move {
-            let mut lines = BufReader::new(stream).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                let _ = events.send(ToolEvent::Stdout(line));
-            }
-        })
-    });
-    let stderr_task = stderr.map(|stream| {
-        let events = events.clone();
-        tokio::spawn(async move {
-            let mut lines = BufReader::new(stream).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                let _ = events.send(ToolEvent::Stderr(line));
-            }
-        })
-    });
 
     let result = tokio::select! {
         status = child.wait() => {
@@ -212,12 +195,6 @@ async fn run_tool(
         }
     };
 
-    if let Some(task) = stdout_task {
-        let _ = task.await;
-    }
-    if let Some(task) = stderr_task {
-        let _ = task.await;
-    }
     let _ = events.send(ToolEvent::Finished(result));
     Ok(result)
 }

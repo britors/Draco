@@ -21,11 +21,8 @@
           <button class="nav-item" data-icon="◈" data-view="explorer" title="Explorer" type="button">Explorer</button>
           <button class="nav-item" data-icon="▦" data-view="dashboard" title="Dashboard" type="button">Dashboard</button>
           <button class="nav-item" data-icon="⚙" data-view="admin" title="Administration" type="button">Administration</button>
-          <button class="nav-item" data-icon="⇩" data-view="backup" title="Backup" type="button">Backup</button>
           <button class="nav-item" data-icon="✦" data-view="assistant" title="Assistant" type="button">Assistant</button>
           <button class="nav-item" data-icon="⌘" data-view="query" title="SQL Editor" type="button">SQL Editor</button>
-          <button class="nav-item" data-icon="◷" data-view="history" title="History" type="button">History</button>
-          <button class="nav-item" data-icon="▤" data-view="snippets" title="Snippets" type="button">Snippets</button>
           <button class="nav-item" data-icon="◉" data-view="preferences" title="Preferences" type="button">Preferences</button>
         </nav>
         <div class="sidebar-footer"><span class="status-dot"></span><span id="health-label">Starting backend…</span></div>
@@ -92,7 +89,7 @@
         </section>
         <section id="view-explorer" class="view" hidden>
           <section class="panel explorer-panel">
-            <div class="panel-heading"><div><span class="eyebrow">LAZY INTROSPECTION</span><h2>Explorer</h2></div><div class="form-actions"><input class="explorer-filter" id="explorer-filter" type="search" placeholder="Filter schemas and objects" aria-label="Filter schemas and objects" autocomplete="off" /><span class="badge" id="explorer-status">Select a connection</span><button class="button small" id="open-erd" type="button" disabled>Open ERD</button></div></div>
+            <div class="panel-heading"><div><span class="eyebrow">LAZY INTROSPECTION</span><h2>Explorer</h2></div><div class="form-actions explorer-actions"><input class="explorer-filter" id="explorer-filter" type="search" placeholder="Filter schemas and objects" aria-label="Filter schemas and objects" autocomplete="off" /><span class="badge" id="explorer-status">Select a connection</span><button class="button small" id="new-schema" type="button" disabled>New schema</button><button class="button small" id="new-table" type="button" disabled>New table</button><button class="button small" id="new-function" type="button" disabled>New function</button><button class="button small" id="new-sequence" type="button" disabled>New sequence</button><button class="button small" id="new-trigger" type="button" disabled>New trigger</button><button class="button small" id="open-erd" type="button" disabled>Open ERD</button></div></div>
             <div class="explorer-layout"><div id="explorer-connections" class="tree-pane"></div><div id="explorer-tree" class="tree-pane tree-content"><div class="empty-state"><strong>Choose a connection</strong><span>Schema objects load on demand.</span></div></div></div>
           </section>
         </section>
@@ -100,27 +97,31 @@
           <section class="panel"><div class="panel-heading"><div><span class="eyebrow">DATABASE OVERVIEW</span><h2>Dashboard</h2></div><select id="dashboard-connection"><option value="">Select a connected connection</option></select></div><div id="dashboard-content" class="dashboard-content"><div class="empty-state"><strong>Choose a connection</strong><span>KPIs and database health load from PostgreSQL.</span></div></div></section>
         </section>
         <section id="view-admin" class="view" hidden>
-          <section class="panel"><div class="panel-heading"><div><span class="eyebrow">OPERATIONS</span><h2>Administration</h2></div><select id="admin-connection"><option value="">Select a connected connection</option></select></div><div id="admin-content" class="admin-content"><div class="empty-state"><strong>Choose a connection</strong><span>Roles, pg_cron, activity, locks, extensions and query stats.</span></div></div></section>
-        </section>
-        <section id="view-table-detail" class="view" hidden>
-          <section class="panel"><div class="panel-heading"><div><span class="eyebrow" id="detail-eyebrow">TABLE DETAIL</span><h2 id="detail-title">Table</h2></div><span class="badge" id="detail-summary">Loading</span></div><div id="detail-content" class="detail-content"></div></section>
-        </section>
-        <section id="view-erd" class="view" hidden>
-          <section class="panel"><div class="panel-heading"><div><span class="eyebrow">RELATIONSHIP MAP</span><h2 id="erd-title">ERD</h2></div><span class="badge" id="erd-summary">Loading</span></div><div id="erd-content" class="erd-content"></div></section>
-        </section>
-        <section id="view-backup" class="view" hidden>
-          <section class="panel">
+          <div class="admin-workspace-nav" role="tablist" aria-label="Administration sections">
+            <button class="admin-workspace-tab active" data-admin-workspace="administration" type="button" role="tab" aria-selected="true">Administration</button>
+            <button class="admin-workspace-tab" data-admin-workspace="backup" type="button" role="tab" aria-selected="false">Backup &amp; Restore</button>
+          </div>
+          <div class="admin-workspace-panel" data-admin-workspace-panel="administration">
+          <section class="panel"><div class="panel-heading"><div><span class="eyebrow">OPERATIONS</span><h2>Administration</h2></div><select id="admin-connection"><option value="">Select a connected connection</option></select></div><div id="admin-tabs" class="admin-tabs" role="tablist" aria-label="Administration tools" hidden></div><div id="admin-content" class="admin-content"><div class="empty-state"><strong>Choose a connection</strong><span>Roles, pg_cron, activity, locks, extensions and query stats.</span></div></div></section>
+          </div>
+          <section class="panel admin-workspace-panel" data-admin-workspace-panel="backup" hidden>
             <div class="panel-heading"><div><span class="eyebrow">DATA PROTECTION</span><h2>Backup &amp; Restore</h2></div><select id="backup-connection"><option value="">Select a connected connection</option></select></div>
             <div class="form-grid backup-grid">
-              <label>Backup file or directory<input id="backup-output" placeholder="/path/to/backup.dump" /></label>
+              <label>Backup file or directory<span class="file-picker-row"><input id="backup-output" placeholder="Choose a destination" readonly /><button class="button small" id="choose-backup-output" type="button">Choose…</button></span></label>
               <label>Format<select id="backup-format"><option value="custom">Custom</option><option value="plain">Plain SQL</option><option value="directory">Directory</option></select></label>
-              <label>Restore input<input id="restore-input" placeholder="/path/to/backup.dump" /></label>
+              <label>Restore input<span class="file-picker-row"><input id="restore-input" placeholder="Choose a backup" readonly /><button class="button small" id="choose-restore-input" type="button">Choose…</button></span></label>
               <label>Target database<input id="restore-database" /></label>
             </div>
             <div class="form-actions"><button class="button primary" id="run-backup" type="button">Create backup</button><button class="button" id="run-restore" type="button">Restore</button><button class="button danger" id="cancel-operation" type="button" hidden>Cancel</button></div>
             <div id="backup-status" class="form-status" role="status"></div>
             <pre id="backup-log" class="operation-log"></pre>
           </section>
+        </section>
+        <section id="view-table-detail" class="view" hidden>
+          <section class="panel"><div class="panel-heading"><div><span class="eyebrow" id="detail-eyebrow">TABLE DETAIL</span><h2 id="detail-title">Table</h2></div><div class="form-actions"><button class="button small" id="back-to-explorer" type="button">← Explorer</button><span class="badge" id="detail-summary">Loading</span></div></div><div id="detail-content" class="detail-content"></div></section>
+        </section>
+        <section id="view-erd" class="view" hidden>
+          <section class="panel"><div class="panel-heading"><div><span class="eyebrow">RELATIONSHIP MAP</span><h2 id="erd-title">ERD</h2></div><span class="badge" id="erd-summary">Loading</span></div><div id="erd-content" class="erd-content"></div></section>
         </section>
         <section id="view-assistant" class="view" hidden>
           <section class="panel">
@@ -131,6 +132,12 @@
           </section>
         </section>
         <section id="view-query" class="view" hidden>
+          <div class="query-workspace-nav" role="tablist" aria-label="SQL workspace sections">
+            <button class="query-workspace-tab active" data-query-workspace="editor" type="button" role="tab" aria-selected="true">Editor</button>
+            <button class="query-workspace-tab" data-query-workspace="history" type="button" role="tab" aria-selected="false">History</button>
+            <button class="query-workspace-tab" data-query-workspace="snippets" type="button" role="tab" aria-selected="false">Snippets</button>
+          </div>
+          <div class="query-workspace-panel" data-query-workspace-panel="editor">
           <section class="panel query-panel">
             <div class="panel-heading"><div><span class="eyebrow">QUERY WORKSPACE</span><h2>SQL Editor</h2></div><span class="badge" id="query-status">Ready</span></div>
             <div class="query-tabs" id="query-tabs" role="tablist" aria-label="Open SQL queries"></div>
@@ -147,12 +154,9 @@
             <div id="result-error" class="form-status error"></div>
             <div id="result-grid" class="result-grid"><div class="empty-state"><strong>Run a query to see results</strong><span>Only the rows in view are rendered — scroll to page through the full result.</span></div></div>
           </section>
-        </section>
-        <section id="view-history" class="view" hidden>
-          <section class="panel"><div class="panel-heading"><div><span class="eyebrow">LAST 50 QUERIES</span><h2>History</h2></div><button class="button small danger" id="clear-history" type="button">Clear history</button></div><div id="history-list" class="history-list"></div></section>
-        </section>
-        <section id="view-snippets" class="view" hidden>
-          <section class="panel"><div class="panel-heading"><div><span class="eyebrow">REUSABLE SQL</span><h2>Snippets</h2></div></div><div id="snippet-list" class="snippet-list"></div></section>
+          </div>
+          <section class="panel query-workspace-panel" data-query-workspace-panel="history" hidden><div class="panel-heading"><div><span class="eyebrow">LAST 50 QUERIES</span><h2>History</h2></div><button class="button small danger" id="clear-history" type="button">Clear history</button></div><div id="history-list" class="history-list"></div></section>
+          <section class="panel query-workspace-panel" data-query-workspace-panel="snippets" hidden><div class="panel-heading"><div><span class="eyebrow">REUSABLE SQL</span><h2>Snippets</h2></div></div><div id="snippet-list" class="snippet-list"></div></section>
         </section>
         <section id="view-preferences" class="view" hidden>
           <section class="panel preferences-panel">
@@ -160,6 +164,7 @@
             <div class="preferences-layout">
               <div class="preferences-tabs" role="tablist" aria-label="Preference sections">
                 <button class="preference-tab active" data-preference-section="appearance" type="button" role="tab" aria-selected="true">Appearance</button>
+                <button class="preference-tab" data-preference-section="ai" type="button" role="tab" aria-selected="false">AI Assistant</button>
                 <button class="preference-tab" data-preference-section="updates" type="button" role="tab" aria-selected="false">Updates</button>
                 <button class="preference-tab" data-preference-section="about" type="button" role="tab" aria-selected="false">About</button>
               </div>
@@ -178,6 +183,22 @@
                     <button class="accent-option purple" data-accent-choice="purple" type="button" aria-label="Purple" aria-pressed="false"></button>
                     <button class="accent-option amber" data-accent-choice="amber" type="button" aria-label="Amber" aria-pressed="false"></button>
                   </div>
+                </section>
+                <section class="preference-section" data-preference-panel="ai" hidden>
+                  <span class="eyebrow">AI ASSISTANT</span><h3>Provider and model</h3><p>Choose the provider used by the read-only database advisor. Each provider keeps its own model configuration.</p>
+                  <form id="ai-settings-form" class="ai-settings-form">
+                    <label>Provider<select id="ai-provider"><option value="anthropic">Anthropic</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option></select></label>
+                    <label>Model<span class="ai-model-picker"><input id="ai-model" list="ai-model-list" autocomplete="off" spellcheck="false" placeholder="Provider model ID" /><button class="button small" id="refresh-ai-models" type="button">Refresh</button></span><datalist id="ai-model-list"></datalist></label>
+                    <label>Daily message limit<input id="ai-daily-limit" type="number" min="1" max="10000" step="1" /></label>
+                    <label>Tool rounds per message<input id="ai-round-limit" type="number" min="1" max="32" step="1" /></label>
+                    <div class="form-actions ai-settings-actions"><button class="button primary" id="save-ai-settings" type="submit">Save AI settings</button></div>
+                  </form>
+                  <div class="ai-key-card">
+                    <div><span class="eyebrow">API KEY</span><h3 id="ai-key-title">Anthropic credential</h3><p>The key is written directly to the system Secret Service and is never returned to this interface.</p></div>
+                    <label>New API key<input id="ai-api-key" type="password" autocomplete="new-password" spellcheck="false" placeholder="Paste a new key" /></label>
+                    <div class="form-actions"><button class="button primary" id="save-ai-key" type="button">Save key</button><button class="button danger" id="clear-ai-key" type="button">Remove key</button></div>
+                  </div>
+                  <div id="ai-settings-status" class="form-status" role="status"></div>
                 </section>
                 <section class="preference-section" data-preference-panel="updates" hidden>
                   <span class="eyebrow">RELEASES</span><h3>Application updates</h3><p>Draco checks the latest published release in the official GitHub repository. Updates are never installed automatically.</p>

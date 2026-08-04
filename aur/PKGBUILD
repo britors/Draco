@@ -6,7 +6,7 @@ pkgdesc="Database client of the Lyra OS ecosystem — schema explorer, SQL edito
 arch=('x86_64')
 url="https://github.com/britors/Draco"
 license=('GPL-3.0-or-later')
-depends=('webkit2gtk-4.1' 'gtk3' 'openssl' 'librsvg')
+depends=('webkit2gtk-4.1' 'gtk3' 'openssl' 'librsvg' 'xdg-desktop-portal')
 makedepends=('cargo' 'desktop-file-utils' 'appstream-glib')
 # 'draco' itself is taken by the official extra/draco (Google's 3D mesh
 # compression library) — AUR forbids names colliding with official repo
@@ -15,7 +15,7 @@ conflicts=('draco-db')
 replaces=('draco-db')
 options=('!lto')
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/britors/Draco/archive/refs/tags/v${pkgver}.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('7d94eb7dc1a6290a093d2b0af5434567770fde63c1b250c02894537341eac6d8')
 
 prepare() {
     cd "Draco-${pkgver}"

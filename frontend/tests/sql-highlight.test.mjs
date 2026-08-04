@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { highlightSql, tokenizeSql } from '../dist/sql-highlight.js';
+import { highlightSql, highlightSqlIncremental, splitSqlStatements, tokenizeSql } from '../dist/sql-highlight.js';
 
 test('keywords, types, strings, comments and numbers are classified', () => {
   const tokens = tokenizeSql("SELECT id::bigint FROM users WHERE age > 10 -- note\n");
@@ -49,4 +49,29 @@ test('highlightSql escapes HTML and reassembles to the original text', () => {
 test('a trailing newline is preserved so the overlay keeps the same line count as the textarea', () => {
   assert.ok(highlightSql('SELECT 1;\n').endsWith('\n'));
   assert.ok(!highlightSql('SELECT 1;').endsWith('\n'));
+});
+
+test('scripts split only on statement semicolons, not semicolons inside PostgreSQL syntax', () => {
+  const sql = "SELECT ';'; -- comment ;\nSELECT $$body;still body$$; /* outer ; /* nested ; */ done */ SELECT 3;";
+  const statements = splitSqlStatements(sql);
+  assert.equal(statements.length, 3);
+  assert.equal(statements.join(''), sql);
+  assert.match(statements[1], /body;still body/);
+});
+
+test('statement splitting distinguishes standard strings from E strings', () => {
+  const escaped = String.raw`SELECT E'it\'s;inside'; SELECT 2;`;
+  assert.equal(splitSqlStatements(escaped).length, 2);
+  const standard = String.raw`SELECT '\'; SELECT 2;`;
+  assert.equal(splitSqlStatements(standard).length, 2);
+});
+
+test('incremental highlighting reuses unchanged statements', () => {
+  const first = highlightSqlIncremental('SELECT 1;\nSELECT 2;');
+  assert.equal(first.reused, 0);
+  const unchanged = highlightSqlIncremental('SELECT 1;\nSELECT 2;', first.cache);
+  assert.equal(unchanged.reused, 2);
+  const changed = highlightSqlIncremental('SELECT 1;\nSELECT 3;', unchanged.cache);
+  assert.equal(changed.reused, 1);
+  assert.equal(changed.cache.map((entry) => entry.sql).join(''), 'SELECT 1;\nSELECT 3;');
 });

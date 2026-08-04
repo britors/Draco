@@ -1,10 +1,13 @@
 use draco_app::{
-    AdminView, Application, ApplicationError, AssistantReplyView, BackupOptionsInput,
-    CompletionDataView, ConnectionInput, ConnectionView, CreateRoleInput, CronJobsView,
-    DashboardView, ErdView, ExtensionsView, Health, HistoryView, PreferencesView, QueryResult,
-    QueryStatsView, RestoreOptionsInput, RoleView, SchemaObjectView, SchemaView, SearchResultView,
-    SnippetInput, SnippetView, TableDetailView, TableMaintenanceOperation, TableView,
-    ToolResultView, UpdateStatusView,
+    AdminView, AlterTableInput, AlterTablePreviewView, Application, ApplicationError,
+    AssistantReplyView, BackupFormat, BackupOptionsInput, BrowseTableView, CompletionDataView,
+    ConnectionInput, ConnectionView, CreateRoleInput, CreateTableInput, CronJobInput,
+    CronJobRunView, CronJobsView, DashboardView, DeleteTableRowInput, ErdView, ExtensionsView,
+    FileAuthorizationPurpose, FunctionDefinitionView, Health, HistoryView, InsertTableRowInput,
+    PreferencesView, QueryResult, QueryStatsView, RestoreOptionsInput, RoleView, SchemaObjectView,
+    SchemaView, SearchResultView, SnippetInput, SnippetView, TableDetailView,
+    TableMaintenanceOperation, TableView, ToolResultView, TriggerInput, UpdateRoleInput,
+    UpdateStatusView, UpdateTableCellInput,
 };
 use draco_core::assistant::{AiMessage, Provider, Settings};
 use serde::{Deserialize, Serialize};
@@ -294,6 +297,33 @@ async fn list_schema_objects(
 }
 
 #[tauri::command]
+async fn next_sequence_value(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    name: String,
+) -> Result<String, CommandError> {
+    state
+        .next_sequence_value(&id, &schema, &name)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn set_sequence_value(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    name: String,
+    value: String,
+) -> Result<(), CommandError> {
+    state
+        .set_sequence_value(&id, &schema, &name, &value)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
 async fn completion_data(
     state: State<'_, Application>,
     id: String,
@@ -327,6 +357,184 @@ async fn table_detail(
 ) -> Result<TableDetailView, CommandError> {
     state
         .table_detail(&id, &schema, &table)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn browse_table_data(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    offset: u64,
+    limit: u32,
+) -> Result<BrowseTableView, CommandError> {
+    state
+        .browse_table_data(&id, &schema, &table, offset, limit)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn update_table_cell(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    input: UpdateTableCellInput,
+) -> Result<(), CommandError> {
+    state
+        .update_table_cell(&id, &schema, &table, input)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn insert_table_row(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    input: InsertTableRowInput,
+) -> Result<(), CommandError> {
+    state
+        .insert_table_row(&id, &schema, &table, input)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn delete_table_row(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    input: DeleteTableRowInput,
+) -> Result<(), CommandError> {
+    state
+        .delete_table_row(&id, &schema, &table, input)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn create_schema(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+) -> Result<(), CommandError> {
+    state.create_schema(&id, &schema).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn create_table(
+    state: State<'_, Application>,
+    id: String,
+    input: CreateTableInput,
+) -> Result<(), CommandError> {
+    state.create_table(&id, input).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn preview_alter_table(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    input: AlterTableInput,
+) -> Result<AlterTablePreviewView, CommandError> {
+    state
+        .preview_alter_table(&id, &schema, &table, input)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn alter_table(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    input: AlterTableInput,
+) -> Result<(), CommandError> {
+    state
+        .alter_table(&id, &schema, &table, input)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn create_sequence(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    name: String,
+) -> Result<(), CommandError> {
+    state
+        .create_sequence(&id, &schema, &name)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn create_trigger(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    input: TriggerInput,
+) -> Result<(), CommandError> {
+    state
+        .create_trigger(&id, &schema, input)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn function_definitions(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    name: String,
+) -> Result<Vec<FunctionDefinitionView>, CommandError> {
+    state
+        .function_definitions(&id, &schema, &name)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn validate_function_definition(
+    state: State<'_, Application>,
+    id: String,
+    ddl: String,
+) -> Result<Option<String>, CommandError> {
+    state
+        .validate_function_definition(&id, &ddl)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn save_function_definition(
+    state: State<'_, Application>,
+    id: String,
+    ddl: String,
+) -> Result<(), CommandError> {
+    state
+        .save_function_definition(&id, &ddl)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn save_trigger_definition(
+    state: State<'_, Application>,
+    id: String,
+    ddl: String,
+) -> Result<(), CommandError> {
+    state
+        .save_trigger_definition(&id, &ddl)
         .await
         .map_err(Into::into)
 }
@@ -376,6 +584,37 @@ async fn set_cron_job_active(
 }
 
 #[tauri::command]
+async fn create_cron_job(
+    state: State<'_, Application>,
+    id: String,
+    input: CronJobInput,
+) -> Result<(), CommandError> {
+    state.create_cron_job(&id, input).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn update_cron_job(
+    state: State<'_, Application>,
+    id: String,
+    job_id: i64,
+    input: CronJobInput,
+) -> Result<(), CommandError> {
+    state
+        .update_cron_job(&id, job_id, input)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn cron_job_runs(
+    state: State<'_, Application>,
+    id: String,
+    job_id: i64,
+) -> Result<Vec<CronJobRunView>, CommandError> {
+    state.cron_job_runs(&id, job_id).await.map_err(Into::into)
+}
+
+#[tauri::command]
 async fn delete_cron_job(
     state: State<'_, Application>,
     id: String,
@@ -402,6 +641,19 @@ async fn create_role(
 }
 
 #[tauri::command]
+async fn update_role(
+    state: State<'_, Application>,
+    id: String,
+    name: String,
+    input: UpdateRoleInput,
+) -> Result<(), CommandError> {
+    state
+        .update_role(&id, &name, input)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
 async fn delete_role(
     state: State<'_, Application>,
     id: String,
@@ -421,6 +673,67 @@ async fn run_backup(
         .run_backup(&id, &operation_id, options)
         .await
         .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn choose_backup_output(
+    state: State<'_, Application>,
+    format: BackupFormat,
+) -> Result<Option<String>, CommandError> {
+    let selected = tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = rfd::FileDialog::new().set_title("Choose backup destination");
+        dialog = match format {
+            BackupFormat::Plain => dialog.add_filter("SQL backup", &["sql"]),
+            BackupFormat::Custom => {
+                dialog.add_filter("PostgreSQL custom backup", &["dump", "backup"])
+            }
+            BackupFormat::Directory => dialog,
+        };
+        dialog.save_file()
+    })
+    .await
+    .map_err(|_| CommandError {
+        code: "operation_error",
+        message: "The native file picker could not be opened".to_string(),
+    })?;
+    let Some(path) = selected else {
+        return Ok(None);
+    };
+    let path = path.to_string_lossy().into_owned();
+    state
+        .authorize_file_path(&path, FileAuthorizationPurpose::Backup)
+        .await
+        .map_err(CommandError::from)?;
+    Ok(Some(path))
+}
+
+#[tauri::command]
+async fn choose_restore_input(
+    state: State<'_, Application>,
+) -> Result<Option<String>, CommandError> {
+    let selected = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("Choose PostgreSQL backup")
+            .add_filter(
+                "PostgreSQL backup",
+                &["dump", "backup", "sql", "txt", "tar"],
+            )
+            .pick_file()
+    })
+    .await
+    .map_err(|_| CommandError {
+        code: "operation_error",
+        message: "The native file picker could not be opened".to_string(),
+    })?;
+    let Some(path) = selected else {
+        return Ok(None);
+    };
+    let path = path.to_string_lossy().into_owned();
+    state
+        .authorize_file_path(&path, FileAuthorizationPurpose::Restore)
+        .await
+        .map_err(CommandError::from)?;
+    Ok(Some(path))
 }
 
 #[tauri::command]
@@ -517,6 +830,14 @@ fn save_assistant_settings(
 }
 
 #[tauri::command]
+async fn assistant_models(
+    state: State<'_, Application>,
+    provider: Provider,
+) -> Result<Vec<String>, CommandError> {
+    state.assistant_models(provider).await.map_err(Into::into)
+}
+
+#[tauri::command]
 async fn save_assistant_key(
     state: State<'_, Application>,
     provider: Provider,
@@ -592,14 +913,33 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             list_schemas,
             list_tables,
             list_schema_objects,
+            next_sequence_value,
+            set_sequence_value,
             completion_data,
             global_search,
             dashboard,
             table_detail,
+            browse_table_data,
+            update_table_cell,
+            insert_table_row,
+            delete_table_row,
+            create_schema,
+            create_table,
+            preview_alter_table,
+            alter_table,
+            create_sequence,
+            create_trigger,
+            function_definitions,
+            validate_function_definition,
+            save_function_definition,
+            save_trigger_definition,
             erd,
             admin,
             cancel_activity,
             list_cron_jobs,
+            create_cron_job,
+            update_cron_job,
+            cron_job_runs,
             set_cron_job_active,
             delete_cron_job,
             list_extensions,
@@ -610,12 +950,16 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             run_table_maintenance,
             list_roles,
             create_role,
+            update_role,
             delete_role,
             run_backup,
+            choose_backup_output,
+            choose_restore_input,
             run_restore,
             cancel_operation,
             assistant_settings,
             save_assistant_settings,
+            assistant_models,
             save_assistant_key,
             clear_assistant_key,
             assistant_history,
@@ -683,6 +1027,7 @@ mod tests {
         assert!(!csp.contains("unsafe-inline"));
         assert!(!csp.contains("https://"));
         assert!(!csp.contains("*"));
+        assert!(csp.contains("form-action 'none'"));
     }
 
     fn draco_core_error_for_test() -> draco_core::error::CoreError {

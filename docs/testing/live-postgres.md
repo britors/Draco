@@ -39,6 +39,7 @@ definidos no ambiente. A senha continua exclusivamente no Secret Service.
 O cenário executado contra PostgreSQL 18.4 cobre:
 
 - autenticação válida e rejeição de senha inválida;
+- recuperação, pela fronteira da aplicação Tauri, após senha inválida e após desconexão explícita;
 - schemas, tabelas, colunas, funções, DDL, índices, constraints, FKs e completion data;
 - criação/alteração de tabela, importação, browse, update, delete, `ANALYZE` e estatísticas;
 - criação, validação, introspecção e chamada de função;
@@ -70,19 +71,20 @@ test application_boundary_reaches_postgres_for_tauri_views ... ok
 test result: ok. 1 passed; 0 failed
 ```
 
-O cenário da aplicação inclui o comando de `EXPLAIN` puro e o ciclo administrativo de role
-consumidos pelo frontend Tauri. Essa execução valida o backend e a fronteira `draco-app`; ainda
-falta automatizar a interação com a webview Tauri instalada, além dos cenários que exigem
-endpoints SSH e chaves reais de IA.
+O cenário da aplicação inclui o comando de `EXPLAIN` puro, rejeição de autenticação inválida,
+desconexão/reconexão e o ciclo administrativo de role consumidos pelo frontend Tauri. Essa
+execução valida o backend e a fronteira `draco-app`; a webview Tauri é coberta pelos contratos
+locais e pelo smoke manual. Cenários que exigem endpoints SSH e chaves reais de IA permanecem
+condicionados à disponibilidade desses serviços externos.
 
 ## Checklist transversal
 
 | Cenário | Evidência |
 |---|---|
 | Nominal contra Postgres real | core e `draco-app` passaram em 04/08/2026 contra PostgreSQL 18.4 |
-| Conexão ausente/perdida | `ConnectionManager`, editor e explorer exibem erro; recuperação após erro SQL coberta pelo teste |
+| Conexão ausente/perdida | fronteira Tauri recusa operação desconectada e volta a executar após reconexão; recuperação após erro SQL também coberta |
 | SSH/jump host | suporte permanece coberto pelo `PostgresDriver`; não executado porque o ambiente E2E não possui endpoint SSH configurado |
-| Loading, vazio e erro | estados implementados nas views; vazio de `pg_cron`, activity e locks observado no teste |
+| Loading, vazio e erro | estados cobertos pelos contratos frontend; vazio de `pg_cron`, activity e locks observado no teste real |
 | Operação longa fora da thread GTK | chamadas GTK usam `runtime.spawn` + `MainContext::spawn_local` |
 | Mutação perigosa | teste usa schema isolado; UI mantém confirmações para operações destrutivas |
 | Segredos e queries em logs | teste usa Secret Service e não registra senha nem conteúdo de credencial |

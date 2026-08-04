@@ -72,10 +72,14 @@ pub async fn create_job(driver: &PostgresDriver, name: Option<&str>, schedule: &
 }
 
 pub async fn update_job(driver: &PostgresDriver, job_id: i64, schedule: &str, command: &str) -> Result<()> {
-    driver
-        .query("UPDATE cron.job SET schedule = $1, command = $2 WHERE jobid = $3", &[&schedule, &command, &job_id])
+    let rows = driver
+        .query("UPDATE cron.job SET schedule = $1, command = $2 WHERE jobid = $3 RETURNING jobid", &[&schedule, &command, &job_id])
         .await?;
-    Ok(())
+    if rows.is_empty() {
+        Err(CoreError::Other("Scheduled job was not found".to_string()))
+    } else {
+        Ok(())
+    }
 }
 
 pub async fn toggle_job(driver: &PostgresDriver, job_id: i64, active: bool) -> Result<()> {

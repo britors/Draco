@@ -112,9 +112,11 @@ O shell inicial em `src-tauri` expõe:
 | `run_table_maintenance` | executar somente VACUUM/ANALYZE allowlisted em tabela identificada |
 | `list_roles` | listar roles e atributos administrativos |
 | `create_role` / `delete_role` | criar role sem senha e excluir após confirmação nominal na UI |
-| `run_backup` / `run_restore` | backup/restauração via `pg_dump`, `pg_restore` ou `psql` |
+| `choose_backup_output` / `choose_restore_input` | abrir seletor nativo e emitir autorização de caminho com finalidade e uso único |
+| `run_backup` / `run_restore` | backup/restauração via `pg_dump`, `pg_restore` ou `psql`, somente após autorização nativa do caminho |
 | `cancel_operation` | cancelar uma operação de backup/restauração em andamento |
 | `assistant_settings` / `save_assistant_settings` | configurações não secretas do Assistente |
+| `assistant_models` | listar modelos compatíveis do provedor usando a chave do Secret Service |
 | `save_assistant_key` / `clear_assistant_key` | gerenciar chaves no Secret Service |
 | `assistant_history` / `clear_assistant_history` | histórico por conexão |
 | `assistant_send` | conversar e executar somente ferramentas de inspeção read-only |
@@ -129,5 +131,5 @@ do backend (nunca do frontend) e nunca baixa nem instala nada — só devolve a 
 link da release para o usuário decidir.
 
 Erros de driver, Secret Service e operações externas são convertidos para um envelope sem detalhes
-sensíveis antes de serem enviados pelo IPC. Logs de backup redigem os caminhos selecionados pelo
-usuário.
+sensíveis antes de serem enviados pelo IPC. Backup/restore não transportam stdout/stderr das
+ferramentas: o resultado contém apenas sucesso, cancelamento e exit code.

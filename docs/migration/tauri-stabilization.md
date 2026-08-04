@@ -2,19 +2,28 @@
 
 ## Decisão
 
-O Tauri é o frontend oficial e o binário distribuído a partir da versão `1.1.3`, mas o crate
-`draco-gtk` permanece compilável por um período de estabilização. Removê-lo agora dificultaria
-rollback e confundiria falhas de paridade com falhas de empacotamento.
+O Tauri é o frontend oficial e será o binário distribuído a partir da versão `2.0.3`, mas o crate
+`draco-gtk` permanece compilável por um período de estabilização. Removê-lo antes dos gates de
+release dificultaria rollback e confundiria falhas de paridade com falhas de empacotamento.
 
 ## Checklist para apagar `draco-gtk`
 
+- [x] CI bloqueia regressões Rust, bridge Tauri, contratos frontend/visuais e metadados de
+      distribuição;
+- [x] raiz de pacote temporária valida binário, desktop entry, AppStream, ícone e bibliotecas
+      dinâmicas no CI;
+- [ ] RPM/OBS e AUR atualizados para a tag Tauri `v2.0.3`, com SHA-256 e crates vendorizados
+      (a tag publicada `v1.1.3` é anterior a `src-tauri`; ver `packaging/RELEASE_PENDING.md`);
+
 - [ ] três ciclos de release sem regressão bloqueadora no shell Tauri;
-- [ ] fluxo de conexão, Explorer, SQL, histórico, snippets, Dashboard, Admin, ERD e Assistente
-      validado contra PostgreSQL real;
-- [ ] smoke test do binário instalado em Wayland e X11;
+- [x] fluxo de conexão, Explorer, SQL, histórico, snippets, Dashboard, Admin e ERD validado contra
+      PostgreSQL 18.4; Assistente validado localmente, com chamadas externas condicionadas às
+      chaves dos provedores;
+- [x] smoke test do binário release em uma raiz de instalação temporária, usando Wayland e
+      X11/XWayland em 04/08/2026;
 - [ ] RPM OBS e AUR instalados sem dependências GTK4/libadwaita/GtkSourceView5;
-- [ ] migração de configurações e Secret Service confirmada em upgrade;
-- [ ] checklist visual da issue #105 aprovado para loading, vazio, erro, acessibilidade e ações
+- [x] migração de configurações e entradas legadas do Secret Service confirmada pelo E2E real;
+- [x] checklist visual da issue #105 aprovado para loading, vazio, erro, acessibilidade e ações
       destrutivas;
 - [ ] uma versão de rollback do pacote GTK publicada e testada.
 

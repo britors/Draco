@@ -3,7 +3,7 @@
 ## Pré-requisitos
 
 - Rust estável recente (`cargo`, `rustc` ≥ 1.85)
-- WebKitGTK 4.1, GTK3, OpenSSL e librsvg para o shell Tauri; GTK4,
+- WebKitGTK 4.1, GTK3, OpenSSL, librsvg e `xdg-desktop-portal` para o shell Tauri; GTK4,
   libadwaita e GtkSourceView5 apenas para o fallback `draco-gtk`
 - Uma instância PostgreSQL rodando para teste manual
 
@@ -34,8 +34,8 @@ cargo run -p draco-tauri
 
 **Lint e testes** (rodar antes de qualquer PR):
 ```bash
-cargo clippy --workspace --exclude draco-gtk --all-targets -- -D warnings
-cargo test --workspace --exclude draco-gtk
+cargo clippy --locked --workspace --exclude draco-gtk --all-targets -- -D warnings
+cargo test --locked --workspace --exclude draco-gtk
 (cd frontend && npm run check && npm test)
 ```
 
@@ -45,7 +45,8 @@ no CI usam `--locked`: qualquer PR que mude `version` em `Cargo.toml` ou adicion
 dependência precisa rodar `cargo check --workspace` localmente antes de commitar, para que
 `Cargo.lock` já saia sincronizado — senão o job falha com "cannot update the lock file". Testes que
 dependem de PostgreSQL, Secret Service ou sessão gráfica continuam no checklist E2E documentado em
-`docs/testing/live-postgres.md`.
+`docs/testing/live-postgres.md`. Os contratos de distribuição também validam versões, app id,
+desktop entry, AppStream, dependências e integridade do tarball AUR.
 
 ## Estrutura do repositório
 
@@ -79,7 +80,7 @@ docs/migration/ # matriz de paridade e decisão de estabilização Tauri
 - `frontend` usa assets locais; a CSP do Tauri bloqueia scripts, frames e
   recursos remotos.
 - Segredos (senhas de conexão, senha de túnel SSH) passam pelo Serviço de
-  Segredos do sistema via `oo7` — nunca são gravados em disco em texto plano
+  Segredos do sistema via `keyring` — nunca são gravados em disco em texto plano
   nem logados.
 
 ## Regras do frontend oficial

@@ -9,16 +9,16 @@
 //! every provider's strict tool_use/tool_result pairing rules since a plain-text turn never
 //! declares a tool call in the first place.
 
-use std::collections::HashMap;
 use std::time::Duration;
 
-use oo7::Keyring;
+use keyring::Entry;
 use serde_json::{Value, json};
 
 pub use crate::store::{AiMessage, AiProvider as Provider, AiRole, AiSettings as Settings};
 
 use crate::postgres::pool::PostgresDriver;
 use crate::postgres::queries;
+use crate::legacy_secrets;
 use crate::store;
 
 #[derive(Debug, Clone)]
@@ -75,22 +75,28 @@ impl From<serde_json::Error> for AssistantError {
     }
 }
 
-impl From<oo7::Error> for AssistantError {
-    fn from(error: oo7::Error) -> Self {
+impl From<keyring::Error> for AssistantError {
+    fn from(error: keyring::Error) -> Self {
         Self::Message(format!("Secret Service indisponível: {error}"))
     }
 }
 
-// ── Secret Service (API keys) ────────────────────────────────────────────────────
+impl From<tokio::task::JoinError> for AssistantError {
+    fn from(error: tokio::task::JoinError) -> Self {
+        Self::Message(format!("secret store task failed: {error}"))
+    }
+}
+
+// ── Credential store (API keys) — Secret Service on Linux, Credential Manager on Windows ──
 
 const AI_SERVICE: &str = "draco-ai";
 
-fn key_attributes(provider: Provider) -> HashMap<&'static str, String> {
-    HashMap::from([("service", AI_SERVICE.to_string()), ("provider", provider.id().to_string())])
+fn key_entry(provider: Provider) -> Result<Entry, keyring::Error> {
+    Entry::new(AI_SERVICE, provider.id())
 }
 
 pub async fn keyring_available() -> bool {
-    Keyring::new().await.is_ok()
+    tokio::task::spawn_blocking(|| Entry::store_status().is_ok()).await.unwrap_or(false)
 }
 
 pub async fn save_key(provider: Provider, key: &str) -> Result<(), AssistantError> {
@@ -98,27 +104,43 @@ pub async fn save_key(provider: Provider, key: &str) -> Result<(), AssistantErro
     if key.is_empty() {
         return Err(AssistantError::Message("A chave de API não pode estar vazia.".into()));
     }
-    let keyring = Keyring::new().await?;
-    keyring
-        .create_item(&format!("Draco: chave de API {}", provider.label()), &key_attributes(provider), key, true)
-        .await?;
-    Ok(())
+    let key = key.to_string();
+    tokio::task::spawn_blocking(move || {
+        key_entry(provider)?
+            .set_password(&key)
+            .map_err(AssistantError::from)?;
+        legacy_secrets::remove(&[("service", AI_SERVICE), ("provider", provider.id())]);
+        Ok(())
+    })
+    .await?
 }
 
 pub async fn load_key(provider: Provider) -> Result<String, AssistantError> {
-    let keyring = Keyring::new().await?;
-    let items = keyring.search_items(&key_attributes(provider)).await?;
-    let Some(item) = items.first() else {
-        return Err(AssistantError::Message(format!("Nenhuma chave de API configurada para {}.", provider.label())));
-    };
-    let secret = item.secret().await?;
-    Ok(String::from_utf8_lossy(secret.as_bytes()).to_string())
+    tokio::task::spawn_blocking(move || match key_entry(provider)?.get_password() {
+        Ok(key) => Ok(key),
+        Err(keyring::Error::NoEntry) => legacy_secrets::migrate(
+            &key_entry(provider)?,
+            &[("service", AI_SERVICE), ("provider", provider.id())],
+        )
+        .map_err(|message| AssistantError::Message(message.to_string()))?
+        .ok_or_else(|| {
+            AssistantError::Message(format!(
+                "Nenhuma chave de API configurada para {}.",
+                provider.label()
+            ))
+        }),
+        Err(error) => Err(AssistantError::from(error)),
+    })
+    .await?
 }
 
 pub async fn clear_key(provider: Provider) -> Result<(), AssistantError> {
-    let keyring = Keyring::new().await?;
-    let _ = keyring.delete(&key_attributes(provider)).await;
-    Ok(())
+    tokio::task::spawn_blocking(move || {
+        let _ = key_entry(provider).and_then(|entry| entry.delete_credential());
+        legacy_secrets::remove(&[("service", AI_SERVICE), ("provider", provider.id())]);
+        Ok(())
+    })
+    .await?
 }
 
 // ── System prompt & tools ────────────────────────────────────────────────────────

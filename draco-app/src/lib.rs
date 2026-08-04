@@ -4,9 +4,10 @@
 //! serializable DTOs and use-case methods. Credentials are accepted only for the duration of a
 //! connection attempt and are never part of a DTO or persisted by this layer.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Component, Path};
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use draco_core::assistant;
@@ -143,6 +144,8 @@ pub struct SchemaObjectView {
     pub name: String,
     pub kind: SchemaObjectKind,
     pub detail: Option<String>,
+    pub parent_table: Option<String>,
+    pub definition: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -206,6 +209,105 @@ pub struct TableDetailView {
     pub column_stats: serde_json::Value,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TableCellInput {
+    pub column: String,
+    pub value_json: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdateTableCellInput {
+    pub keys: Vec<TableCellInput>,
+    pub column: String,
+    pub value_json: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InsertTableRowInput {
+    pub values_json: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeleteTableRowInput {
+    pub keys: Vec<TableCellInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrowseTableView {
+    pub columns: Vec<String>,
+    pub rows: Vec<BTreeMap<String, String>>,
+    pub primary_key_columns: Vec<String>,
+    pub total: i64,
+    pub offset: u64,
+    pub limit: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TableReferenceInput {
+    pub schema: String,
+    pub table: String,
+    pub column: String,
+    pub on_delete: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateTableColumnInput {
+    pub name: String,
+    pub data_type: String,
+    pub nullable: bool,
+    pub primary_key: bool,
+    pub unique: bool,
+    pub default: Option<String>,
+    pub references: Option<TableReferenceInput>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateTableInput {
+    pub schema: String,
+    pub table: String,
+    pub columns: Vec<CreateTableColumnInput>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlterTableColumnInput {
+    pub original_name: Option<String>,
+    pub name: String,
+    pub data_type: String,
+    pub nullable: bool,
+    pub primary_key: bool,
+    pub default: Option<String>,
+    pub removed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlterTableInput {
+    pub new_table_name: String,
+    pub columns: Vec<AlterTableColumnInput>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlterTablePreviewView {
+    pub statements: Vec<String>,
+    pub sql: String,
+    pub destructive: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TriggerInput {
+    pub name: String,
+    pub table: String,
+    pub timing: String,
+    pub events: String,
+    pub function: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FunctionDefinitionView {
+    pub ddl: String,
+    pub args: String,
+    pub oid: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErdView {
     pub schema: String,
@@ -237,6 +339,18 @@ pub struct CreateRoleInput {
     pub create_role: bool,
     pub superuser: bool,
     pub connection_limit: i32,
+    #[serde(default)]
+    pub valid_until: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateRoleInput {
+    pub login: bool,
+    pub create_database: bool,
+    pub create_role: bool,
+    pub superuser: bool,
+    pub connection_limit: i32,
+    pub valid_until: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -257,6 +371,23 @@ pub struct CronJobView {
 pub struct CronJobsView {
     pub installed: bool,
     pub jobs: Vec<CronJobView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CronJobInput {
+    pub name: Option<String>,
+    pub schedule: String,
+    pub command: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CronJobRunView {
+    pub id: i64,
+    pub status: Option<String>,
+    pub return_message: Option<String>,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
+    pub duration_seconds: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -314,6 +445,12 @@ pub enum BackupFormat {
     Plain,
     Custom,
     Directory,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileAuthorizationPurpose {
+    Backup,
+    Restore,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -415,6 +552,7 @@ pub struct UpdateStatusView {
 pub struct Application {
     manager: Mutex<ConnectionManager>,
     operations: Mutex<HashMap<String, watch::Sender<bool>>>,
+    authorized_files: Mutex<HashMap<String, (FileAuthorizationPurpose, Instant)>>,
 }
 
 impl Application {
@@ -424,6 +562,7 @@ impl Application {
         Self {
             manager: Mutex::new(manager),
             operations: Mutex::new(HashMap::new()),
+            authorized_files: Mutex::new(HashMap::new()),
         }
     }
 
@@ -829,19 +968,51 @@ impl Application {
                     queries::RoutineKind::Procedure => SchemaObjectKind::Procedure,
                 },
                 detail: (!routine.return_type.is_empty()).then_some(routine.return_type),
+                parent_table: None,
+                definition: None,
             })
             .collect::<Vec<_>>();
         objects.extend(sequences?.into_iter().map(|sequence| SchemaObjectView {
             name: sequence.name,
             kind: SchemaObjectKind::Sequence,
             detail: None,
+            parent_table: None,
+            definition: None,
         }));
         objects.extend(triggers?.into_iter().map(|trigger| SchemaObjectView {
             name: trigger.name,
             kind: SchemaObjectKind::Trigger,
             detail: Some(format!("on {}", trigger.table)),
+            parent_table: Some(trigger.table),
+            definition: Some(trigger.definition),
         }));
         Ok(objects)
+    }
+
+    pub async fn next_sequence_value(&self, id: &str, schema: &str, name: &str) -> Result<String> {
+        validate_schema_object_name(schema, "Schema")?;
+        validate_schema_object_name(name, "Sequence")?;
+        let (driver, _) = self.connected_driver(id).await?;
+        Ok(queries::seq_next_val(&driver, schema, name).await?)
+    }
+
+    pub async fn set_sequence_value(
+        &self,
+        id: &str,
+        schema: &str,
+        name: &str,
+        value: &str,
+    ) -> Result<()> {
+        validate_schema_object_name(schema, "Schema")?;
+        validate_schema_object_name(name, "Sequence")?;
+        let value = value.trim().parse::<i64>().map_err(|_| {
+            ApplicationError::InvalidInput(
+                "Sequence value must be a signed 64-bit integer".to_string(),
+            )
+        })?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::seq_set_val(&driver, schema, name, value).await?;
+        Ok(())
     }
 
     /// Whole-database completion data (schemas, tables, columns, functions) for the SQL editor's
@@ -942,6 +1113,219 @@ impl Application {
         })
     }
 
+    pub async fn browse_table_data(
+        &self,
+        id: &str,
+        schema: &str,
+        table: &str,
+        offset: u64,
+        limit: u32,
+    ) -> Result<BrowseTableView> {
+        validate_table_name(schema, table)?;
+        if !(1..=200).contains(&limit) {
+            return Err(ApplicationError::InvalidInput(
+                "Table page size must be between 1 and 200".to_string(),
+            ));
+        }
+        let offset_i64 = i64::try_from(offset).map_err(|_| {
+            ApplicationError::InvalidInput("Table page offset is too large".to_string())
+        })?;
+        let (driver, _) = self.connected_driver(id).await?;
+        let metadata = table_edit_metadata(&driver, schema, table).await?;
+        let result = queries::browse_table_data_ordered(
+            &driver,
+            schema,
+            table,
+            offset_i64,
+            i64::from(limit),
+            &metadata.primary_keys,
+        )
+        .await?;
+        Ok(BrowseTableView {
+            columns: result.columns,
+            rows: result.rows,
+            primary_key_columns: metadata.primary_keys,
+            total: result.total,
+            offset,
+            limit,
+        })
+    }
+
+    pub async fn update_table_cell(
+        &self,
+        id: &str,
+        schema: &str,
+        table: &str,
+        input: UpdateTableCellInput,
+    ) -> Result<()> {
+        validate_table_name(schema, table)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        let metadata = table_edit_metadata(&driver, schema, table).await?;
+        let keys = validate_row_keys(input.keys, &metadata.primary_keys)?;
+        validate_table_column(&input.column, &metadata.columns)?;
+        let value = parse_json_value(&input.value_json)?;
+        queries::update_table_row_json(&driver, schema, table, &keys, &input.column, &value)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn insert_table_row(
+        &self,
+        id: &str,
+        schema: &str,
+        table: &str,
+        input: InsertTableRowInput,
+    ) -> Result<()> {
+        validate_table_name(schema, table)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        let metadata = table_edit_metadata(&driver, schema, table).await?;
+        let values = parse_table_row(&input.values_json, &metadata.columns)?;
+        queries::insert_table_row_json(&driver, schema, table, &values).await?;
+        Ok(())
+    }
+
+    pub async fn delete_table_row(
+        &self,
+        id: &str,
+        schema: &str,
+        table: &str,
+        input: DeleteTableRowInput,
+    ) -> Result<()> {
+        validate_table_name(schema, table)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        let metadata = table_edit_metadata(&driver, schema, table).await?;
+        let keys = validate_row_keys(input.keys, &metadata.primary_keys)?;
+        queries::delete_table_row_json(&driver, schema, table, &keys).await?;
+        Ok(())
+    }
+
+    pub async fn create_schema(&self, id: &str, schema: &str) -> Result<()> {
+        validate_schema_object_name(schema, "Schema")?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::create_schema(&driver, schema).await?;
+        Ok(())
+    }
+
+    pub async fn create_table(&self, id: &str, input: CreateTableInput) -> Result<()> {
+        validate_table_name(&input.schema, &input.table)?;
+        if input.columns.is_empty() || input.columns.len() > 512 {
+            return Err(ApplicationError::InvalidInput(
+                "A table requires between 1 and 512 columns".to_string(),
+            ));
+        }
+        let columns = input
+            .columns
+            .into_iter()
+            .map(new_table_column)
+            .collect::<Result<Vec<_>>>()?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::create_table(&driver, &input.schema, &input.table, &columns).await?;
+        Ok(())
+    }
+
+    pub async fn preview_alter_table(
+        &self,
+        id: &str,
+        schema: &str,
+        table: &str,
+        input: AlterTableInput,
+    ) -> Result<AlterTablePreviewView> {
+        validate_table_name(schema, table)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        let detail = queries::get_table_detail(&driver, schema, table).await?;
+        build_alter_table_preview(schema, table, input, &detail)
+    }
+
+    pub async fn alter_table(
+        &self,
+        id: &str,
+        schema: &str,
+        table: &str,
+        input: AlterTableInput,
+    ) -> Result<()> {
+        validate_table_name(schema, table)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        let detail = queries::get_table_detail(&driver, schema, table).await?;
+        let preview = build_alter_table_preview(schema, table, input, &detail)?;
+        queries::alter_table(&driver, &preview.statements).await?;
+        Ok(())
+    }
+
+    pub async fn create_sequence(&self, id: &str, schema: &str, name: &str) -> Result<()> {
+        validate_schema_object_name(schema, "Schema")?;
+        validate_schema_object_name(name, "Sequence")?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::create_sequence(&driver, schema, name).await?;
+        Ok(())
+    }
+
+    pub async fn create_trigger(&self, id: &str, schema: &str, input: TriggerInput) -> Result<()> {
+        validate_schema_object_name(schema, "Schema")?;
+        validate_schema_object_name(&input.name, "Trigger")?;
+        validate_schema_object_name(&input.table, "Table")?;
+        if input.function.trim().is_empty() || input.function.chars().any(char::is_control) {
+            return Err(ApplicationError::InvalidInput(
+                "Trigger function is required and cannot contain control characters".to_string(),
+            ));
+        }
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::create_trigger(
+            &driver,
+            schema,
+            &input.name,
+            &input.table,
+            &input.timing,
+            &input.events,
+            &input.function,
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn function_definitions(
+        &self,
+        id: &str,
+        schema: &str,
+        name: &str,
+    ) -> Result<Vec<FunctionDefinitionView>> {
+        validate_schema_object_name(schema, "Schema")?;
+        validate_schema_object_name(name, "Function")?;
+        let (driver, _) = self.connected_driver(id).await?;
+        Ok(queries::get_function_ddl(&driver, schema, name)
+            .await?
+            .into_iter()
+            .map(|definition| FunctionDefinitionView {
+                ddl: definition.ddl,
+                args: definition.args,
+                oid: definition.oid,
+            })
+            .collect())
+    }
+
+    pub async fn validate_function_definition(
+        &self,
+        id: &str,
+        ddl: &str,
+    ) -> Result<Option<String>> {
+        validate_function_ddl(ddl)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        Ok(queries::validate_function(&driver, ddl).await?)
+    }
+
+    pub async fn save_function_definition(&self, id: &str, ddl: &str) -> Result<()> {
+        validate_function_ddl(ddl)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::save_function(&driver, ddl).await?;
+        Ok(())
+    }
+
+    pub async fn save_trigger_definition(&self, id: &str, ddl: &str) -> Result<()> {
+        validate_trigger_ddl(ddl)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::save_function(&driver, ddl).await?;
+        Ok(())
+    }
+
     pub async fn erd(&self, id: &str, schema: &str) -> Result<ErdView> {
         let (driver, _) = self.connected_driver(id).await?;
         let data = queries::get_erd_data(&driver, schema).await?;
@@ -1001,6 +1385,38 @@ impl Application {
         let (driver, _) = self.connected_driver(id).await?;
         queries::toggle_job(&driver, job_id, active).await?;
         Ok(())
+    }
+
+    pub async fn create_cron_job(&self, id: &str, input: CronJobInput) -> Result<()> {
+        let (name, schedule, command) = validate_cron_job_input(input)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::create_job(&driver, name.as_deref(), &schedule, &command).await?;
+        Ok(())
+    }
+
+    pub async fn update_cron_job(&self, id: &str, job_id: i64, input: CronJobInput) -> Result<()> {
+        validate_job_id(job_id)?;
+        let (_, schedule, command) = validate_cron_job_input(input)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::update_job(&driver, job_id, &schedule, &command).await?;
+        Ok(())
+    }
+
+    pub async fn cron_job_runs(&self, id: &str, job_id: i64) -> Result<Vec<CronJobRunView>> {
+        validate_job_id(job_id)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        Ok(queries::get_job_runs(&driver, job_id)
+            .await?
+            .into_iter()
+            .map(|run| CronJobRunView {
+                id: run.runid,
+                status: run.status,
+                return_message: run.return_message,
+                start_time: run.start_time,
+                end_time: run.end_time,
+                duration_seconds: run.duration_sec,
+            })
+            .collect())
     }
 
     pub async fn delete_cron_job(&self, id: &str, job_id: i64) -> Result<()> {
@@ -1120,8 +1536,33 @@ impl Application {
                 createrole: input.create_role,
                 superuser: input.superuser,
                 conn_limit: input.connection_limit,
+                valid_until: normalize_role_valid_until(input.valid_until.as_deref())?,
                 ..Default::default()
             },
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn update_role(&self, id: &str, name: &str, input: UpdateRoleInput) -> Result<()> {
+        let name = validate_role_name(name)?;
+        if input.connection_limit < -1 {
+            return Err(ApplicationError::InvalidInput(
+                "Role connection limit must be -1 or greater".to_string(),
+            ));
+        }
+        let valid_until = normalize_role_valid_until(input.valid_until.as_deref())?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::update_role(
+            &driver,
+            &name,
+            input.login,
+            input.create_database,
+            input.create_role,
+            input.superuser,
+            input.connection_limit,
+            valid_until.as_deref(),
+            None,
         )
         .await?;
         Ok(())
@@ -1154,6 +1595,8 @@ impl Application {
                 "Backup compression must be between 0 and 9".to_string(),
             ));
         }
+        self.consume_file_authorization(&options.output, FileAuthorizationPurpose::Backup)
+            .await?;
         let format = match options.format {
             BackupFormat::Plain => DumpFormat::Plain,
             BackupFormat::Custom => DumpFormat::Custom,
@@ -1183,6 +1626,8 @@ impl Application {
             ));
         }
         validate_file_path(&options.input, "Restore input")?;
+        self.consume_file_authorization(&options.input, FileAuthorizationPurpose::Restore)
+            .await?;
         let core_options = RestoreOptions {
             input: options.input.into(),
             target_database: options.target_database,
@@ -1205,6 +1650,39 @@ impl Application {
         }
     }
 
+    pub async fn authorize_file_path(
+        &self,
+        path: &str,
+        purpose: FileAuthorizationPurpose,
+    ) -> Result<()> {
+        validate_file_path(path, "Selected path")?;
+        validate_selected_path(path, purpose)?;
+        self.authorized_files
+            .lock()
+            .await
+            .insert(path.to_string(), (purpose, Instant::now()));
+        Ok(())
+    }
+
+    async fn consume_file_authorization(
+        &self,
+        path: &str,
+        purpose: FileAuthorizationPurpose,
+    ) -> Result<()> {
+        const FILE_AUTHORIZATION_TTL: Duration = Duration::from_secs(10 * 60);
+        let authorization = self.authorized_files.lock().await.remove(path);
+        if authorization.is_some_and(|(authorized_purpose, created)| {
+            authorized_purpose == purpose && created.elapsed() <= FILE_AUTHORIZATION_TTL
+        }) {
+            Ok(())
+        } else {
+            Err(ApplicationError::InvalidInput(
+                "Choose the file again with the native file picker before running this operation"
+                    .to_string(),
+            ))
+        }
+    }
+
     pub fn assistant_settings(&self) -> assistant::Settings {
         store::get_ai_settings()
     }
@@ -1215,6 +1693,12 @@ impl Application {
     ) -> Result<assistant::Settings> {
         store::save_ai_settings(&settings)?;
         Ok(settings)
+    }
+
+    pub async fn assistant_models(&self, provider: assistant::Provider) -> Result<Vec<String>> {
+        assistant::list_models(provider)
+            .await
+            .map_err(|error| ApplicationError::Assistant(error.to_string()))
     }
 
     pub async fn save_assistant_key(&self, provider: assistant::Provider, key: &str) -> Result<()> {
@@ -1324,7 +1808,6 @@ impl Application {
         }
         let (driver, conn) = self.connected_context(id).await?;
         let password = secrets::get_password(id).await?;
-        let redacted_paths = operation.paths_for_redaction();
         let cancel_rx = self.register_operation(operation_id).await?;
         let (events_tx, mut events_rx) = mpsc::unbounded_channel();
         let operation_id_owned = operation_id.to_string();
@@ -1344,22 +1827,19 @@ impl Application {
                 }
             }
         });
-        let mut logs = Vec::new();
         while let Some(event) = events_rx.recv().await {
-            match event {
-                ToolEvent::Stdout(line) => push_log(
-                    &mut logs,
-                    redact_paths(format!("stdout: {line}"), &redacted_paths),
-                ),
-                ToolEvent::Stderr(line) => push_log(
-                    &mut logs,
-                    redact_paths(format!("stderr: {line}"), &redacted_paths),
-                ),
-                ToolEvent::Finished(_) => {}
+            if matches!(event, ToolEvent::Finished(_)) {
+                break;
             }
         }
         let result = match task.await {
             Ok(Ok(result)) => result,
+            Ok(Err(CoreError::Io(error))) if error.kind() == std::io::ErrorKind::NotFound => {
+                self.finish_operation(operation_id).await;
+                return Err(ApplicationError::InvalidInput(
+                    "Required PostgreSQL client tool is not installed".to_string(),
+                ));
+            }
             Ok(Err(error)) => {
                 self.finish_operation(operation_id).await;
                 return Err(error.into());
@@ -1375,7 +1855,18 @@ impl Application {
             exit_code: result.exit_code,
             cancelled: result.cancelled,
             succeeded: result.succeeded(),
-            logs,
+            logs: vec![if result.cancelled {
+                "Operation cancelled".to_string()
+            } else if result.succeeded() {
+                "PostgreSQL tool completed successfully".to_string()
+            } else {
+                format!(
+                    "PostgreSQL tool failed with exit code {}",
+                    result
+                        .exit_code
+                        .map_or_else(|| "unknown".to_string(), |code| code.to_string())
+                )
+            }],
         })
     }
 
@@ -1557,29 +2048,6 @@ enum ToolOperation {
     Restore(RestoreOptions),
 }
 
-impl ToolOperation {
-    fn paths_for_redaction(&self) -> Vec<String> {
-        match self {
-            Self::Dump(options) => vec![options.output.display().to_string()],
-            Self::Restore(options) => vec![options.input.display().to_string()],
-        }
-    }
-}
-
-fn push_log(logs: &mut Vec<String>, line: String) {
-    const MAX_LOG_LINES: usize = 2_000;
-    if logs.len() < MAX_LOG_LINES {
-        logs.push(line);
-    }
-}
-
-fn redact_paths(mut line: String, paths: &[String]) -> String {
-    for path in paths.iter().filter(|path| !path.is_empty()) {
-        line = line.replace(path, "<selected-path>");
-    }
-    line
-}
-
 /// File operations are intentionally limited to an explicit absolute path supplied by the user
 /// (normally from a future native file picker). Relative paths and parent traversal are rejected;
 /// no generic filesystem command is exposed to the webview.
@@ -1594,6 +2062,42 @@ fn validate_file_path(value: &str, label: &str) -> Result<()> {
         return Err(ApplicationError::InvalidInput(format!(
             "{label} must be an absolute path without parent traversal"
         )));
+    }
+    Ok(())
+}
+
+fn validate_selected_path(value: &str, purpose: FileAuthorizationPurpose) -> Result<()> {
+    let path = Path::new(value);
+    match purpose {
+        FileAuthorizationPurpose::Backup => {
+            let parent = path.parent().ok_or_else(|| {
+                ApplicationError::InvalidInput("Backup destination has no parent".to_string())
+            })?;
+            if !parent.is_dir() {
+                return Err(ApplicationError::InvalidInput(
+                    "Backup destination directory does not exist".to_string(),
+                ));
+            }
+            if std::fs::symlink_metadata(path)
+                .is_ok_and(|metadata| metadata.file_type().is_symlink())
+            {
+                return Err(ApplicationError::InvalidInput(
+                    "Backup destination cannot be a symbolic link".to_string(),
+                ));
+            }
+        }
+        FileAuthorizationPurpose::Restore => {
+            let metadata = std::fs::symlink_metadata(path).map_err(|_| {
+                ApplicationError::InvalidInput(
+                    "Restore input must be an existing regular file".to_string(),
+                )
+            })?;
+            if !metadata.is_file() || metadata.file_type().is_symlink() {
+                return Err(ApplicationError::InvalidInput(
+                    "Restore input must be a regular file, not a symbolic link".to_string(),
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -1621,6 +2125,34 @@ fn validate_role_name(value: &str) -> Result<String> {
         ));
     }
     Ok(name.to_string())
+}
+
+fn normalize_role_valid_until(value: Option<&str>) -> Result<Option<String>> {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let bytes = value.as_bytes();
+    let valid_shape = bytes.len() == 10
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit());
+    let valid_date = valid_shape
+        && value[0..4].parse::<u16>().is_ok_and(|year| year > 0)
+        && value[5..7]
+            .parse::<u8>()
+            .is_ok_and(|month| (1..=12).contains(&month))
+        && value[8..10]
+            .parse::<u8>()
+            .is_ok_and(|day| (1..=31).contains(&day));
+    if !valid_date {
+        return Err(ApplicationError::InvalidInput(
+            "Role expiration must use YYYY-MM-DD".to_string(),
+        ));
+    }
+    Ok(Some(value.to_string()))
 }
 
 fn validate_snippet_name(value: &str) -> Result<String> {
@@ -1651,6 +2183,368 @@ fn validate_job_id(job_id: i64) -> Result<()> {
     } else {
         Ok(())
     }
+}
+
+fn validate_schema_object_name(value: &str, label: &str) -> Result<()> {
+    if value.trim().is_empty() || value.contains('\0') || value.chars().any(char::is_control) {
+        return Err(ApplicationError::InvalidInput(format!(
+            "{label} name is required and cannot contain control characters"
+        )));
+    }
+    if value.len() > 63 {
+        return Err(ApplicationError::InvalidInput(format!(
+            "{label} name must be at most 63 bytes"
+        )));
+    }
+    Ok(())
+}
+
+fn new_table_column(input: CreateTableColumnInput) -> Result<queries::NewTableColumn> {
+    queries::validate_table_column_definition(
+        &input.name,
+        &input.data_type,
+        input.default.as_deref(),
+    )?;
+    let references = input
+        .references
+        .map(|reference| -> Result<queries::NewColumnReference> {
+            validate_schema_object_name(&reference.schema, "Referenced schema")?;
+            validate_schema_object_name(&reference.table, "Referenced table")?;
+            validate_schema_object_name(&reference.column, "Referenced column")?;
+            Ok(queries::NewColumnReference {
+                schema: reference.schema,
+                table: reference.table,
+                column: reference.column,
+                on_delete: reference.on_delete,
+            })
+        })
+        .transpose()?;
+    Ok(queries::NewTableColumn {
+        name: input.name,
+        data_type: input.data_type,
+        nullable: input.nullable,
+        primary_key: input.primary_key,
+        unique: input.unique,
+        default: input.default,
+        references,
+    })
+}
+
+fn build_alter_table_preview(
+    schema: &str,
+    table: &str,
+    input: AlterTableInput,
+    detail: &queries::TableDetail,
+) -> Result<AlterTablePreviewView> {
+    validate_schema_object_name(&input.new_table_name, "Table")?;
+    if input.columns.is_empty() || input.columns.len() > 512 {
+        return Err(ApplicationError::InvalidInput(
+            "An edited table requires between 1 and 512 column entries".to_string(),
+        ));
+    }
+    let original_names = detail
+        .columns
+        .iter()
+        .map(|column| column.name.clone())
+        .collect::<HashSet<_>>();
+    let mut supplied_originals = HashSet::new();
+    let mut resulting_names = HashSet::new();
+    let mut edits = Vec::with_capacity(input.columns.len());
+    for column in input.columns {
+        if let Some(original_name) = &column.original_name {
+            if !original_names.contains(original_name)
+                || !supplied_originals.insert(original_name.clone())
+            {
+                return Err(ApplicationError::InvalidInput(
+                    "Edited columns do not match the current table".to_string(),
+                ));
+            }
+        }
+        if !column.removed {
+            queries::validate_table_column_definition(
+                &column.name,
+                &column.data_type,
+                column.default.as_deref(),
+            )?;
+            if !resulting_names.insert(column.name.clone()) {
+                return Err(ApplicationError::InvalidInput(
+                    "The edited table contains duplicate column names".to_string(),
+                ));
+            }
+        }
+        edits.push(queries::ColumnEdit {
+            original_name: column.original_name,
+            name: column.name,
+            data_type: column.data_type,
+            nullable: column.nullable,
+            default: column.default,
+            primary_key: column.primary_key,
+            removed: column.removed,
+        });
+    }
+    if supplied_originals != original_names {
+        return Err(ApplicationError::InvalidInput(
+            "Every current table column must be included in an alter request".to_string(),
+        ));
+    }
+    let primary_key_constraint = detail
+        .constraints
+        .iter()
+        .find(|constraint| constraint.kind == "PRIMARY KEY")
+        .map(|constraint| constraint.name.as_str());
+    let statements = queries::build_alter_table_statements(
+        schema,
+        table,
+        &input.new_table_name,
+        &detail.columns,
+        &edits,
+        primary_key_constraint,
+    );
+    let destructive = queries::alter_table_is_destructive(&statements);
+    let sql = if statements.is_empty() {
+        "-- No changes".to_string()
+    } else {
+        format!("{};", statements.join(";\n"))
+    };
+    Ok(AlterTablePreviewView {
+        statements,
+        sql,
+        destructive,
+    })
+}
+
+fn validate_function_ddl(ddl: &str) -> Result<()> {
+    let ddl = ddl.trim();
+    if ddl.is_empty() || ddl.len() > 2_097_152 || ddl.contains('\0') {
+        return Err(ApplicationError::InvalidInput(
+            "Function definition is required and must be at most 2 MiB".to_string(),
+        ));
+    }
+    let prefix = ddl
+        .split_whitespace()
+        .take(4)
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase();
+    if !(prefix.starts_with("create function ")
+        || prefix.starts_with("create procedure ")
+        || prefix.starts_with("create or replace function")
+        || prefix.starts_with("create or replace procedure"))
+    {
+        return Err(ApplicationError::InvalidInput(
+            "Only CREATE [OR REPLACE] FUNCTION/PROCEDURE definitions are accepted".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_trigger_ddl(ddl: &str) -> Result<()> {
+    let ddl = ddl.trim();
+    if ddl.is_empty() || ddl.len() > 1_048_576 || ddl.contains('\0') {
+        return Err(ApplicationError::InvalidInput(
+            "Trigger definition is required and must be at most 1 MiB".to_string(),
+        ));
+    }
+    let prefix = ddl
+        .split_whitespace()
+        .take(4)
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase();
+    if !(prefix.starts_with("create trigger ") || prefix.starts_with("create or replace trigger")) {
+        return Err(ApplicationError::InvalidInput(
+            "Only CREATE [OR REPLACE] TRIGGER definitions are accepted".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+struct TableEditMetadata {
+    columns: HashSet<String>,
+    primary_keys: Vec<String>,
+}
+
+async fn table_edit_metadata(
+    driver: &PostgresDriver,
+    schema: &str,
+    table: &str,
+) -> Result<TableEditMetadata> {
+    let detail = queries::get_table_detail(driver, schema, table).await?;
+    let columns = detail
+        .columns
+        .iter()
+        .map(|column| column.name.clone())
+        .collect::<HashSet<_>>();
+    if columns.is_empty() {
+        return Err(ApplicationError::InvalidInput(
+            "Table was not found or has no visible columns".to_string(),
+        ));
+    }
+    let primary_keys = detail
+        .columns
+        .into_iter()
+        .filter(|column| column.is_primary_key)
+        .map(|column| column.name)
+        .collect();
+    Ok(TableEditMetadata {
+        columns,
+        primary_keys,
+    })
+}
+
+fn validate_table_name(schema: &str, table: &str) -> Result<()> {
+    validate_schema_object_name(schema, "Schema")?;
+    validate_schema_object_name(table, "Table")
+}
+
+fn validate_table_column(column: &str, columns: &HashSet<String>) -> Result<()> {
+    validate_schema_object_name(column, "Column")?;
+    if !columns.contains(column) {
+        return Err(ApplicationError::InvalidInput(
+            "Column does not belong to the selected table".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_table_values(
+    values: Vec<TableCellInput>,
+    columns: &HashSet<String>,
+) -> Result<Vec<(String, serde_json::Value)>> {
+    if values.len() > columns.len() {
+        return Err(ApplicationError::InvalidInput(
+            "Table row contains too many columns".to_string(),
+        ));
+    }
+    let mut seen = HashSet::with_capacity(values.len());
+    values
+        .into_iter()
+        .map(|cell| {
+            validate_table_column(&cell.column, columns)?;
+            if !seen.insert(cell.column.clone()) {
+                return Err(ApplicationError::InvalidInput(
+                    "Table row contains a duplicate column".to_string(),
+                ));
+            }
+            let value = parse_json_value(&cell.value_json)?;
+            Ok((cell.column, value))
+        })
+        .collect()
+}
+
+fn parse_table_row(
+    values_json: &str,
+    columns: &HashSet<String>,
+) -> Result<Vec<(String, serde_json::Value)>> {
+    if values_json.len() > 8_388_608 {
+        return Err(ApplicationError::InvalidInput(
+            "Table rows must be at most 8 MiB".to_string(),
+        ));
+    }
+    let values = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(values_json)
+        .map_err(|_| {
+            ApplicationError::InvalidInput(
+                "A new table row must be a valid JSON object".to_string(),
+            )
+        })?
+        .into_iter()
+        .map(|(column, value)| TableCellInput {
+            column,
+            value_json: value.to_string(),
+        })
+        .collect();
+    validate_table_values(values, columns)
+}
+
+fn validate_row_keys(
+    keys: Vec<TableCellInput>,
+    primary_keys: &[String],
+) -> Result<Vec<(String, serde_json::Value)>> {
+    if primary_keys.is_empty() {
+        return Err(ApplicationError::InvalidInput(
+            "Editing requires a primary key on the table".to_string(),
+        ));
+    }
+    let mut supplied = HashMap::with_capacity(keys.len());
+    for key in keys {
+        validate_schema_object_name(&key.column, "Primary key column")?;
+        let value = parse_json_value(&key.value_json)?;
+        if value.is_null() {
+            return Err(ApplicationError::InvalidInput(
+                "Primary key values cannot be null".to_string(),
+            ));
+        }
+        if supplied.insert(key.column, value).is_some() {
+            return Err(ApplicationError::InvalidInput(
+                "Primary key contains a duplicate column".to_string(),
+            ));
+        }
+    }
+    if supplied.len() != primary_keys.len()
+        || primary_keys
+            .iter()
+            .any(|column| !supplied.contains_key(column))
+    {
+        return Err(ApplicationError::InvalidInput(
+            "A complete primary key is required to identify the table row".to_string(),
+        ));
+    }
+    Ok(primary_keys
+        .iter()
+        .map(|column| {
+            (
+                column.clone(),
+                supplied
+                    .remove(column)
+                    .expect("primary key presence was checked"),
+            )
+        })
+        .collect())
+}
+
+fn parse_json_value(value: &str) -> Result<serde_json::Value> {
+    if value.len() > 1_048_576 {
+        return Err(ApplicationError::InvalidInput(
+            "Table values must be at most 1 MiB each".to_string(),
+        ));
+    }
+    serde_json::from_str(value).map_err(|_| {
+        ApplicationError::InvalidInput(
+            "Table values must use valid JSON; strings require double quotes".to_string(),
+        )
+    })
+}
+
+fn validate_cron_job_input(input: CronJobInput) -> Result<(Option<String>, String, String)> {
+    let name = input
+        .name
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty());
+    if name
+        .as_ref()
+        .is_some_and(|name| name.chars().count() > 63 || name.chars().any(char::is_control))
+    {
+        return Err(ApplicationError::InvalidInput(
+            "Scheduled job name must be at most 63 characters without control characters"
+                .to_string(),
+        ));
+    }
+    let schedule = input.schedule.trim().to_string();
+    if schedule.is_empty()
+        || schedule.chars().count() > 100
+        || schedule.chars().any(char::is_control)
+    {
+        return Err(ApplicationError::InvalidInput(
+            "Scheduled job schedule must be 1 to 100 printable characters".to_string(),
+        ));
+    }
+    let command = input.command.trim().to_string();
+    if command.is_empty() || command.len() > 100_000 || command.contains('\0') {
+        return Err(ApplicationError::InvalidInput(
+            "Scheduled job command must be 1 to 100000 bytes".to_string(),
+        ));
+    }
+    Ok((name, schedule, command))
 }
 
 fn validate_extension_name(value: &str) -> Result<String> {
@@ -1815,6 +2709,19 @@ mod tests {
     }
 
     #[test]
+    fn trigger_views_carry_their_parent_table_for_navigation() {
+        let trigger = SchemaObjectView {
+            name: "audit_change".to_string(),
+            kind: SchemaObjectKind::Trigger,
+            detail: Some("on accounts".to_string()),
+            parent_table: Some("accounts".to_string()),
+            definition: Some("CREATE TRIGGER audit_change".to_string()),
+        };
+        let json = serde_json::to_value(trigger).expect("trigger view serializes");
+        assert_eq!(json["parent_table"], "accounts");
+    }
+
+    #[test]
     fn invalid_input_is_rejected_before_storage() {
         let mut input = valid_input();
         input.host.clear();
@@ -1854,10 +2761,24 @@ mod tests {
             create_role: false,
             superuser: false,
             connection_limit: -1,
+            valid_until: None,
         };
         let json = serde_json::to_string(&input).expect("role input serializes");
         assert!(!json.contains("password"));
         assert!(!json.contains("secret"));
+    }
+
+    #[test]
+    fn role_expiration_is_optional_and_requires_an_iso_date() {
+        assert_eq!(normalize_role_valid_until(None).unwrap(), None);
+        assert_eq!(normalize_role_valid_until(Some("  ")).unwrap(), None);
+        assert_eq!(
+            normalize_role_valid_until(Some("2030-12-31")).unwrap(),
+            Some("2030-12-31".to_string())
+        );
+        assert!(normalize_role_valid_until(Some("31/12/2030")).is_err());
+        assert!(normalize_role_valid_until(Some("2030-13-01")).is_err());
+        assert!(normalize_role_valid_until(Some("2030-12-00")).is_err());
     }
 
     #[test]
@@ -1891,6 +2812,46 @@ mod tests {
             app.delete_cron_job("missing", -1).await,
             Err(ApplicationError::InvalidInput(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn invalid_sequence_value_is_rejected_before_connection_lookup() {
+        let app = Application::new();
+        assert!(matches!(
+            app.set_sequence_value("missing", "public", "items_id_seq", "1.5")
+                .await,
+            Err(ApplicationError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            app.set_sequence_value("missing", "", "items_id_seq", "1")
+                .await,
+            Err(ApplicationError::InvalidInput(_))
+        ));
+    }
+
+    #[test]
+    fn cron_job_input_is_trimmed_and_bounded() {
+        let (name, schedule, command) = validate_cron_job_input(CronJobInput {
+            name: Some("  nightly  ".to_string()),
+            schedule: "  0 2 * * *  ".to_string(),
+            command: "  VACUUM ANALYZE  ".to_string(),
+        })
+        .expect("valid cron input");
+        assert_eq!(name.as_deref(), Some("nightly"));
+        assert_eq!(schedule, "0 2 * * *");
+        assert_eq!(command, "VACUUM ANALYZE");
+        assert!(validate_cron_job_input(CronJobInput {
+            name: None,
+            schedule: "".to_string(),
+            command: "SELECT 1".to_string(),
+        })
+        .is_err());
+        assert!(validate_cron_job_input(CronJobInput {
+            name: None,
+            schedule: "@daily".to_string(),
+            command: "\0".to_string(),
+        })
+        .is_err());
     }
 
     #[tokio::test]
@@ -1940,19 +2901,77 @@ mod tests {
     }
 
     #[test]
+    fn table_row_identity_requires_the_complete_primary_key() {
+        let primary_keys = vec!["tenant_id".to_string(), "id".to_string()];
+        let keys = validate_row_keys(
+            vec![
+                TableCellInput {
+                    column: "id".to_string(),
+                    value_json: "9007199254740993".to_string(),
+                },
+                TableCellInput {
+                    column: "tenant_id".to_string(),
+                    value_json: "7".to_string(),
+                },
+            ],
+            &primary_keys,
+        )
+        .expect("complete key");
+        assert_eq!(keys[0], ("tenant_id".to_string(), serde_json::json!(7)));
+        assert_eq!(keys[1].0, "id");
+        assert_eq!(keys[1].1.to_string(), "9007199254740993");
+        assert!(validate_row_keys(
+            vec![TableCellInput {
+                column: "id".to_string(),
+                value_json: "1".to_string(),
+            }],
+            &primary_keys,
+        )
+        .is_err());
+        assert!(validate_row_keys(Vec::new(), &[]).is_err());
+    }
+
+    #[test]
+    fn table_values_preserve_arbitrary_numeric_precision() {
+        let value = parse_json_value("12345678901234567890.12345678901234567890")
+            .expect("arbitrary precision JSON number");
+        assert_eq!(
+            value.to_string(),
+            "12345678901234567890.12345678901234567890"
+        );
+        let columns = HashSet::from(["amount".to_string()]);
+        let row = parse_table_row(
+            r#"{"amount":12345678901234567890.12345678901234567890}"#,
+            &columns,
+        )
+        .expect("row object");
+        assert_eq!(
+            row[0].1.to_string(),
+            "12345678901234567890.12345678901234567890"
+        );
+        assert!(parse_table_row("[]", &columns).is_err());
+        assert!(parse_table_row(r#"{"unknown":1}"#, &columns).is_err());
+    }
+
+    #[test]
+    fn definition_editors_accept_only_the_expected_ddl_kind() {
+        assert!(validate_function_ddl(
+            "CREATE OR REPLACE FUNCTION public.f() RETURNS void LANGUAGE sql AS $$ SELECT $$"
+        )
+        .is_ok());
+        assert!(validate_function_ddl("DROP FUNCTION public.f()").is_err());
+        assert!(validate_trigger_ddl(
+            "CREATE OR REPLACE TRIGGER audit AFTER UPDATE ON items EXECUTE FUNCTION audit()"
+        )
+        .is_ok());
+        assert!(validate_trigger_ddl("DROP TRIGGER audit ON items").is_err());
+    }
+
+    #[test]
     fn file_operation_errors_do_not_echo_private_paths() {
         let error = validate_file_path("relative/private-secret.dump", "Backup output")
             .expect_err("relative paths must be rejected");
         assert!(!error.to_string().contains("private-secret"));
-    }
-
-    #[test]
-    fn backup_logs_redact_selected_paths() {
-        let line = redact_paths(
-            "could not open /home/user/private.dump".to_string(),
-            &["/home/user/private.dump".to_string()],
-        );
-        assert_eq!(line, "could not open <selected-path>");
     }
 
     #[test]
@@ -2000,5 +3019,48 @@ mod tests {
         app.finish_operation("query-1").await;
         assert!(app.cancel_operation("query-1").await.is_err());
         assert!(app.register_operation("query-1").await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn native_file_authorizations_are_scoped_and_single_use() {
+        let app = Application::new();
+        let path = "/tmp/draco-authorized-backup.dump";
+        app.authorize_file_path(path, FileAuthorizationPurpose::Backup)
+            .await
+            .expect("authorize selected backup");
+        app.consume_file_authorization(path, FileAuthorizationPurpose::Backup)
+            .await
+            .expect("consume once");
+        assert!(app
+            .consume_file_authorization(path, FileAuthorizationPurpose::Backup)
+            .await
+            .is_err());
+
+        app.authorize_file_path(path, FileAuthorizationPurpose::Backup)
+            .await
+            .expect("authorize for backup only");
+        assert!(app
+            .consume_file_authorization(path, FileAuthorizationPurpose::Restore)
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn backup_rejects_a_forged_absolute_path_before_connection_lookup() {
+        let error = Application::new()
+            .run_backup(
+                "missing",
+                "operation",
+                BackupOptionsInput {
+                    output: "/tmp/not-authorized.dump".to_string(),
+                    format: BackupFormat::Custom,
+                    compression: None,
+                    schemas: Vec::new(),
+                    tables: Vec::new(),
+                },
+            )
+            .await
+            .expect_err("unselected path must fail");
+        assert!(matches!(error, ApplicationError::InvalidInput(_)));
     }
 }

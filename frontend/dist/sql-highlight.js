@@ -68,13 +68,113 @@ export function tokenizeSql(sql) {
   return tokens;
 }
 
-export function highlightSql(sql) {
+function highlightSqlFragment(sql) {
   let html = '';
   for (const token of tokenizeSql(sql)) {
     const text = escapeHtml(token.value);
     html += token.type === 'plain' ? text : `<span class="sql-tok-${token.type}">${text}</span>`;
   }
+  return html;
+}
+
+export function highlightSql(sql) {
+  const html = highlightSqlFragment(sql);
   // A trailing newline is invisible in a <pre>, so the overlay would be one line shorter than the
   // textarea and scroll out of sync on the last line. Pad it so both share the same line count.
   return sql.endsWith('\n') ? `${html}\n` : html;
+}
+
+export function splitSqlStatements(sql) {
+  const statements = [];
+  let start = 0;
+  let index = 0;
+  let state = 'normal';
+  let blockDepth = 0;
+  let dollarDelimiter = '';
+  let singleQuoteBackslashEscapes = false;
+  while (index < sql.length) {
+    const current = sql[index];
+    const next = sql[index + 1];
+    if (state === 'line-comment') {
+      if (current === '\n') state = 'normal';
+      index += 1;
+      continue;
+    }
+    if (state === 'block-comment') {
+      if (current === '/' && next === '*') { blockDepth += 1; index += 2; continue; }
+      if (current === '*' && next === '/') {
+        blockDepth -= 1;
+        index += 2;
+        if (blockDepth === 0) state = 'normal';
+        continue;
+      }
+      index += 1;
+      continue;
+    }
+    if (state === 'single-quote') {
+      if (singleQuoteBackslashEscapes && current === '\\') { index += Math.min(2, sql.length - index); continue; }
+      if (current === "'" && next === "'") { index += 2; continue; }
+      if (current === "'") state = 'normal';
+      index += 1;
+      continue;
+    }
+    if (state === 'double-quote') {
+      if (current === '"' && next === '"') { index += 2; continue; }
+      if (current === '"') state = 'normal';
+      index += 1;
+      continue;
+    }
+    if (state === 'dollar-quote') {
+      if (sql.startsWith(dollarDelimiter, index)) {
+        index += dollarDelimiter.length;
+        state = 'normal';
+      } else {
+        index += 1;
+      }
+      continue;
+    }
+    if (current === '-' && next === '-') { state = 'line-comment'; index += 2; continue; }
+    if (current === '/' && next === '*') { state = 'block-comment'; blockDepth = 1; index += 2; continue; }
+    if (current === "'") {
+      const prefix = sql[index - 1];
+      const beforePrefix = sql[index - 2];
+      singleQuoteBackslashEscapes = (prefix === 'e' || prefix === 'E') && (beforePrefix === undefined || !/[A-Za-z0-9_$]/.test(beforePrefix));
+      state = 'single-quote';
+      index += 1;
+      continue;
+    }
+    if (current === '"') { state = 'double-quote'; index += 1; continue; }
+    if (current === '$') {
+      const delimiter = sql.slice(index).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/)?.[0];
+      if (delimiter) { dollarDelimiter = delimiter; state = 'dollar-quote'; index += delimiter.length; continue; }
+    }
+    if (current === ';') {
+      statements.push(sql.slice(start, index + 1));
+      start = index + 1;
+    }
+    index += 1;
+  }
+  if (start < sql.length) statements.push(sql.slice(start));
+  return statements;
+}
+
+export function highlightSqlIncremental(sql, previousCache = []) {
+  const reusable = new Map();
+  for (const entry of previousCache) {
+    const entries = reusable.get(entry.sql) || [];
+    entries.push(entry.html);
+    reusable.set(entry.sql, entries);
+  }
+  let reused = 0;
+  const cache = splitSqlStatements(sql).map((statement) => {
+    const entries = reusable.get(statement);
+    if (entries?.length) {
+      reused += 1;
+      return { sql: statement, html: entries.shift() };
+    }
+    return { sql: statement, html: highlightSqlFragment(statement) };
+  });
+  let html = cache.map((entry) => entry.html).join('');
+  if (sql.endsWith('\n')) html += '\n';
+  return { html, cache, reused };
 }
