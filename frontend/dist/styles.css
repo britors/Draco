@@ -388,6 +388,22 @@ select:not(:disabled):active { background-color: var(--color-surface-raised); }
 .app-dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 26px; }
 .app-dialog-actions .danger-action { border-color: #9b5047; color: #fff2ed; background: #a95249; }
 .app-dialog-actions .danger-action:hover { border-color: #cf6a5d; background: #c15b50; }
+.ai-review-dialog[hidden] { display: none; }
+.ai-review-dialog { position: fixed; inset: 0; z-index: 34; display: grid; place-items: center; padding: 20px; }
+.ai-review-backdrop { position: absolute; inset: 0; background: rgba(4, 5, 8, .8); backdrop-filter: blur(6px); }
+.ai-review-panel { position: relative; display: grid; width: min(720px, 100%); max-height: calc(100vh - 40px); gap: 18px; padding: 26px; overflow: auto; border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: 0 24px 90px rgba(0, 0, 0, .56); }
+.ai-review-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.ai-review-heading h2 { margin: 5px 0 0; }
+.ai-review-panel > p { margin: 0; color: var(--color-text-muted); line-height: 1.55; }
+.ai-review-focus { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.ai-review-focus-button { padding: 9px 11px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-muted); background: var(--color-surface-input); cursor: pointer; }
+.ai-review-focus-button:hover, .ai-review-focus-button.active { border-color: var(--color-action); color: var(--color-action-soft); background: var(--color-surface-raised); }
+.ai-review-focus-button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ai-review-query { display: grid; min-width: 0; gap: 8px; }
+.ai-review-query pre { max-height: 220px; margin: 0; padding: 13px; overflow: auto; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); background: var(--color-surface-input); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
+.ai-review-note { display: grid; gap: 8px; color: var(--color-text-muted); font-size: 12px; }
+.ai-review-note textarea { width: 100%; resize: vertical; }
+.ai-review-actions { display: flex; justify-content: flex-end; gap: 9px; }
 .object-dialog { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; padding: 20px; }
 .object-dialog-backdrop { position: absolute; inset: 0; background: rgba(4, 5, 8, .8); backdrop-filter: blur(6px); }
 .object-dialog-panel { position: relative; display: flex; width: min(980px, 100%); max-height: min(860px, calc(100vh - 40px)); flex-direction: column; overflow: hidden; border: 1px solid #3a2c32; border-radius: 11px; background: #151720; box-shadow: 0 24px 90px rgba(0, 0, 0, .56); }
@@ -488,7 +504,7 @@ html[data-theme="light"] .sidebar-toggle { box-shadow: 0 0 0 4px #f6f4f0; }
 html[data-theme="light"] .nav-item { color: #65615c; }
 html[data-theme="light"] .nav-item.active { color: var(--color-action); background: #ebe6e2; }
 html[data-theme="light"] .panel, html[data-theme="light"] .hero-panel { border-color: var(--color-border); background: rgba(255, 255, 255, .88); }
-html[data-theme="light"] .health-card, html[data-theme="light"] .connection-card, html[data-theme="light"] .history-item, html[data-theme="light"] .snippet-item, html[data-theme="light"] .metric-card, html[data-theme="light"] .data-panel, html[data-theme="light"] .assistant-message, html[data-theme="light"] .command-dialog, html[data-theme="light"] .app-dialog-panel, html[data-theme="light"] .object-dialog-panel { border-color: var(--color-border); color: var(--color-text); background: var(--color-surface); }
+html[data-theme="light"] .health-card, html[data-theme="light"] .connection-card, html[data-theme="light"] .history-item, html[data-theme="light"] .snippet-item, html[data-theme="light"] .metric-card, html[data-theme="light"] .data-panel, html[data-theme="light"] .assistant-message, html[data-theme="light"] .command-dialog, html[data-theme="light"] .app-dialog-panel, html[data-theme="light"] .ai-review-panel, html[data-theme="light"] .object-dialog-panel { border-color: var(--color-border); color: var(--color-text); background: var(--color-surface); }
 html[data-theme="light"] input, html[data-theme="light"] textarea, html[data-theme="light"] #sql-editor, html[data-theme="light"] #assistant-message, html[data-theme="light"] .ddl-code, html[data-theme="light"] .operation-log, html[data-theme="light"] .object-sql-preview { border-color: var(--color-border-strong); color: var(--color-text); background: var(--color-surface-input); }
 html[data-theme="light"] .column-editor-row { border-color: var(--color-border); background: #f8f6f2; }
 html[data-theme="light"] select {
@@ -505,7 +521,7 @@ html[data-theme="light"] .result-grid tr.result-row-alt td { background: #f8f6f2
 html[data-theme="light"] .assistant-message.user { border-color: var(--color-border-strong); color: #332c29; background: #f1e8e4; }
 html[data-theme="light"] .erd-node { border-color: var(--color-border); background: #fff; box-shadow: 0 12px 30px rgba(60, 52, 45, .12); }
 html[data-theme="light"] .erd-node-header { border-color: var(--color-border); background: #f2efeb; }
-html[data-theme="light"] .command-backdrop, html[data-theme="light"] .app-dialog-backdrop, html[data-theme="light"] .object-dialog-backdrop { background: rgba(45, 42, 38, .36); }
+html[data-theme="light"] .command-backdrop, html[data-theme="light"] .app-dialog-backdrop, html[data-theme="light"] .ai-review-backdrop, html[data-theme="light"] .object-dialog-backdrop { background: rgba(45, 42, 38, .36); }
 
 @media (max-width: 860px) {
   body { height: auto; overflow: visible; }
@@ -564,6 +580,9 @@ html[data-theme="light"] .command-backdrop, html[data-theme="light"] .app-dialog
   .maintenance-heading { align-items: flex-start; flex-direction: column; }
   .maintenance-actions { justify-content: flex-start; }
   .app-dialog-panel { padding: 22px; }
+  .ai-review-dialog { padding: 8px; }
+  .ai-review-panel { max-height: calc(100vh - 16px); padding: 20px; }
+  .ai-review-focus { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .explorer-layout { grid-template-columns: 1fr; }
   .tree-pane + .tree-pane { border-top: 1px solid var(--color-border); border-left: 0; }
   nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }

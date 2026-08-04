@@ -33,7 +33,7 @@ test('shell contains every registered application view', () => {
   assert.match(index, /id="command-palette"[^>]+role="dialog"/);
   assert.match(index, /<script type="module" src="\.\/app\.js"><\/script>/);
   assert.match(index, /id="query-tabs"[^>]+role="tablist"/);
-  for (const control of ['format-sql', 'explain-query', 'copy-result']) assert.match(index, new RegExp(`id="${control}"`));
+  for (const control of ['format-sql', 'review-query-ai', 'explain-query', 'copy-result']) assert.match(index, new RegExp(`id="${control}"`));
   assert.match(index, /id="sql-editor-highlight"[^>]+aria-hidden="true"/);
   assert.match(index, /id="sql-autocomplete"[^>]+role="listbox"/);
   for (const control of ['window-minimize', 'window-maximize', 'window-close']) assert.match(index, new RegExp(`id="${control}"`));
@@ -45,6 +45,9 @@ test('shell contains every registered application view', () => {
   assert.match(index, /aria-expanded="true"/);
   assert.match(index, /id="app-dialog"[^>]+role="dialog"/);
   for (const control of ['app-dialog-confirm', 'app-dialog-cancel', 'app-dialog-input']) assert.match(index, new RegExp(`id="${control}"`));
+  assert.match(index, /id="ai-review-dialog"[^>]+role="dialog"[^>]+aria-modal="true"/);
+  for (const focus of ['general', 'performance', 'security', 'readability']) assert.match(index, new RegExp(`data-ai-review-focus="${focus}"`));
+  for (const control of ['ai-review-query-preview', 'ai-review-note', 'submit-ai-review', 'cancel-ai-review']) assert.match(index, new RegExp(`id="${control}"`));
   for (const control of ['choose-backup-output', 'choose-restore-input']) assert.match(index, new RegExp(`id="${control}"`));
   assert.match(index, /id="backup-output"[^>]+readonly/);
   assert.match(index, /id="restore-input"[^>]+readonly/);
@@ -73,6 +76,22 @@ test('frontend invokes only the typed local application bridge', () => {
   assert.doesNotMatch(index, /<script[^>]+src=["']https?:|<link[^>]+href=["']https?:/);
   assert.match(app, /import \{ resultRowToText, resultToTsv, serializeResult \} from '\.\/result-export\.js'/);
   assert.match(app, /import \{ highlightSqlIncremental \} from '\.\/sql-highlight\.js'/);
+  assert.match(app, /import \{ AI_QUERY_REVIEW_FOCUSES, buildAiQueryReviewMessage \} from '\.\/ai-query-review\.js'/);
+});
+
+test('SQL editor ports the GTK AI review modal and sends only the current query context', () => {
+  assert.match(app, /function openAiReviewDialog/);
+  assert.match(app, /const sql = selectedQueryText\(\)\.trim\(\)/);
+  assert.match(app, /aiReviewRequest = \{ connectionId, sql \}/);
+  assert.match(app, /function setAiReviewFocus/);
+  assert.match(app, /buildAiQueryReviewMessage\(aiReviewFocus, sql, byId\('ai-review-note'\)\.value\)/);
+  assert.match(app, /byId\('assistant-connection'\)\.value = connectionId/);
+  assert.match(app, /switchView\('assistant'\)/);
+  assert.match(app, /await sendAssistant\(\)/);
+  assert.match(app, /byId\('ai-review-query-preview'\)\.textContent = sql/);
+  assert.doesNotMatch(app, /ai-review-query-preview'\)\.innerHTML/);
+  assert.match(style, /\.ai-review-dialog\[hidden\]/);
+  assert.match(style, /\.ai-review-focus-button\.active/);
 });
 
 test('backup and restore paths come only from native file pickers', () => {

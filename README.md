@@ -52,7 +52,6 @@ qualquer distribuição Linux moderna, com integração visual prioritária ao L
 - `data`: `.desktop`, metadados AppStream e ícones.
 - `packaging/obs`: artefatos para o pacote RPM no OBS
   (`home:rodrigosbrito:lyra/postgres-draco`).
-- `aur`: `PKGBUILD` para o Arch User Repository.
 - `docs/migration`: matriz de paridade funcional da reescrita.
 
 ## Compilando
@@ -90,17 +89,15 @@ cargo test -p draco-tauri
 
 ## Instalação
 
-Os artefatos oficiais são RPM via OBS
-(`home:rodrigosbrito:lyra/postgres-draco`) e AUR (`postgres-draco`). O nome de
-pacote não é "draco" simples porque esse nome já é usado pelo projeto
-"graphics" do openSUSE (biblioteca de compressão 3D do Google) e pelo pacote
-oficial `extra/draco` do Arch — o app continua se chamando Draco, só o nome
-de distribuição do pacote muda. Não há build Windows — nenhum app do
+O artefato Linux oficial é o RPM via OBS
+(`home:rodrigosbrito:lyra/postgres-draco`). O nome do pacote não é "draco"
+simples porque esse nome já é usado pelo projeto "graphics" do openSUSE
+(biblioteca de compressão 3D do Google) — o app continua se chamando Draco,
+só o nome de distribuição do pacote muda. Não há build Windows — nenhum app do
 ecossistema Lyra OS sustenta essa plataforma hoje.
 
-> **Release Tauri:** a tag `v2.0.3` contém o novo aplicativo oficial. Os passos
-> restantes para sincronizar os canais RPM/OBS e AUR estão registrados em
-> [`packaging/RELEASE_PENDING.md`](packaging/RELEASE_PENDING.md).
+> **Release Tauri:** a tag `v2.0.3` contém o novo aplicativo oficial e está
+> publicada no OBS para openSUSE Leap 16.0.
 
 ## Licença
 

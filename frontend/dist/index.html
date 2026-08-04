@@ -141,7 +141,7 @@
           <section class="panel query-panel">
             <div class="panel-heading"><div><span class="eyebrow">QUERY WORKSPACE</span><h2>SQL Editor</h2></div><span class="badge" id="query-status">Ready</span></div>
             <div class="query-tabs" id="query-tabs" role="tablist" aria-label="Open SQL queries"></div>
-            <div class="query-toolbar"><label>Connection<select id="query-connection"><option value="">Select a connected connection</option></select></label><div class="form-actions"><button class="button" id="format-sql" type="button">Format SQL</button><button class="button" id="save-current-snippet" type="button">Save snippet</button><button class="button" id="explain-query" type="button">Explain (F10)</button><button class="button" id="run-script" type="button">Run script</button><button class="button primary" id="run-query" type="button">Run query</button><button class="button danger" id="cancel-query" type="button" hidden>Cancel</button></div></div>
+            <div class="query-toolbar"><label>Connection<select id="query-connection"><option value="">Select a connected connection</option></select></label><div class="form-actions"><button class="button" id="format-sql" type="button">Format SQL</button><button class="button" id="save-current-snippet" type="button">Save snippet</button><button class="button" id="review-query-ai" type="button">✦ Review with AI</button><button class="button" id="explain-query" type="button">Explain (F10)</button><button class="button" id="run-script" type="button">Run script</button><button class="button primary" id="run-query" type="button">Run query</button><button class="button danger" id="cancel-query" type="button" hidden>Cancel</button></div></div>
             <div class="sql-editor-wrap">
               <pre class="sql-editor-highlight" id="sql-editor-highlight" aria-hidden="true"></pre>
               <textarea id="sql-editor" spellcheck="false" autocomplete="off" placeholder="SELECT current_database(), now();"></textarea>
@@ -234,6 +234,22 @@
         <p id="app-dialog-message"></p>
         <label id="app-dialog-input-wrap" class="app-dialog-input-wrap" hidden><span id="app-dialog-input-label">Value</span><input id="app-dialog-input" autocomplete="off" /></label>
         <div class="app-dialog-actions"><button class="button" id="app-dialog-cancel" type="button">Cancel</button><button class="button primary" id="app-dialog-confirm" type="button">Confirm</button></div>
+      </div>
+    </section>
+    <section id="ai-review-dialog" class="ai-review-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="ai-review-title" aria-describedby="ai-review-description">
+      <div class="ai-review-backdrop" data-close-ai-review></div>
+      <div class="ai-review-panel">
+        <div class="ai-review-heading"><div><span class="eyebrow">READ-ONLY ADVISOR</span><h2 id="ai-review-title">Review query with AI</h2></div><button class="button small" type="button" data-close-ai-review aria-label="Close AI review">Esc</button></div>
+        <p id="ai-review-description">Choose the focus of the review. The selected SQL is sent to your configured AI provider; database inspection tools remain read-only.</p>
+        <div class="ai-review-focus" role="group" aria-label="Review focus">
+          <button class="ai-review-focus-button active" data-ai-review-focus="general" type="button" aria-pressed="true">General</button>
+          <button class="ai-review-focus-button" data-ai-review-focus="performance" type="button" aria-pressed="false">Performance</button>
+          <button class="ai-review-focus-button" data-ai-review-focus="security" type="button" aria-pressed="false">Security</button>
+          <button class="ai-review-focus-button" data-ai-review-focus="readability" type="button" aria-pressed="false">Readability</button>
+        </div>
+        <div class="ai-review-query"><span class="eyebrow">QUERY TO REVIEW</span><pre id="ai-review-query-preview"></pre></div>
+        <label class="ai-review-note">Additional context (optional)<textarea id="ai-review-note" rows="3" placeholder="For example: this runs for every request and must preserve tenant isolation."></textarea></label>
+        <div class="ai-review-actions"><button class="button" id="cancel-ai-review" type="button">Cancel</button><button class="button primary" id="submit-ai-review" type="button">Review</button></div>
       </div>
     </section>
     <script type="module" src="./app.js"></script>

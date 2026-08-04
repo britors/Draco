@@ -33,23 +33,20 @@ O caminho de distribuição inicial é:
 | Artefato | Canal | Status |
 |---|---|---|
 | RPM | OBS `home:rodrigosbrito:lyra/postgres-draco` | suportado |
-| pacote Arch | AUR `postgres-draco` | suportado |
 | bundle Tauri `.deb`/AppImage | build local/QA | experimental, não é requisito de publicação |
 
 Os manifests de desenvolvimento (`Cargo.toml`, `tauri.conf.json` e `frontend/package.json`) podem
-estar à frente da última tag publicada. RPM, AUR e a primeira entrada AppStream, porém, sempre
+estar à frente da última tag publicada. O RPM e a primeira entrada AppStream, porém, sempre
 descrevem a mesma tag imutável. O teste `frontend/tests/distribution.test.mjs` impede divergência
-interna entre esses dois grupos e rejeita checksum AUR com `SKIP`. A tag `v2.0.3` contém o shell
-Tauri oficial; a sincronização dos canais está registrada em
-[`packaging/RELEASE_PENDING.md`](../../packaging/RELEASE_PENDING.md).
+entre os metadados publicados. A tag `v2.0.3` contém o shell Tauri oficial e está publicada no
+OBS.
 
 ## Build offline e validação do pacote
 
 O bundle de produção consome `frontend/dist` diretamente e não executa npm. As dependências npm
 são apenas de teste, estão fixadas com integridade em `package-lock.json` e são instaladas no CI
 com `npm ci --ignore-scripts`. No OBS, `cargo_vendor` gera `vendor.tar.zst`; build e testes usam
-`cargo --locked --offline`. No AUR, `prepare()` baixa crates sob o lockfile e as fases seguintes
-usam `--frozen`; o tarball da tag tem SHA-256 obrigatório.
+`cargo --locked --offline`.
 
 Além dos testes Rust/frontend, o CI valida `.desktop` e AppStream sem rede, monta uma raiz de
 instalação temporária, confere binário/ícone/metadados e rejeita bibliotecas dinâmicas ausentes.

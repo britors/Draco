@@ -3,22 +3,19 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
-const [workspace, frontend, tauri, tauriMain, desktop, metainfo, aur, spec, releasePending] = await Promise.all([
+const [workspace, frontend, tauri, tauriMain, desktop, metainfo, spec] = await Promise.all([
   read('../../Cargo.toml'),
   read('../package.json'),
   read('../../src-tauri/tauri.conf.json'),
   read('../../src-tauri/src/main.rs'),
   read('../../data/org.lyraos.Draco.desktop'),
   read('../../data/org.lyraos.Draco.metainfo.xml'),
-  read('../../aur/PKGBUILD'),
   read('../../packaging/obs/postgres-draco.spec'),
-  read('../../packaging/RELEASE_PENDING.md'),
 ]);
 
 const workspaceVersion = workspace.match(/\[workspace\.package\][\s\S]*?version = "([^"]+)"/)?.[1];
 const frontendManifest = JSON.parse(frontend);
 const tauriConfig = JSON.parse(tauri);
-const aurVersion = aur.match(/^pkgver=(.+)$/m)?.[1];
 const rpmVersion = spec.match(/^Version:\s*(\S+)/m)?.[1];
 const appstreamVersion = metainfo.match(/<release version="([^"]+)"/)?.[1];
 
@@ -28,17 +25,11 @@ test('development manifests stay on one version', () => {
   assert.equal(tauriConfig.version, workspaceVersion);
 });
 
-test('published Linux package metadata describes one immutable release', () => {
-  assert.ok(aurVersion);
-  assert.equal(rpmVersion, aurVersion);
-  assert.equal(appstreamVersion, aurVersion);
-  const checksums = aur.match(/sha256sums=\(([\s\S]*?)\)/)?.[1].match(/[a-f0-9]{64}/g) || [];
-  assert.equal(checksums.length, 2, 'the tagged source and metadata patch both require SHA-256 checksums');
-  assert.doesNotMatch(aur, /sha256sums=\('SKIP'\)/);
-  if (aurVersion !== workspaceVersion) {
-    assert.match(releasePending, new RegExp(`desenvolvimento está em \`${workspaceVersion}\``));
-    assert.match(releasePending, new RegExp(`ainda apontam para\\s+\`${aurVersion}\``));
-  }
+test('published OBS metadata describes one immutable release', () => {
+  assert.ok(rpmVersion);
+  assert.equal(appstreamVersion, rpmVersion);
+  assert.match(spec, /^Source0:\s+%\{name\}-%\{version\}\.tar\.zst$/m);
+  assert.match(spec, /^Source1:\s+vendor\.tar\.zst$/m);
 });
 
 test('installed identity is consistent across Tauri, desktop and AppStream', () => {
@@ -59,14 +50,12 @@ test('Windows release starts without a console window', () => {
   );
 });
 
-test('official packages contain Tauri runtime dependencies without GTK fallback dependencies', () => {
-  for (const dependency of ['webkit2gtk-4.1', 'gtk3', 'openssl', 'librsvg', 'xdg-desktop-portal']) {
-    assert.match(aur, new RegExp(`'${dependency}'`));
-  }
+test('official RPM contains Tauri runtime dependencies without GTK fallback dependencies', () => {
   assert.match(spec, /^BuildRequires:\s+pkgconfig\(webkit2gtk-4\.1\)$/m);
+  assert.match(spec, /^BuildRequires:\s+pkgconfig\(openssl\)$/m);
+  assert.match(spec, /^BuildRequires:\s+pkgconfig\(librsvg-2\.0\)$/m);
   assert.match(spec, /^Requires:\s+xdg-desktop-portal$/m);
   for (const fallbackDependency of ['gtk4', 'libadwaita', 'gtksourceview-5']) {
-    assert.doesNotMatch(aur, new RegExp(`'${fallbackDependency}'`));
     assert.doesNotMatch(spec, new RegExp(`pkgconfig\\(${fallbackDependency}`));
   }
 });

@@ -4,11 +4,15 @@ import { applySuggestion, buildCompletionIndex, suggest } from './sql-autocomple
 import { visibleRange } from './virtual-list.js';
 import { schemaObjectSql } from './explorer-navigation.js';
 import { clampResultColumnWidth } from './result-columns.js';
+import { AI_QUERY_REVIEW_FOCUSES, buildAiQueryReviewMessage } from './ai-query-review.js';
 
 const invoke = window.__TAURI__?.core?.invoke;
 const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
 const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.0.3', theme: 'dark', accent: 'coral', check_updates_on_startup: true }, releaseUrl: '', queryTabs: [{ id: 1, label: 'Query 1', sql: '' }], currentQueryTabId: 1 };
 let dialogResolver = null;
+let aiReviewRequest = null;
+let aiReviewReturnFocus = null;
+let aiReviewFocus = 'general';
 
 const PIX_KEY = 'britors@live.com';
 const PIX_COPY_AND_PASTE = '00020126380014BR.GOV.BCB.PIX0116britors@live.com5204000053039865802BR5906BRITOR6009SAO PAULO62070503***63044B68';
@@ -822,6 +826,50 @@ async function sendAssistant() {
     if (requestEpoch === assistantRequestEpoch) { renderAssistantHistory(reply.history); byId('assistant-message').value = ''; byId('assistant-status').textContent = `${reply.input_tokens} input · ${reply.output_tokens} output tokens`; }
   } catch (error) { if (requestEpoch === assistantRequestEpoch) byId('assistant-status').textContent = 'Assistant request failed. Configure a provider key and reconnect.'; }
   finally { if (requestEpoch === assistantRequestEpoch) byId('send-assistant').disabled = false; }
+}
+
+function setAiReviewFocus(focus) {
+  aiReviewFocus = AI_QUERY_REVIEW_FOCUSES.includes(focus) ? focus : 'general';
+  for (const button of document.querySelectorAll('[data-ai-review-focus]')) {
+    const active = button.dataset.aiReviewFocus === aiReviewFocus;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
+}
+
+function closeAiReviewDialog({ restoreFocus = true } = {}) {
+  byId('ai-review-dialog').hidden = true;
+  byId('ai-review-query-preview').textContent = '';
+  byId('ai-review-note').value = '';
+  aiReviewRequest = null;
+  if (restoreFocus) aiReviewReturnFocus?.focus();
+  aiReviewReturnFocus = null;
+}
+
+function openAiReviewDialog() {
+  const connectionId = byId('query-connection').value;
+  const sql = selectedQueryText().trim();
+  if (!connectionId) { byId('query-status').textContent = 'Select a connected connection'; return; }
+  if (!sql) { byId('query-status').textContent = 'Write a query before reviewing it with AI'; return; }
+  saveCurrentQueryTab();
+  aiReviewRequest = { connectionId, sql };
+  aiReviewReturnFocus = document.activeElement;
+  setAiReviewFocus('general');
+  byId('ai-review-query-preview').textContent = sql;
+  byId('ai-review-note').value = '';
+  byId('ai-review-dialog').hidden = false;
+  window.setTimeout(() => document.querySelector('[data-ai-review-focus="general"]')?.focus(), 0);
+}
+
+async function submitAiReview() {
+  if (!aiReviewRequest) return;
+  const { connectionId, sql } = aiReviewRequest;
+  const message = buildAiQueryReviewMessage(aiReviewFocus, sql, byId('ai-review-note').value);
+  closeAiReviewDialog({ restoreFocus: false });
+  byId('assistant-connection').value = connectionId;
+  byId('assistant-message').value = message;
+  switchView('assistant');
+  await sendAssistant();
 }
 
 async function askAssistantAboutQueryStat(id, queryStat) {
@@ -2716,6 +2764,7 @@ document.addEventListener('keydown', (event) => {
   if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 's') { event.preventDefault(); switchView('query'); showQueryWorkspaceSection('editor'); void saveCurrentSnippet(); }
   if (event.key === 'F8') { event.preventDefault(); switchView('query'); showQueryWorkspaceSection('editor'); runQuery(); }
   if (event.key === 'F10') { event.preventDefault(); switchView('query'); showQueryWorkspaceSection('editor'); runQuery('explain'); }
+  if (event.key === 'Escape' && !byId('ai-review-dialog').hidden) { event.preventDefault(); closeAiReviewDialog(); }
   if (event.key === 'Escape' && !byId('command-palette').hidden) closeCommandPalette();
 });
 byId('cancel-connection').addEventListener('click', hideForm);
@@ -2741,6 +2790,11 @@ byId('export-csv').addEventListener('click', () => downloadResult('csv'));
 byId('export-json').addEventListener('click', () => downloadResult('json'));
 byId('copy-result').addEventListener('click', copyResult);
 byId('save-current-snippet').addEventListener('click', saveCurrentSnippet);
+byId('review-query-ai').addEventListener('click', openAiReviewDialog);
+byId('submit-ai-review').addEventListener('click', () => void submitAiReview());
+byId('cancel-ai-review').addEventListener('click', closeAiReviewDialog);
+for (const element of document.querySelectorAll('[data-close-ai-review]')) element.addEventListener('click', closeAiReviewDialog);
+for (const button of document.querySelectorAll('[data-ai-review-focus]')) button.addEventListener('click', () => setAiReviewFocus(button.dataset.aiReviewFocus));
 byId('clear-history').addEventListener('click', async () => { if (await showConfirm('Clear all saved query history?', 'Clear history', true, 'Clear')) { await invoke('clear_history'); loadHistory(); } });
 byId('sql-editor').addEventListener('keydown', (event) => {
   const popupOpen = !byId('sql-autocomplete').hidden;

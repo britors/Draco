@@ -46,7 +46,7 @@ dependência precisa rodar `cargo check --workspace` localmente antes de commita
 `Cargo.lock` já saia sincronizado — senão o job falha com "cannot update the lock file". Testes que
 dependem de PostgreSQL, Secret Service ou sessão gráfica continuam no checklist E2E documentado em
 `docs/testing/live-postgres.md`. Os contratos de distribuição também validam versões, app id,
-desktop entry, AppStream, dependências e integridade do tarball AUR.
+desktop entry, AppStream e dependências do RPM/OBS.
 
 ## Estrutura do repositório
 
@@ -59,7 +59,6 @@ frontend/       # frontend web local empacotado pelo Tauri
 draco-gtk/      # frontend GTK4/libadwaita de fallback (binário `draco-gtk`)
 data/           # .desktop, metainfo AppStream, ícones
 packaging/obs/  # spec RPM para o OBS (home:rodrigosbrito:lyra/postgres-draco)
-aur/            # PKGBUILD
 docs/migration/ # matriz de paridade e decisão de estabilização Tauri
 ```
 

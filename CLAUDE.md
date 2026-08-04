@@ -26,7 +26,7 @@ workspace apenas como fallback de estabilização.
 - Queries normais não dependem de `psql`. Backup/restauração são a exceção
   deliberada e usam `pg_dump`, `pg_restore` ou `psql` por meio de
   `draco-core::postgres::backup`.
-- O produto e o empacotamento são somente Linux (RPM/OBS e AUR); não reintroduzir
+- O produto e o empacotamento são somente Linux (RPM/OBS); não reintroduzir
   suporte Windows sem nova decisão de produto.
 
 ## Arquitetura e dependências entre camadas
@@ -67,7 +67,8 @@ A bridge registrada em `src-tauri/src/main.rs` oferece:
   triggers, mais busca global;
 - Editor SQL com abas, seleção/buffer completo, execução de query ou script,
   `EXPLAIN` sem `ANALYZE`, cancelamento por `operationId`, highlighting local e
-  autocomplete obtido do schema;
+  autocomplete obtido do schema; a modal `Review with AI` envia a seleção ou o
+  buffer atual para revisão de segurança, performance e legibilidade;
 - grid de resultados virtualizado, detalhe de linha, cópia TSV e exportação
   CSV/JSON;
 - histórico (máximo 50) e snippets por conexão;
@@ -176,10 +177,8 @@ colocar a senha no ambiente. A última execução documentada passou contra
 PostgreSQL 18.4, mas ainda não cobre webview instalada, SSH/jump host real nem
 as três APIs de IA.
 
-O worktree está em `2.0.3`, enquanto RPM/AUR/AppStream continuam em `1.1.3`.
-Essa tag antiga não contém `src-tauri`; seguir `packaging/RELEASE_PENDING.md`
-e nunca publicar o pacote Tauri com `SKIP`, uma tag reutilizada ou um checksum
-de `main`.
+O workspace, o RPM/OBS e o AppStream estão em `2.0.3`. Releases devem usar uma
+tag imutável; nunca reutilizar uma tag nem gerar o tarball de um branch mutável.
 
 ## Documentação que acompanha mudanças
 
