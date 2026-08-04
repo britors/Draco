@@ -90,6 +90,10 @@ test('SQL editor ports the GTK AI review modal and sends only the current query 
   assert.match(app, /await sendAssistant\(\)/);
   assert.match(app, /byId\('ai-review-query-preview'\)\.textContent = sql/);
   assert.doesNotMatch(app, /ai-review-query-preview'\)\.innerHTML/);
+  assert.match(app, /function scrollAssistantToBottom/);
+  assert.match(app, /window\.requestAnimationFrame\(\(\) => \{/);
+  assert.match(app, /transcript\.scrollTop = transcript\.scrollHeight/);
+  assert.match(app, /renderAssistantHistory\(reply\.history\)/);
   assert.match(style, /\.ai-review-dialog\[hidden\]/);
   assert.match(style, /\.ai-review-focus-button\.active/);
 });

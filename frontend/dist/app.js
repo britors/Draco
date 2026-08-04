@@ -789,15 +789,22 @@ function renderAdvancedConnections() {
   }
 }
 
+function scrollAssistantToBottom() {
+  window.requestAnimationFrame(() => {
+    const transcript = byId('assistant-history');
+    transcript.scrollTop = transcript.scrollHeight;
+  });
+}
+
 function renderAssistantHistory(history) {
   const transcript = byId('assistant-history'); transcript.replaceChildren();
-  if (!history.length) { transcript.append(errorState('Ask about a query, schema, or execution plan', 'The assistant can inspect the connected database but never changes it.')); return; }
+  if (!history.length) { transcript.append(errorState('Ask about a query, schema, or execution plan', 'The assistant can inspect the connected database but never changes it.')); scrollAssistantToBottom(); return; }
   for (const message of history) {
     const bubble = document.createElement('article'); bubble.className = `assistant-message ${message.role === 'user' ? 'user' : ''}`;
     const label = document.createElement('small'); label.textContent = message.tool_label ? `Tool · ${message.tool_label}` : message.role === 'user' ? 'You' : 'Assistant';
     const content = document.createElement('div'); content.textContent = message.content; bubble.append(label, content); transcript.append(bubble);
   }
-  transcript.scrollTop = transcript.scrollHeight;
+  scrollAssistantToBottom();
 }
 
 let assistantRequestEpoch = 0;
