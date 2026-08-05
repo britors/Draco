@@ -178,14 +178,16 @@ jobs:
       - name: Install build and packaging dependencies
         run: >-
           zypper --non-interactive install git-core curl gcc gcc-c++ make pkgconf-pkg-config
+          rust cargo
           rpm-build file 'pkgconfig(webkit2gtk-4.1)' 'pkgconfig(gtk+-3.0)'
           'pkgconfig(openssl)' 'pkgconfig(librsvg-2.0)'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate.outputs.tag }}
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
-        with:
-          toolchain: stable
+      # Use Leap's supported toolchain inside this minimal container. The rustup
+      # composite action loses the system PATH between its internal steps here.
+      - name: Validate distribution Rust toolchain
+        run: cargo --version && rustc --version
       - name: Install pinned Tauri CLI
         run: cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
       - name: Build openSUSE RPM
