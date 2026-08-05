@@ -55,8 +55,8 @@ pub struct ToolConnection<'a> {
     pub ssl: bool,
 }
 
-/// Compatibility event stream for the GTK fallback. Raw stdout/stderr variants remain in the
-/// contract but the hardened runner never emits them; only `Finished` is sent.
+/// Event stream for backup and restore operations. Raw stdout/stderr variants remain in the
+/// contract for API compatibility, but the hardened runner never emits them; only `Finished` is sent.
 #[derive(Debug, Clone)]
 pub enum ToolEvent {
     Stdout(String),

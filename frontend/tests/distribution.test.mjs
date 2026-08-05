@@ -42,6 +42,12 @@ test('installed identity is consistent across Tauri, desktop and AppStream', () 
   assert.match(metainfo, new RegExp(`<id>${appId}</id>`));
   assert.match(metainfo, new RegExp(`<launchable type="desktop-id">${appId}\\.desktop</launchable>`));
   assert.match(metainfo, /<binary>draco<\/binary>/);
+  assert.match(spec, /install -Dm0644 logo-new\.png/);
+  assert.doesNotMatch(
+    spec,
+    new RegExp(`${appId.replaceAll('.', '\\.')}-symbolic`),
+    'the RPM must not install a symbolic variant that GNOME can prefer over the color desktop icon',
+  );
 });
 
 test('Windows release starts without a console window', () => {
@@ -63,18 +69,20 @@ test('tag releases publish native Windows, Debian, Fedora and openSUSE packages'
   assert.match(releaseWorkflow, /SHA256SUMS/);
   assert.equal(tauriConfig.bundle.windows.nsis.installMode, 'currentUser');
   assert.equal(tauriConfig.bundle.windows.webviewInstallMode.silent, true);
+  assert.ok(tauriConfig.bundle.icon.includes('../logo-new.png'));
   assert.ok(tauriConfig.bundle.icon.includes('icons/icon.ico'));
   assert.ok(tauriConfig.bundle.linux.deb.depends.includes('xdg-desktop-portal'));
   assert.ok(tauriConfig.bundle.linux.rpm.depends.includes('xdg-desktop-portal'));
   assert.ok((await stat(new URL('../../src-tauri/icons/icon.ico', import.meta.url))).size > 0);
+  assert.ok((await stat(new URL('../../logo-new.png', import.meta.url))).size > 0);
 });
 
-test('official RPM contains Tauri runtime dependencies without GTK fallback dependencies', () => {
+test('official RPM contains Tauri runtime dependencies without legacy GTK frontend dependencies', () => {
   assert.match(spec, /^BuildRequires:\s+pkgconfig\(webkit2gtk-4\.1\)$/m);
   assert.match(spec, /^BuildRequires:\s+pkgconfig\(openssl\)$/m);
   assert.match(spec, /^BuildRequires:\s+pkgconfig\(librsvg-2\.0\)$/m);
   assert.match(spec, /^Requires:\s+xdg-desktop-portal$/m);
-  for (const fallbackDependency of ['gtk4', 'libadwaita', 'gtksourceview-5']) {
-    assert.doesNotMatch(spec, new RegExp(`pkgconfig\\(${fallbackDependency}`));
+  for (const legacyDependency of ['gtk4', 'libadwaita', 'gtksourceview-5']) {
+    assert.doesNotMatch(spec, new RegExp(`pkgconfig\\(${legacyDependency}`));
   }
 });

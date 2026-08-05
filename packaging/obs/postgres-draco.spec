@@ -29,7 +29,6 @@ BuildRequires:  pkgconfig(openssl)
 BuildRequires:  pkgconfig(librsvg-2.0)
 BuildRequires:  desktop-file-utils
 BuildRequires:  appstream-glib
-BuildRequires:  fdupes
 BuildRequires:  zstd
 Requires:       xdg-desktop-portal
 
@@ -60,14 +59,8 @@ install -Dm0644 data/org.lyraos.Draco.desktop \
     %{buildroot}%{_datadir}/applications/org.lyraos.Draco.desktop
 install -Dm0644 data/org.lyraos.Draco.metainfo.xml \
     %{buildroot}%{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
-install -Dm0644 data/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png \
+install -Dm0644 logo-new.png \
     %{buildroot}%{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png
-install -Dm0644 data/icons/hicolor/1024x1024/apps/org.lyraos.Draco-about.png \
-    %{buildroot}%{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco-about.png
-install -Dm0644 data/icons/org.lyraos.Draco-symbolic.svg \
-    %{buildroot}%{_datadir}/icons/hicolor/symbolic/apps/org.lyraos.Draco-symbolic.svg
-
-%fdupes %{buildroot}%{_datadir}/icons/hicolor/1024x1024/apps
 
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.lyraos.Draco.desktop
 appstream-util validate-relax --nonet \
@@ -76,7 +69,7 @@ appstream-util validate-relax --nonet \
 %check
 # Live PostgreSQL and browser/display tests are ignored; unit, contract and Tauri smoke tests run
 # against the vendored Rust dependencies without a server or GUI session.
-cargo test --locked --offline --workspace --exclude draco-gtk
+cargo test --locked --offline --workspace
 
 %files
 %license LICENSE
@@ -85,7 +78,5 @@ cargo test --locked --offline --workspace --exclude draco-gtk
 %{_datadir}/applications/org.lyraos.Draco.desktop
 %{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
 %{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png
-%{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco-about.png
-%{_datadir}/icons/hicolor/symbolic/apps/org.lyraos.Draco-symbolic.svg
 
 %changelog

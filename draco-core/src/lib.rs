@@ -1,6 +1,6 @@
 //! Toolkit-agnostic engine for Draco: Postgres connections, SSH tunnels, schema
-//! introspection queries and local storage. No GTK/GUI dependency lives here —
-//! see `draco-gtk` for the frontend.
+//! introspection queries and local storage. No GUI dependency lives here; the
+//! Tauri shell consumes this crate through `draco-app`.
 
 pub mod assistant;
 pub mod connection;

@@ -33,7 +33,7 @@
     "license": "GPL-3.0-or-later",
     "shortDescription": "PostgreSQL workbench",
     "icon": [
-      "../data/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png",
+      "../logo-new.png",
       "icons/icon.ico"
     ],
     "linux": {

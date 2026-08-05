@@ -24,8 +24,7 @@ pub struct ManagedConnection {
 
 /// Tracks the lifecycle (and, once connected, the live `PostgresDriver`) of every registered
 /// connection. Owned by the caller as `Arc<tokio::sync::Mutex<ConnectionManager>>` so it can be
-/// shared between the GTK thread (which dispatches work) and the tasks spawned on the tokio
-/// runtime (which actually run the async Postgres/SSH I/O) — see `draco-gtk/src/main.rs`.
+/// shared safely by application services and tasks performing asynchronous Postgres/SSH I/O.
 #[derive(Default)]
 pub struct ConnectionManager {
     map: HashMap<String, ManagedConnection>,

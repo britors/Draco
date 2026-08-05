@@ -83,5 +83,4 @@ depois da paridade funcional. A referência Kraken Studio é somente estética; 
 identidade ou código externo é copiado.
 
 Tema claro saiu da lista de "fora de escopo" em 2026-08-04: ver tela de Preferências
-(`view-preferences` em `frontend/dist/index.html`) e a superfície correspondente na matriz de
-paridade (`docs/migration/rust-gtk-parity.md`, milestone M8).
+(`view-preferences` em `frontend/dist/index.html`) e seus contratos frontend.

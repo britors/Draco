@@ -2,9 +2,8 @@
 
 ## Artefato oficial
 
-O binário oficial agora é `target/release/draco`, produzido pelo crate
-`draco-tauri`. O package id continua `org.lyraos.Draco`; `draco-gtk` permanece no
-workspace apenas durante a estabilização e não é o artefato de distribuição.
+O binário oficial é `target/release/draco`, produzido pelo crate `draco-tauri`.
+O package id continua `org.lyraos.Draco`.
 
 ```sh
 cargo run -p draco-tauri
@@ -16,8 +15,8 @@ offline depois do checkout:
 
 ```sh
 (cd frontend && npm run check && npm test)
-cargo test --workspace --exclude draco-gtk
-cargo clippy --workspace --exclude draco-gtk --all-targets -- -D warnings
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 ## Dependências Linux
@@ -78,21 +77,13 @@ credenciais para issues ou logs públicos.
 
 ## Configurações existentes
 
-O Tauri usa os mesmos arquivos XDG e a mesma camada `draco-core` do GTK. Conexões, snippets,
-histórico, preferências e chaves não são migrados por uma segunda rotina: o app novo lê a fonte
-existente e preserva os IDs. O usuário deve manter o Secret Service disponível no primeiro
-lançamento; nenhuma senha é convertida para TOML ou para `localStorage`.
+O Tauri preserva os arquivos XDG e a camada `draco-core` das versões anteriores. Conexões,
+snippets, histórico, preferências e chaves mantêm seus IDs. O usuário deve manter o Secret
+Service disponível no primeiro lançamento; nenhuma senha é convertida para TOML ou para
+`localStorage`.
 
 Credenciais salvas por versões que usavam `oo7` tinham atributos diferentes dos usados por
 `keyring`. No primeiro acesso no Linux, o backend procura a entrada legada diretamente no Secret
 Service, copia para o novo namespace, confere a cópia e somente então remove a entrada antiga.
 Isso vale para senha PostgreSQL, SSH/jump host e chaves do Assistente; nenhum valor passa pelo
 frontend ou pelos logs.
-
-## Paridade, rollback e remoção do GTK
-
-O `draco-gtk` não deve ser removido junto com a criação do shell Tauri. A decisão registrada em
-[`tauri-stabilization.md`](../migration/tauri-stabilization.md) exige um período de estabilização,
-validação contra PostgreSQL real e confirmação dos artefatos instalados. Até lá, `cargo check -p
-draco-gtk` continua no CI. Se o Tauri falhar em produção, o rollback é o pacote anterior do GTK;
-os arquivos de configuração e o Secret Service continuam compatíveis.

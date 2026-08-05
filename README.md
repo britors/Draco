@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo/draco_postgresql_logo_v3_no_cylinder.png" alt="Draco" width="200">
+  <img src="logo-new.png" alt="Draco" width="200">
 </p>
 
 <p align="center">
@@ -25,16 +25,12 @@ qualquer distribuição Linux moderna, com integração visual prioritária ao L
   PostgreSQL.
 - Túnel SSH (incluindo jump host) feito em processo (`russh`), sem depender do
   binário `ssh`.
-- Interface oficial Tauri 2, com frontend local sem CDN; o `draco-gtk` é o
-  fallback compilável durante a estabilização.
+- Interface oficial Tauri 2, com frontend local sem CDN.
 - Nenhuma senha ou passphrase é manuseada em texto plano — armazenamento
   delegado ao Serviço de Segredos do sistema (GNOME Keyring/KWallet, via
   `keyring`), já integrado ao sistema.
 
-> **Status**: Tauri 2 é o artefato oficial; o `draco-gtk` permanece compilável
-> durante a transição. Veja
-> [`docs/migration/rust-gtk-parity.md`](docs/migration/rust-gtk-parity.md) para
-> o que já foi portado e o que falta.
+> **Status**: Tauri 2 é o único frontend e artefato oficial.
 
 ---
 
@@ -43,40 +39,27 @@ qualquer distribuição Linux moderna, com integração visual prioritária ao L
 - `draco-core`: pool Postgres, túnel SSH, queries de introspecção/DDL/stats,
   storage local (TOML/XDG) e segredos — sem dependência de nenhum toolkit
   gráfico.
-- `draco-app`: casos de uso e DTOs serializáveis, fronteira compartilhada entre
-  os frontends.
+- `draco-app`: casos de uso e DTOs serializáveis consumidos pelo shell Tauri.
 - `src-tauri`: shell Tauri 2, capabilities mínimas e bridge IPC tipada.
 - `frontend/dist`: shell web local empacotado pelo Tauri, sem dependências de
   rede em runtime.
-- `draco-gtk`: frontend GTK4/libadwaita de fallback (binário `draco-gtk`).
-- `data`: `.desktop`, metadados AppStream e ícones.
+- `data`: `.desktop` e metadados AppStream.
 - `packaging/obs`: artefatos para o pacote RPM no OBS
   (`home:rodrigosbrito:lyra/postgres-draco`).
-- `docs/migration`: matriz de paridade funcional da reescrita.
 
 ## Compilando
 
 Dependências de sistema para o app oficial (nomes Fedora/openSUSE): WebKitGTK
 4.1, GTK3, OpenSSL, librsvg e `xdg-desktop-portal` (seletores de arquivo
-nativos), além de um compilador Rust estável recente
-(`cargo`, `rustc` ≥ 1.85). Para compilar o fallback GTK, instale também
-GTK4, libadwaita e GtkSourceView5.
+nativos), além de um compilador Rust estável recente (`cargo`, `rustc` ≥ 1.85).
 
 ```sh
 cargo build --locked --release -p draco-tauri
 ./target/release/draco
 ```
 
-Para validar o fallback GTK durante a estabilização:
-
-```sh
-cargo run -p draco-gtk --bin draco-gtk
-```
-
-No fallback GTK, a variável `DRACO_LOG` controla o nível de log, por exemplo
-`DRACO_LOG=debug cargo run -p draco-gtk --bin draco-gtk`. Para o Tauri, use
-`RUST_BACKTRACE=1 cargo run -p draco-tauri`. Senhas e conteúdo de query nunca
-são registrados nos logs.
+Para diagnóstico, use `RUST_BACKTRACE=1 cargo run -p draco-tauri`. Senhas e
+conteúdo de query nunca são registrados nos logs.
 
 ### Testes
 

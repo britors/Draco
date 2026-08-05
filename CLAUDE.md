@@ -1,15 +1,13 @@
 # Draco
 
-Cliente desktop PostgreSQL do ecossistema **Lyra OS** para Linux. O artefato
-oficial é o app **Tauri 2**; a implementação GTK4/libadwaita continua no
-workspace apenas como fallback de estabilização.
+Cliente desktop PostgreSQL do ecossistema **Lyra OS**. O único frontend e
+artefato oficial é o app **Tauri 2**.
 
 - Repositório: <https://github.com/britors/Draco>
 - Identificador desktop: `org.lyraos.Draco`
 - Versão do workspace: `2.0.3`
 - Licença: GPL-3.0-or-later
 - Binário oficial: `target/release/draco`
-- Binário de fallback: `target/debug/draco-gtk`
 
 ## Stack e restrições de produto
 
@@ -26,12 +24,12 @@ workspace apenas como fallback de estabilização.
 - Queries normais não dependem de `psql`. Backup/restauração são a exceção
   deliberada e usam `pg_dump`, `pg_restore` ou `psql` por meio de
   `draco-core::postgres::backup`.
-- O produto e o empacotamento são somente Linux (RPM/OBS); não reintroduzir
-  suporte Windows sem nova decisão de produto.
+- A distribuição oficial cobre Windows NSIS, DEB Ubuntu, RPM Fedora/openSUSE e
+  RPM openSUSE via OBS.
 
 ## Arquitetura e dependências entre camadas
 
-O workspace possui quatro crates:
+O workspace possui três crates:
 
 - `draco-core`: motor independente de GUI. Contém conexões, pool, TLS, SSH,
   introspecção/DDL/administração PostgreSQL, backup/restauração, Assistente de
@@ -43,19 +41,12 @@ O workspace possui quatro crates:
 - `src-tauri` (`draco-tauri`): bridge IPC fina e shell oficial. Comandos devem
   delegar para `draco-app`; não expor `PostgresDriver` ou acesso genérico a
   filesystem/processo.
-- `draco-gtk`: frontend legado/fallback. Ainda usa `draco-core` diretamente e
-  deve permanecer compilável até o checklist de estabilização ser concluído.
 
 Fluxo oficial:
 
 ```text
 frontend/dist -> comandos Tauri -> draco-app -> draco-core -> PostgreSQL/SSH/XDG/keyring
 ```
-
-No fallback GTK, o loop GTK fica na main thread e um runtime Tokio multi-thread
-é mantido na thread `draco-tokio`. I/O assíncrono é iniciado com
-`runtime_handle.spawn(...)` e o `JoinHandle` é aguardado em
-`glib::MainContext::spawn_local(...)`; não bloquear um loop esperando o outro.
 
 ## Estado funcional atual do Tauri
 
@@ -86,8 +77,8 @@ tabelas (incluindo FK inline e troca de PK), criação de schema/sequence/trigge
 edição validada de funções/procedures/triggers, edição de roles e jobs e reset
 de sequences. Os DTOs nunca aceitam um lote de `ALTER TABLE` pronto: o serviço
 reconsulta a estrutura atual, valida os campos e reconstrói o diff no Rust.
-Antes de ampliar uma superfície, conferir a matriz em
-`docs/migration/rust-gtk-parity.md` e os comandos registrados em
+Antes de ampliar uma superfície, conferir o contrato em
+`docs/architecture/tauri-application-contract.md` e os comandos registrados em
 `src-tauri/src/main.rs`.
 
 ## Invariantes de segurança
@@ -157,10 +148,9 @@ Validação equivalente à CI:
 ```sh
 (cd frontend && npm ci --ignore-scripts && npm run check && npm test)
 cargo fmt --check -p draco-app -p draco-tauri
-cargo clippy --locked --workspace --exclude draco-gtk --all-targets -- -D warnings
-cargo test --locked --workspace --exclude draco-gtk
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace
 cargo build --locked -p draco-tauri
-cargo check --locked -p draco-gtk
 desktop-file-validate data/org.lyraos.Draco.desktop
 appstreamcli validate --no-net data/org.lyraos.Draco.metainfo.xml
 ```
@@ -182,14 +172,12 @@ tag imutável; nunca reutilizar uma tag nem gerar o tarball de um branch mutáve
 
 ## Documentação que acompanha mudanças
 
-- Paridade e lacunas: `docs/migration/rust-gtk-parity.md`.
-- Critérios para remover o GTK: `docs/migration/tauri-stabilization.md`.
 - Contrato `draco-app`/IPC: `docs/architecture/tauri-application-contract.md`.
 - Ameaças e invariantes: `docs/security/threat-model.md`.
 - Design system: `docs/design/frontend-design-system.md`.
 - Desenvolvimento e distribuição Linux: `docs/development/tauri.md`.
 - Teste real: `docs/testing/live-postgres.md`.
 
-Ao concluir uma superfície, atualizar a matriz de paridade e a documentação do
-contrato correspondente. O código e os comandos registrados são a fonte de
-verdade quando um documento estiver defasado.
+Ao concluir uma superfície, atualizar a documentação do contrato
+correspondente. O código e os comandos registrados são a fonte de verdade
+quando um documento estiver defasado.
