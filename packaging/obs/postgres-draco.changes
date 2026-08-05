@@ -1,4 +1,13 @@
 -------------------------------------------------------------------
+Wed Aug 05 14:08:49 UTC 2026 - rodrigo@w3ti.com.br
+
+- Versão 2.0.5: corrigido o ícone ausente no desktop Linux.
+- Instalados ícones coloridos em tamanhos padrão do tema hicolor (32, 128,
+  256 e 512 px), em vez do diretório não padrão 2720x2720.
+- O publicador agora inspeciona DEB e RPM e rejeita pacotes sem o ícone ou
+  com uma entrada desktop inconsistente.
+
+-------------------------------------------------------------------
 Wed Aug 05 12:45:00 UTC 2026 - rodrigo@w3ti.com.br
 
 - Versão 2.0.4: removido o frontend GTK legado e suas dependências.

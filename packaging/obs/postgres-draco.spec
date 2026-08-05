@@ -10,7 +10,7 @@
 #
 
 Name:           postgres-draco
-Version:        2.0.4
+Version:        2.0.5
 Release:        1
 Summary:        Cliente de banco de dados do ecossistema Lyra OS
 License:        GPL-3.0-or-later
