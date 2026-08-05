@@ -48,8 +48,8 @@ configuração de um certificado no repositório.
 Os manifests de desenvolvimento (`Cargo.toml`, `tauri.conf.json` e `frontend/package.json`) podem
 estar à frente da última tag publicada. O RPM e a primeira entrada AppStream, porém, sempre
 descrevem a mesma tag imutável. O teste `frontend/tests/distribution.test.mjs` impede divergência
-entre os metadados publicados. A tag `v2.0.3` contém o shell Tauri oficial e está publicada no
-OBS.
+entre os metadados publicados. A versão `2.0.4` é a primeira a publicar os quatro formatos
+nativos no GitHub, além do RPM no OBS.
 
 ## Build offline e validação do pacote
 

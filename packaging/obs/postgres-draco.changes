@@ -1,3 +1,13 @@
+-------------------------------------------------------------------
+Wed Aug 05 12:45:00 UTC 2026 - rodrigo@w3ti.com.br
+
+- Versão 2.0.4: removido o frontend GTK legado e suas dependências.
+- Corrigido o pacote para instalar apenas o logo colorido canônico, evitando
+  que o GNOME selecione a variante simbólica antiga.
+- Adicionados pacotes nativos no GitHub para Windows, Ubuntu, Fedora e
+  openSUSE.
+
+-------------------------------------------------------------------
 Tue Aug 04 17:20:00 UTC 2026 - rodrigo@w3ti.com.br
 
 - Versão 2.0.3: migração completa do frontend para Tauri 2, com Explorer,

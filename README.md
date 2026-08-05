@@ -85,9 +85,8 @@ disponível para openSUSE. O nome do pacote OBS não é "draco" simples porque
 esse nome já é usado pelo projeto "graphics" do openSUSE; o aplicativo continua
 se chamando Draco.
 
-> **Release Tauri:** a tag `v2.0.3` contém o novo aplicativo oficial e está
-> publicada no OBS para openSUSE Leap 16.0. Os pacotes multiplataforma começam
-> na próxima tag, pois o workflow não altera releases anteriores.
+> **Release Tauri:** a versão `2.0.4` inaugura os pacotes nativos no GitHub para
+> Windows, Ubuntu, Fedora e openSUSE e mantém o RPM oficial no OBS.
 
 ## Licença
 

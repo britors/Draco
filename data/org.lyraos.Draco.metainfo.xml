@@ -43,6 +43,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="2.0.4" date="2026-08-05">
+      <description>
+        <p>Pacotes nativos para Windows, Ubuntu, Fedora e openSUSE, remoção do frontend GTK legado e correção do ícone colorido no desktop.</p>
+      </description>
+    </release>
     <release version="2.0.3" date="2026-08-04">
       <description>
         <p>Nova aplicação oficial em Tauri 2, com Explorer, editor SQL, administração, ERD, backup e Assistente de IA integrados.</p>

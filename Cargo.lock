@@ -1188,7 +1188,7 @@ dependencies = [
 
 [[package]]
 name = "draco-app"
-version = "2.0.3"
+version = "2.0.4"
 dependencies = [
  "draco-core",
  "futures-util",
@@ -1200,7 +1200,7 @@ dependencies = [
 
 [[package]]
 name = "draco-core"
-version = "2.0.3"
+version = "2.0.4"
 dependencies = [
  "async-trait",
  "deadpool-postgres",
@@ -1226,7 +1226,7 @@ dependencies = [
 
 [[package]]
 name = "draco-tauri"
-version = "2.0.3"
+version = "2.0.4"
 dependencies = [
  "draco-app",
  "draco-core",

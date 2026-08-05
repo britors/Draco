@@ -10,7 +10,7 @@
 #
 
 Name:           postgres-draco
-Version:        2.0.3
+Version:        2.0.4
 Release:        1
 Summary:        Cliente de banco de dados do ecossistema Lyra OS
 License:        GPL-3.0-or-later
@@ -18,8 +18,6 @@ Group:          Productivity/Databases/Tools
 URL:            https://github.com/britors/Draco
 Source0:        %{name}-%{version}.tar.zst
 Source1:        vendor.tar.zst
-Patch0:         draco-2.0.3-metainfo.patch
-
 BuildRequires:  cargo
 BuildRequires:  cargo-packaging
 BuildRequires:  rust >= 1.85
