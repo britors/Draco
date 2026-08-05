@@ -42,7 +42,8 @@ test('installed identity is consistent across Tauri, desktop and AppStream', () 
   assert.match(metainfo, new RegExp(`<id>${appId}</id>`));
   assert.match(metainfo, new RegExp(`<launchable type="desktop-id">${appId}\\.desktop</launchable>`));
   assert.match(metainfo, /<binary>draco<\/binary>/);
-  assert.match(spec, /install -Dm0644 logo-new\.png/);
+  assert.match(spec, /install -Dm0644 src-tauri\/icons\/512x512\.png/);
+  assert.match(spec, /icons\/hicolor\/512x512\/apps\/org\.lyraos\.Draco\.png/);
   assert.doesNotMatch(
     spec,
     new RegExp(`${appId.replaceAll('.', '\\.')}-symbolic`),
@@ -69,12 +70,23 @@ test('tag releases publish native Windows, Debian, Fedora and openSUSE packages'
   assert.match(releaseWorkflow, /SHA256SUMS/);
   assert.equal(tauriConfig.bundle.windows.nsis.installMode, 'currentUser');
   assert.equal(tauriConfig.bundle.windows.webviewInstallMode.silent, true);
-  assert.ok(tauriConfig.bundle.icon.includes('../logo-new.png'));
+  assert.deepEqual(tauriConfig.bundle.icon, [
+    'icons/32x32.png',
+    'icons/128x128.png',
+    'icons/128x128@2x.png',
+    'icons/512x512.png',
+    'icons/icon.ico',
+  ]);
   assert.ok(tauriConfig.bundle.icon.includes('icons/icon.ico'));
   assert.ok(tauriConfig.bundle.linux.deb.depends.includes('xdg-desktop-portal'));
   assert.ok(tauriConfig.bundle.linux.rpm.depends.includes('xdg-desktop-portal'));
   assert.ok((await stat(new URL('../../src-tauri/icons/icon.ico', import.meta.url))).size > 0);
   assert.ok((await stat(new URL('../../logo-new.png', import.meta.url))).size > 0);
+  for (const [file, size] of [['32x32.png', 32], ['128x128.png', 128], ['128x128@2x.png', 256], ['512x512.png', 512]]) {
+    const png = await readFile(new URL(`../../src-tauri/icons/${file}`, import.meta.url));
+    assert.equal(png.readUInt32BE(16), size, `${file} width`);
+    assert.equal(png.readUInt32BE(20), size, `${file} height`);
+  }
 });
 
 test('official RPM contains Tauri runtime dependencies without legacy GTK frontend dependencies', () => {

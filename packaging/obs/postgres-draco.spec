@@ -57,8 +57,8 @@ install -Dm0644 data/org.lyraos.Draco.desktop \
     %{buildroot}%{_datadir}/applications/org.lyraos.Draco.desktop
 install -Dm0644 data/org.lyraos.Draco.metainfo.xml \
     %{buildroot}%{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
-install -Dm0644 logo-new.png \
-    %{buildroot}%{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png
+install -Dm0644 src-tauri/icons/512x512.png \
+    %{buildroot}%{_datadir}/icons/hicolor/512x512/apps/org.lyraos.Draco.png
 
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.lyraos.Draco.desktop
 appstream-util validate-relax --nonet \
@@ -75,6 +75,6 @@ cargo test --locked --offline --workspace
 %{_bindir}/draco
 %{_datadir}/applications/org.lyraos.Draco.desktop
 %{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
-%{_datadir}/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png
+%{_datadir}/icons/hicolor/512x512/apps/org.lyraos.Draco.png
 
 %changelog
