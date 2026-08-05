@@ -48,6 +48,12 @@ dependem de PostgreSQL, Secret Service ou sessão gráfica continuam no checklis
 `docs/testing/live-postgres.md`. Os contratos de distribuição também validam versões, app id,
 desktop entry, AppStream e dependências do RPM/OBS.
 
+O workflow `.github/workflows/release.yml` roda somente para tags `vX.Y.Z` (ou
+reexecução manual de uma tag), valida a versão dos manifests e publica NSIS
+Windows, DEB Ubuntu, RPM Fedora e RPM openSUSE com checksums SHA-256. Não use uma
+branch como entrada manual: o job exige uma tag existente apontando exatamente
+para o commit compilado.
+
 ## Estrutura do repositório
 
 ```

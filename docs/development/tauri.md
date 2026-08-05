@@ -28,12 +28,23 @@ variam por distribuição; em Ubuntu 24.04 são `libwebkit2gtk-4.1-0`, `libgtk-3
 `librsvg2-2` e `xdg-desktop-portal`. O build local precisa também dos pacotes `-dev`
 correspondentes às bibliotecas linkadas.
 
-O caminho de distribuição inicial é:
+Os canais de distribuição são:
 
 | Artefato | Canal | Status |
 |---|---|---|
-| RPM | OBS `home:rodrigosbrito:lyra/postgres-draco` | suportado |
-| bundle Tauri `.deb`/AppImage | build local/QA | experimental, não é requisito de publicação |
+| Windows x64 NSIS (`.exe`) | GitHub Release | suportado a partir da próxima tag |
+| Ubuntu 24.04 x64 (`.deb`) | GitHub Release | suportado a partir da próxima tag |
+| Fedora 43 x64 (`.rpm`) | GitHub Release | suportado a partir da próxima tag |
+| openSUSE Leap 16.0 x64 (`.rpm`) | GitHub Release | suportado a partir da próxima tag |
+| openSUSE Leap 16.0 (`.rpm`) | OBS `home:rodrigosbrito:lyra/postgres-draco` | suportado |
+
+O workflow `release.yml` é acionado apenas por uma tag `vX.Y.Z` existente (ou
+manualmente apontando para ela), exige que a tag coincida com as versões do
+workspace, frontend e Tauri, compila cada RPM dentro da distribuição de destino
+e publica os quatro pacotes mais um `SHA256SUMS`. O instalador NSIS usa o modo
+`currentUser`; a aplicação release usa o subsistema gráfico do Windows e não
+abre uma janela de console. Assinatura Authenticode ainda depende da futura
+configuração de um certificado no repositório.
 
 Os manifests de desenvolvimento (`Cargo.toml`, `tauri.conf.json` e `frontend/package.json`) podem
 estar à frente da última tag publicada. O RPM e a primeira entrada AppStream, porém, sempre

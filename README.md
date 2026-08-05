@@ -89,15 +89,22 @@ cargo test -p draco-tauri
 
 ## Instalação
 
-O artefato Linux oficial é o RPM via OBS
-(`home:rodrigosbrito:lyra/postgres-draco`). O nome do pacote não é "draco"
-simples porque esse nome já é usado pelo projeto "graphics" do openSUSE
-(biblioteca de compressão 3D do Google) — o app continua se chamando Draco,
-só o nome de distribuição do pacote muda. Não há build Windows — nenhum app do
-ecossistema Lyra OS sustenta essa plataforma hoje.
+Cada tag `vX.Y.Z` gera e anexa à GitHub Release quatro pacotes nativos:
+
+- instalador Windows x64 em NSIS (`.exe`), sem janela de console e instalado
+  para o usuário atual por padrão;
+- pacote `.deb` compilado no Ubuntu 24.04;
+- pacote `.rpm` compilado no Fedora 43;
+- pacote `.rpm` compilado no openSUSE Leap 16.0.
+
+O RPM oficial via OBS (`home:rodrigosbrito:lyra/postgres-draco`) continua
+disponível para openSUSE. O nome do pacote OBS não é "draco" simples porque
+esse nome já é usado pelo projeto "graphics" do openSUSE; o aplicativo continua
+se chamando Draco.
 
 > **Release Tauri:** a tag `v2.0.3` contém o novo aplicativo oficial e está
-> publicada no OBS para openSUSE Leap 16.0.
+> publicada no OBS para openSUSE Leap 16.0. Os pacotes multiplataforma começam
+> na próxima tag, pois o workflow não altera releases anteriores.
 
 ## Licença
 

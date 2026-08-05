@@ -28,9 +28,30 @@
   "bundle": {
     "active": true,
     "category": "Utility",
+    "publisher": "Lyra OS",
+    "homepage": "https://github.com/britors/Draco",
+    "license": "GPL-3.0-or-later",
     "shortDescription": "PostgreSQL workbench",
     "icon": [
-      "../data/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png"
-    ]
+      "../data/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png",
+      "icons/icon.ico"
+    ],
+    "linux": {
+      "deb": {
+        "depends": ["xdg-desktop-portal"]
+      },
+      "rpm": {
+        "depends": ["xdg-desktop-portal"]
+      }
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

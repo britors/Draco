@@ -40,7 +40,7 @@ decisão que o aprovou.
 | M8 | Atalhos e Preferências | Tauri: `Ctrl+P` e `Ctrl+K` (palette/busca global), `Ctrl+T` (nova query), `F8`/`Ctrl+Enter` (rodar), `F10` (EXPLAIN) e `Ctrl+Shift+S` (snippet); GTK mantém `Ctrl+P`, `Ctrl+T`, `F8` e `F10` | implementado |
 | M8 | Preferências, atualizações e about | Tauri: tela de Preferências com tema claro/escuro e 5 cores de destaque (persistidos em `AppSettings`), checagem manual/automática de atualização contra o release mais recente do GitHub (`draco-core::updates`, somente leitura, nunca instala) e aba About com licença, repositório e doação via Pix (SVG estático commitado, chave/copia-e-cola conferidos por teste contra `qrcode` como devDependency — sem chamada de rede em runtime) | implementado (falta no GTK: tela equivalente — hoje o tema GTK segue só o `libadwaita` do sistema) |
 | M10 | Assistente de IA | capacidade nova (não existia na versão Electron), inspirada no `vega-gtk::assistant`: aba por conexão (botão na linha do host, ao lado de Dashboard/Admin), Anthropic/OpenAI/Gemini, chave só no credential store (`keyring`, Secret Service no Linux; nunca `secret-tool` shell-out como no Vega), acesso **somente leitura** ao banco — `list_schemas`/`list_tables`/`describe_table`/`explain_query`/`run_select`/`get_performance_health` (`draco-core::assistant`), sem nenhuma ferramenta de escrita: índices/rewrites sugeridos são só texto para o usuário rodar manualmente no Editor SQL | implementado (falta: validar contra Postgres real e contra as três APIs de fato; sem anexos de arquivo/imagem, ao contrário do Vega — fora de escopo por ora; limite diário usa dia UTC, não o fuso local) |
-| M11 | CI e distribuição Linux | contratos frontend/componentes/estados visuais e metadados; lint/testes Rust; mock smoke da bridge Tauri; build do binário oficial; validação `.desktop`/AppStream; smoke de layout instalado e bibliotecas; OBS vendorizado/offline; dependências Tauri sem GTK4/libadwaita/GtkSourceView5; fallback GTK compilável | em estabilização (tag/release `v2.0.3`, RPM/OBS, smoke Wayland/X11 e validação PostgreSQL concluídos; três ciclos estáveis e pacote de rollback ainda são gates externos) |
+| M11 | CI e distribuição | contratos frontend/componentes/estados visuais e metadados; lint/testes Rust; mock smoke da bridge Tauri; build do binário oficial; validação `.desktop`/AppStream; smoke de layout instalado e bibliotecas; NSIS Windows, DEB Ubuntu, RPM Fedora/openSUSE e OBS vendorizado/offline; dependências Tauri sem GTK4/libadwaita/GtkSourceView5; fallback GTK compilável | em estabilização (tag/release `v2.0.3`, RPM/OBS, smoke Wayland/X11 e validação PostgreSQL concluídos; workflow multiplataforma entra na próxima tag; três ciclos estáveis e pacote de rollback ainda são gates externos) |
 
 ## Nota de ambiente: dados do GtkSourceView5
 
@@ -64,18 +64,17 @@ por isso não entraram na matriz acima: **pg_dump/pg_restore** via GUI,
 conexões e uma tabela de **migrations** (`_draco_migrations`, conceito
 Prisma-like ligado ao `schema.draco`). Nenhuma delas foi portada para
 `draco-core` ainda — ficam pendentes de decisão de escopo (portar em um M9 ou
-descartar deliberadamente, como o Windows) antes de implementar a UI
+descartar deliberadamente) antes de implementar a UI
 correspondente.
 
 ## Desvios aprovados
 
-Suporte Windows (2026-07-27): removido do escopo por decisão de produto. O
-Draco Electron publicava um instalador `.exe` (NSIS); nenhum dos apps do
-ecossistema Lyra OS (Vega, Beam, Sulafat, Chord) sustenta build Windows hoje,
-e GTK4/libadwaita via MSYS2 exigiria infraestrutura de CI/empacotamento sem
-precedente pra copiar. O rewrite é só Linux, empacotado via OBS
-(`home:rodrigosbrito:lyra/postgres-draco`) — nome de pacote diferente do app
-porque "draco" simples já é usado pelo projeto "graphics" do openSUSE.
+Suporte Windows foi inicialmente retirado em 2026-07-27 porque o frontend GTK
+exigiria uma infraestrutura MSYS2 própria. A decisão foi revista em 2026-08-04:
+o shell Tauri permite gerar NSIS nativamente em `windows-latest`, sem console no
+build release e com instalação por usuário. A distribuição Linux também ganhou
+DEB Ubuntu e RPMs compilados nativamente no Fedora e no openSUSE, mantendo o
+OBS (`home:rodrigosbrito:lyra/postgres-draco`) como canal oficial adicional.
 
 ## Critérios transversais por módulo
 
