@@ -104,6 +104,19 @@ impl PostgresDriver {
         Ok(())
     }
 
+    /// Executes a set of single PostgreSQL statements atomically. The extended query protocol
+    /// rejects extra statements hidden in any item, which is important for object editors that
+    /// combine a Draco-generated statement with user-reviewed DDL.
+    pub async fn execute_transaction(&self, statements: &[&str]) -> Result<()> {
+        let mut client = self.pool.get().await?;
+        let transaction = client.transaction().await?;
+        for statement in statements {
+            transaction.execute(*statement, &[]).await?;
+        }
+        transaction.commit().await?;
+        Ok(())
+    }
+
     /// Same simple-query protocol as `batch_execute`, but keeps each statement's row/command
     /// data instead of discarding it — used by the query editor's "Run as script" so a
     /// multi-statement buffer still shows a result, not just a side effect.

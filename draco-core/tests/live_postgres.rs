@@ -304,7 +304,66 @@ async fn connects_and_introspects_the_real_database() {
     }
 
     let sequences = queries::get_sequences(&driver, &test_schema).await.expect("get_sequences");
-    assert!(sequences.iter().any(|sequence| sequence.name == "draco_live_test_seq"));
+    let sequence = sequences
+        .iter()
+        .find(|sequence| sequence.name == "draco_live_test_seq")
+        .expect("created sequence should be listed");
+    assert!(sequence.definition.starts_with("ALTER SEQUENCE"));
+    queries::save_object_definition(&driver, &sequence.definition)
+        .await
+        .expect("save sequence definition");
+
+    let view = "draco_live_test_view";
+    queries::save_object_definition(
+        &driver,
+        &format!(
+            "CREATE OR REPLACE VIEW \"{test_schema}\".\"{view}\" AS SELECT id, status FROM \"{test_schema}\".\"{table}\""
+        ),
+    )
+    .await
+    .expect("save view definition");
+    let view_ddl = queries::get_table_ddl(&driver, &test_schema, view)
+        .await
+        .expect("get view definition");
+    assert!(view_ddl.starts_with("CREATE OR REPLACE VIEW"));
+
+    let index = "draco_live_test_status_idx";
+    queries::save_object_definition(
+        &driver,
+        &format!(
+            "CREATE INDEX \"{index}\" ON \"{test_schema}\".\"{table}\" (description)"
+        ),
+    )
+    .await
+    .expect("create editable index");
+    let (index_ddl, constraint_name) = queries::get_index_ddl(&driver, &test_schema, table, index)
+        .await
+        .expect("get index definition")
+        .expect("created index should exist");
+    assert!(constraint_name.is_none());
+    assert!(index_ddl.starts_with("CREATE INDEX"));
+    let invalid_replacement = queries::replace_index_definition(
+        &driver,
+        &test_schema,
+        table,
+        index,
+        &format!("CREATE INDEX \"{index}\" ON \"{test_schema}\".missing_table (id)"),
+    )
+    .await;
+    assert!(invalid_replacement.is_err());
+    assert!(queries::get_index_ddl(&driver, &test_schema, table, index)
+        .await
+        .expect("check index after rollback")
+        .is_some());
+    queries::replace_index_definition(
+        &driver,
+        &test_schema,
+        table,
+        index,
+        &format!("CREATE INDEX \"{index}\" ON \"{test_schema}\".\"{table}\" (status)"),
+    )
+    .await
+    .expect("replace editable index");
 
     let triggers = queries::get_triggers(&driver, &test_schema).await.expect("get_triggers");
     assert!(triggers.iter().any(|trigger| trigger.name == "draco_live_test_trigger"));

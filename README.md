@@ -26,6 +26,11 @@ qualquer distribuição Linux moderna, com integração visual prioritária ao L
 - Túnel SSH (incluindo jump host) feito em processo (`russh`), sem depender do
   binário `ssh`.
 - Interface oficial Tauri 2, com frontend local sem CDN.
+- Workbench Programming com tela dedicada e editor SQL para
+  views/functions/procedures/triggers, além de editores validados de sequences
+  e índices comuns.
+- Integração nativa com GitHub: repositório configurável, branches, diff contra
+  o banco implantado, comparação entre branches, commit e criação de pull request.
 - Nenhuma senha ou passphrase é manuseada em texto plano — armazenamento
   delegado ao Serviço de Segredos do sistema (GNOME Keyring/KWallet, via
   `keyring`), já integrado ao sistema.
@@ -85,7 +90,7 @@ disponível para openSUSE. O nome do pacote OBS não é "draco" simples porque
 esse nome já é usado pelo projeto "graphics" do openSUSE; o aplicativo continua
 se chamando Draco.
 
-> **Release Tauri:** a versão `2.0.5` distribui pacotes nativos no GitHub para
+> **Release Tauri:** a versão `2.1.0` distribui pacotes nativos no GitHub para
 > Windows, Ubuntu, Fedora e openSUSE, corrige o ícone do desktop Linux e mantém
 > o RPM oficial no OBS.
 

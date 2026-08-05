@@ -8,7 +8,7 @@ const style = await readFile(new URL('../dist/styles.css', import.meta.url), 'ut
 const pixQr = await readFile(new URL('../dist/pix-donation.svg', import.meta.url), 'utf8');
 
 test('shell contains every registered application view', () => {
-  for (const view of ['connections', 'explorer', 'dashboard', 'admin', 'assistant', 'query', 'preferences']) {
+  for (const view of ['connections', 'explorer', 'programming', 'dashboard', 'admin', 'assistant', 'query', 'preferences']) {
     assert.match(index, new RegExp(`id="view-${view}"`));
   }
   assert.doesNotMatch(index, /data-view="(?:history|snippets)"/);
@@ -42,6 +42,7 @@ test('shell contains every registered application view', () => {
   assert.match(index, /id="favorite"/);
   assert.match(index, /id="explorer-filter"/);
   for (const control of ['new-schema', 'new-table', 'new-function', 'new-sequence', 'new-trigger']) assert.match(index, new RegExp(`id="${control}"`));
+  for (const control of ['programming-connection', 'programming-schema', 'programming-new-function', 'programming-new-trigger', 'programming-content', 'programming-back', 'programming-editor', 'programming-save']) assert.match(index, new RegExp(`id="${control}"`));
   assert.match(index, /aria-expanded="true"/);
   assert.match(index, /id="app-dialog"[^>]+role="dialog"/);
   for (const control of ['app-dialog-confirm', 'app-dialog-cancel', 'app-dialog-input']) assert.match(index, new RegExp(`id="${control}"`));
@@ -68,7 +69,7 @@ test('shell contains every registered application view', () => {
 });
 
 test('frontend invokes only the typed local application bridge', () => {
-  for (const command of ['health', 'preferences', 'save_preferences', 'check_for_updates', 'list_connections', 'list_schema_objects', 'next_sequence_value', 'set_sequence_value', 'create_schema', 'create_table', 'preview_alter_table', 'alter_table', 'create_sequence', 'create_trigger', 'function_definitions', 'validate_function_definition', 'save_function_definition', 'save_trigger_definition', 'completion_data', 'global_search', 'execute_query', 'execute_explain', 'rename_snippet', 'dashboard', 'browse_table_data', 'update_table_cell', 'insert_table_row', 'delete_table_row', 'cancel_activity', 'list_cron_jobs', 'create_cron_job', 'update_cron_job', 'cron_job_runs', 'set_cron_job_active', 'delete_cron_job', 'list_extensions', 'install_extension', 'drop_extension', 'query_stats', 'reset_query_stats', 'run_table_maintenance', 'list_roles', 'create_role', 'update_role', 'delete_role', 'choose_backup_output', 'choose_restore_input', 'run_backup', 'assistant_settings', 'save_assistant_settings', 'assistant_models', 'save_assistant_key', 'clear_assistant_key', 'assistant_send']) {
+  for (const command of ['health', 'preferences', 'save_preferences', 'check_for_updates', 'list_connections', 'list_schema_objects', 'next_sequence_value', 'set_sequence_value', 'create_schema', 'create_table', 'preview_alter_table', 'alter_table', 'create_sequence', 'save_view_definition', 'save_sequence_definition', 'index_definition', 'save_index_definition', 'create_trigger', 'function_definitions', 'validate_function_definition', 'save_function_definition', 'save_trigger_definition', 'completion_data', 'global_search', 'execute_query', 'execute_explain', 'rename_snippet', 'dashboard', 'browse_table_data', 'update_table_cell', 'insert_table_row', 'delete_table_row', 'cancel_activity', 'list_cron_jobs', 'create_cron_job', 'update_cron_job', 'cron_job_runs', 'set_cron_job_active', 'delete_cron_job', 'list_extensions', 'install_extension', 'drop_extension', 'query_stats', 'reset_query_stats', 'run_table_maintenance', 'list_roles', 'create_role', 'update_role', 'delete_role', 'choose_backup_output', 'choose_restore_input', 'run_backup', 'assistant_settings', 'save_assistant_settings', 'assistant_models', 'save_assistant_key', 'clear_assistant_key', 'assistant_send']) {
     assert.match(app, new RegExp(`['"]${command}['"]`));
   }
   assert.doesNotMatch(app, /localStorage|sessionStorage|fetch\(|XMLHttpRequest|dangerouslySetInnerHTML/);
@@ -112,6 +113,11 @@ test('Explorer exposes local object creators and validated definition editors', 
   assert.match(app, /function openTriggerCreator/);
   assert.match(app, /function definitionEditorDialog/);
   assert.match(app, /function editFunctionDefinition/);
+  assert.match(app, /function editViewDefinition/);
+  assert.match(app, /function editSequenceDefinition/);
+  assert.match(app, /function editIndexDefinition/);
+  assert.match(app, /function explorerFolder/);
+  assert.match(app, /explorerFolder\(children, 'Programming'\)/);
   assert.match(app, /CREATE OR REPLACE TRIGGER/);
   assert.match(app, /result\.destructive/);
   assert.match(app, /References must use schema\.table\.column/);
@@ -124,6 +130,40 @@ test('Explorer exposes local object creators and validated definition editors', 
   assert.match(app, /options\.onApplied\?\.\(input\.new_table_name\)/);
   assert.match(app, /filterExplorerTree\(\);/);
   assert.match(style, /\.tree-table-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;/);
+  assert.match(style, /\.tree-folder-toggle:focus-visible/);
+  assert.match(style, /\.object-definition-row \{/);
+  assert.match(app, /Managed by constraint/);
+  assert.match(app, /drop and recreate this index inside one transaction/);
+});
+
+test('Programming is a first-class database development workspace', () => {
+  assert.match(index, /data-view="programming"/);
+  assert.match(index, /<h2>Programming<\/h2>/);
+  assert.match(app, /function openProgramming/);
+  assert.match(app, /function loadProgrammingSchemas/);
+  assert.match(app, /function loadProgrammingObjects/);
+  for (const group of ['Views', 'Functions', 'Procedures', 'Triggers']) assert.match(app, new RegExp(`programmingGroup\\('${group}'`));
+  assert.match(app, /invoke\('list_schema_objects', \{ id, schema \}\)/);
+  assert.match(app, /invoke\('list_tables', \{ id, schema \}\)/);
+  assert.match(style, /\.programming-content \{/);
+  assert.match(style, /\.programming-object \{/);
+  assert.match(index, /id="programming-editor-screen"[^>]+hidden/);
+  assert.match(app, /function returnToProgrammingBrowser/);
+  assert.match(app, /edit\.addEventListener\('click', \(\) => void openProgrammingObject/);
+  assert.match(app, /byId\('programming-browser-screen'\)\.hidden = true/);
+  assert.match(app, /syncProgrammingEditorHighlight/);
+});
+
+test('GitHub source control is configured in Preferences and available in the Programming editor', () => {
+  assert.match(index, /data-preference-section="github"/);
+  assert.match(index, /data-preference-panel="github"/);
+  for (const control of ['github-owner', 'github-repository', 'github-root-path', 'github-default-branch', 'github-token', 'github-connect', 'github-disconnect']) assert.match(index, new RegExp(`id="${control}"`));
+  for (const control of ['programming-github-branch', 'programming-github-base', 'programming-github-load', 'programming-github-diff-deployed', 'programming-github-diff-branches', 'programming-github-commit', 'programming-github-pr']) assert.match(index, new RegExp(`id="${control}"`));
+  for (const command of ['github_status', 'connect_github', 'github_branches', 'github_file', 'github_commit_file', 'github_compare', 'github_create_pull_request']) assert.match(app, new RegExp(`invoke\\('${command}'`));
+  assert.match(app, /function programmingGithubPath/);
+  assert.match(app, /function lineDiff/);
+  assert.match(app, /function createProgrammingPullRequest/);
+  assert.match(style, /\.github-diff \{/);
 });
 
 test('table detail browses safely and edits rows only through complete primary keys', () => {
@@ -264,9 +304,9 @@ test('dark visual system is local and has explicit loading/error/empty surfaces'
   assert.match(app, /request !== state\.explorerConnectionRequest/);
   assert.match(app, /invoke\('list_tables', \{ id, schema: schemaName \}\)/);
   assert.match(app, /invoke\('list_schema_objects', \{ id, schema: schemaName \}\)/);
-  assert.match(app, /Functions & procedures/);
+  assert.match(app, /explorerFolder\(children, 'Programming'\)/);
   assert.match(app, /Sequences/);
-  assert.match(app, /Triggers/);
+  assert.match(app, /groupSchemaObjects\(objects\)/);
   assert.match(app, /function openSchemaObject/);
   assert.match(app, /function advanceSequence/);
   assert.match(app, /function resetSequence/);

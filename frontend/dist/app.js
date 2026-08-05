@@ -2,13 +2,13 @@ import { resultRowToText, resultToTsv, serializeResult } from './result-export.j
 import { highlightSqlIncremental } from './sql-highlight.js';
 import { applySuggestion, buildCompletionIndex, suggest } from './sql-autocomplete.js';
 import { visibleRange } from './virtual-list.js';
-import { schemaObjectSql } from './explorer-navigation.js';
+import { groupSchemaObjects, schemaObjectSql } from './explorer-navigation.js';
 import { clampResultColumnWidth } from './result-columns.js';
 import { AI_QUERY_REVIEW_FOCUSES, buildAiQueryReviewMessage } from './ai-query-review.js';
 
 const invoke = window.__TAURI__?.core?.invoke;
 const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
-const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.0.3', theme: 'dark', accent: 'coral', check_updates_on_startup: true }, releaseUrl: '', queryTabs: [{ id: 1, label: 'Query 1', sql: '' }], currentQueryTabId: 1 };
+const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.1.0', theme: 'dark', accent: 'coral', check_updates_on_startup: true }, releaseUrl: '', queryTabs: [{ id: 1, label: 'Query 1', sql: '' }], currentQueryTabId: 1 };
 let dialogResolver = null;
 let aiReviewRequest = null;
 let aiReviewReturnFocus = null;
@@ -225,6 +225,80 @@ async function clearAssistantKey() {
   }
 }
 
+let githubConnection = null;
+let githubBranches = [];
+
+function renderGithubConnection(connection) {
+  githubConnection = connection;
+  byId('github-owner').value = connection.owner || '';
+  byId('github-repository').value = connection.repository || '';
+  byId('github-root-path').value = connection.root_path || '';
+  byId('github-default-branch').value = connection.default_branch || '';
+  byId('github-disconnect').disabled = !connection.connected;
+  const status = byId('github-settings-status');
+  status.textContent = connection.connected
+    ? `Connected as ${connection.account_login} · ${connection.owner}/${connection.repository}`
+    : 'GitHub is not connected.';
+  status.className = `form-status ${connection.connected ? 'success' : ''}`.trim();
+}
+
+async function loadGithubSettings() {
+  const status = byId('github-settings-status');
+  status.textContent = 'Checking GitHub connection…';
+  status.className = 'form-status';
+  try {
+    renderGithubConnection(await invoke('github_status'));
+  } catch (error) {
+    status.textContent = error?.message || 'Could not check the GitHub connection';
+    status.className = 'form-status error';
+  }
+}
+
+async function connectGithub(event) {
+  event.preventDefault();
+  const token = value('github-token');
+  const status = byId('github-settings-status');
+  if (!token) {
+    status.textContent = 'Paste a GitHub token before connecting.';
+    status.className = 'form-status error';
+    return;
+  }
+  const settings = {
+    owner: value('github-owner'),
+    repository: value('github-repository'),
+    root_path: value('github-root-path'),
+    default_branch: value('github-default-branch') || 'main',
+  };
+  byId('github-connect').disabled = true;
+  status.textContent = 'Validating repository and credential with GitHub…';
+  status.className = 'form-status';
+  try {
+    renderGithubConnection(await invoke('connect_github', { settings, token }));
+    byId('github-token').value = '';
+    await loadProgrammingGithub();
+  } catch (error) {
+    status.textContent = error?.message || 'Could not connect GitHub';
+    status.className = 'form-status error';
+  } finally {
+    byId('github-connect').disabled = false;
+  }
+}
+
+async function disconnectGithub() {
+  if (!await showConfirm('Remove the GitHub token from the system Secret Service?', 'Disconnect GitHub', true, 'Disconnect')) return;
+  const status = byId('github-settings-status');
+  byId('github-disconnect').disabled = true;
+  try {
+    await invoke('disconnect_github');
+    renderGithubConnection({ ...(githubConnection || {}), connected: false, account_login: null });
+    githubBranches = [];
+    renderProgrammingGithubBranches();
+  } catch (error) {
+    status.textContent = error?.message || 'Could not disconnect GitHub';
+    status.className = 'form-status error';
+  }
+}
+
 async function checkForUpdates(manual = true) {
   const button = byId('check-updates');
   button.disabled = true;
@@ -251,6 +325,7 @@ function showPreferenceSection(name) {
   }
   for (const panel of document.querySelectorAll('[data-preference-panel]')) panel.hidden = panel.dataset.preferencePanel !== name;
   if (name === 'ai') void loadAssistantSettings();
+  if (name === 'github') void loadGithubSettings();
 }
 
 let sqlHighlightCache = [];
@@ -269,6 +344,24 @@ function setEditorValue(text) {
   byId('sql-editor').value = text;
   syncEditorHighlight();
   hideAutocomplete();
+}
+
+let programmingHighlightCache = [];
+
+function syncProgrammingEditorHighlight() {
+  const editor = byId('programming-editor');
+  const overlay = byId('programming-editor-highlight');
+  const highlighted = highlightSqlIncremental(editor.value, programmingHighlightCache);
+  programmingHighlightCache = highlighted.cache;
+  overlay.innerHTML = highlighted.html;
+  overlay.scrollTop = editor.scrollTop;
+  overlay.scrollLeft = editor.scrollLeft;
+}
+
+function setProgrammingEditorValue(text) {
+  programmingHighlightCache = [];
+  byId('programming-editor').value = text;
+  syncProgrammingEditorHighlight();
 }
 
 const completionCache = new Map();
@@ -777,7 +870,7 @@ function renderQueryConnections() {
 }
 
 function renderAdvancedConnections() {
-  for (const id of ['dashboard-connection', 'admin-connection', 'backup-connection', 'assistant-connection']) {
+  for (const id of ['dashboard-connection', 'admin-connection', 'backup-connection', 'assistant-connection', 'programming-connection']) {
     const select = byId(id);
     const selected = select.value;
     select.replaceChildren();
@@ -945,6 +1038,29 @@ async function loadDashboard(id) {
 function dataPanel(title, rows) {
   const panel = document.createElement('div'); panel.className = 'data-panel'; const heading = document.createElement('h3'); heading.textContent = title; panel.append(heading);
   for (const [label, value] of rows.slice(0, 12)) { const row = document.createElement('div'); row.className = 'data-row'; const key = document.createElement('span'); key.textContent = label; const val = document.createElement('strong'); val.textContent = value ?? '—'; row.append(key, val); panel.append(row); }
+  return panel;
+}
+
+function indexPanel(id, schema, table, indexes) {
+  const panel = document.createElement('section'); panel.className = 'data-panel';
+  const heading = document.createElement('h3'); heading.textContent = 'Indexes'; panel.append(heading);
+  if (!indexes.length) {
+    const empty = document.createElement('div'); empty.className = 'empty-state compact'; empty.textContent = 'No indexes'; panel.append(empty); return panel;
+  }
+  for (const index of indexes.slice(0, 12)) {
+    const row = document.createElement('div'); row.className = 'data-row object-definition-row';
+    const name = document.createElement('span'); name.textContent = index.name;
+    const definition = document.createElement('strong'); definition.textContent = index.definition || '—'; definition.title = index.definition || '';
+    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = 'Edit';
+    if (index.constraint_name) {
+      edit.disabled = true;
+      edit.title = `Managed by constraint ${index.constraint_name}`;
+    } else {
+      edit.title = `Edit ${index.name}`;
+      edit.addEventListener('click', () => void editIndexDefinition(id, schema, table, index.name));
+    }
+    row.append(name, definition, edit); panel.append(row);
+  }
   return panel;
 }
 
@@ -1141,12 +1257,12 @@ async function createSequenceFromExplorer() {
   catch (error) { await showAlert(error?.message || 'Could not create sequence', 'Sequence not created'); }
 }
 
-function openTriggerCreator(id, schema) {
+function openTriggerCreator(id, schema, onCreated = null) {
   const dialog = objectDialog(`New trigger · ${schema}`); const grid = document.createElement('div'); grid.className = 'object-form-grid';
   const name = textInput('', 'audit_change'); const table = textInput('', 'table'); const timing = selectInput(['BEFORE', 'AFTER', 'INSTEAD OF'], 'BEFORE'); const events = textInput('INSERT', 'INSERT UPDATE'); const func = textInput('', 'schema.function_name');
   grid.append(labeledControl('Trigger name', name), labeledControl('Table', table), labeledControl('Timing', timing), labeledControl('Events', events), labeledControl('Function', func)); dialog.body.append(grid);
   const create = document.createElement('button'); create.className = 'button primary'; create.type = 'button'; create.textContent = 'Create trigger';
-  create.addEventListener('click', async () => { create.disabled = true; dialog.status.textContent = 'Creating trigger…'; try { await invoke('create_trigger', { id, schema, input: { name: name.value.trim(), table: table.value.trim(), timing: timing.value, events: events.value.trim(), function: func.value.trim() } }); dialog.close(); await openExplorer(id); } catch (error) { dialog.status.textContent = error?.message || 'Could not create trigger'; dialog.status.className = 'form-status error'; create.disabled = false; } });
+  create.addEventListener('click', async () => { create.disabled = true; dialog.status.textContent = 'Creating trigger…'; try { await invoke('create_trigger', { id, schema, input: { name: name.value.trim(), table: table.value.trim(), timing: timing.value, events: events.value.trim(), function: func.value.trim() } }); dialog.close(); if (onCreated) await onCreated(); else await openExplorer(id); } catch (error) { dialog.status.textContent = error?.message || 'Could not create trigger'; dialog.status.className = 'form-status error'; create.disabled = false; } });
   dialog.actions.append(create);
 }
 
@@ -1154,21 +1270,534 @@ function functionTemplate(schema) {
   return `CREATE OR REPLACE FUNCTION ${quotePreviewIdentifier(schema)}.${quotePreviewIdentifier('function_name')}()\nRETURNS void\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  -- function body\nEND;\n$$;`;
 }
 
-function definitionEditorDialog(id, title, ddl, kind) {
+function triggerTemplate(schema) {
+  return `CREATE OR REPLACE TRIGGER ${quotePreviewIdentifier('trigger_name')}\nBEFORE INSERT ON ${quotePreviewIdentifier(schema)}.${quotePreviewIdentifier('table_name')}\nFOR EACH ROW\nEXECUTE FUNCTION ${quotePreviewIdentifier(schema)}.${quotePreviewIdentifier('function_name')}();`;
+}
+
+function definitionEditorDialog(id, title, ddl, kind, context = {}) {
+  const definitions = {
+    function: ['save_function_definition', 'Save definition'],
+    trigger: ['save_trigger_definition', 'Save trigger'],
+    view: ['save_view_definition', 'Save view'],
+    sequence: ['save_sequence_definition', 'Save sequence'],
+    index: ['save_index_definition', 'Recreate index'],
+  };
+  const [saveCommand, saveLabel] = definitions[kind];
+  const { onSaved, ...commandContext } = context;
   const dialog = objectDialog(title); const editor = document.createElement('textarea'); editor.className = 'definition-editor'; editor.value = ddl; editor.spellcheck = false; dialog.body.append(editor);
   if (kind === 'function') {
     const validate = document.createElement('button'); validate.className = 'button'; validate.type = 'button'; validate.textContent = 'Validate';
     validate.addEventListener('click', async () => { validate.disabled = true; dialog.status.textContent = 'Validating in a rolled-back transaction…'; try { const error = await invoke('validate_function_definition', { id, ddl: editor.value }); dialog.status.textContent = error || 'Definition is valid'; dialog.status.className = `form-status ${error ? 'error' : 'success'}`; } catch (error) { dialog.status.textContent = error?.message || 'Validation failed'; dialog.status.className = 'form-status error'; } finally { validate.disabled = false; } });
     dialog.actions.append(validate);
   }
-  const save = document.createElement('button'); save.className = 'button primary'; save.type = 'button'; save.textContent = kind === 'function' ? 'Save definition' : 'Save trigger';
-  save.addEventListener('click', async () => { save.disabled = true; dialog.status.textContent = 'Saving definition…'; try { await invoke(kind === 'function' ? 'save_function_definition' : 'save_trigger_definition', { id, ddl: editor.value }); dialog.close(); await openExplorer(id); } catch (error) { dialog.status.textContent = error?.message || 'Could not save definition'; dialog.status.className = 'form-status error'; save.disabled = false; } });
+  const save = document.createElement('button'); save.className = 'button primary'; save.type = 'button'; save.textContent = saveLabel;
+  save.addEventListener('click', async () => {
+    if (kind === 'index' && !await showConfirm('Draco will drop and recreate this index inside one transaction. Writes may wait while the index is rebuilt.', 'Recreate index', true, 'Recreate')) return;
+    save.disabled = true; dialog.status.textContent = 'Saving definition…';
+    try {
+      await invoke(saveCommand, { id, ...commandContext, ddl: editor.value });
+      dialog.close();
+      if (onSaved) await onSaved(); else await openExplorer(id);
+    } catch (error) {
+      dialog.status.textContent = error?.message || 'Could not save definition'; dialog.status.className = 'form-status error'; save.disabled = false;
+    }
+  });
   dialog.actions.append(save);
 }
 
-async function editFunctionDefinition(id, schema, name) {
-  try { const definitions = await invoke('function_definitions', { id, schema, name }); if (!definitions.length) throw new Error('Definition not found'); let selected = definitions[0]; if (definitions.length > 1) { const args = await showPrompt(`This name has ${definitions.length} overloads. Enter the exact identity arguments of the overload to edit.\n\n${definitions.map((item) => item.args || '(no arguments)').join('\n')}`, 'Choose function overload', 'Identity arguments', '', definitions[0].args); if (args === null) return; selected = definitions.find((item) => item.args === args) || null; if (!selected) { await showAlert('No overload matched those identity arguments.', 'Function not opened'); return; } } definitionEditorDialog(id, `Function · ${schema}.${name}(${selected.args})`, selected.ddl, 'function'); }
-  catch (error) { await showAlert(error?.message || 'Could not load function definition', 'Function unavailable'); }
+async function openProgrammingFromExplorer(id, schema, object) {
+  state.selectedConnectionId = id;
+  state.selectedSchema = schema;
+  byId('programming-connection').value = id;
+  switchView('programming');
+  await loadProgrammingSchemas(id);
+  byId('programming-schema').value = schema;
+  await loadProgrammingObjects(id, schema);
+  await openProgrammingObject(id, schema, object);
+}
+
+async function editFunctionDefinition(id, schema, name, kind = 'function') {
+  await openProgrammingFromExplorer(id, schema, { name, kind, detail: kind });
+}
+
+async function newProgrammingFromExplorer(kind) {
+  const id = state.selectedConnectionId;
+  const schema = state.selectedSchema;
+  if (!id || !schema) return;
+  state.selectedConnectionId = id;
+  state.selectedSchema = schema;
+  byId('programming-connection').value = id;
+  switchView('programming');
+  await loadProgrammingSchemas(id);
+  byId('programming-schema').value = schema;
+  await newProgrammingDefinition(kind);
+}
+
+async function editViewDefinition(id, schema, name, onSaved = null) {
+  try {
+    const payload = await invoke('table_detail', { id, schema, table: name });
+    definitionEditorDialog(id, `View · ${schema}.${name}`, payload.ddl, 'view', { schema, name, ...(onSaved ? { onSaved } : {}) });
+  } catch (error) {
+    await showAlert(error?.message || 'Could not load the view definition', 'View unavailable');
+  }
+}
+
+function editSequenceDefinition(id, schema, object) {
+  definitionEditorDialog(id, `Sequence · ${schema}.${object.name}`, object.definition || '', 'sequence', { schema, name: object.name });
+}
+
+async function editIndexDefinition(id, schema, table, name) {
+  try {
+    const ddl = await invoke('index_definition', { id, schema, table, name });
+    definitionEditorDialog(id, `Index · ${schema}.${name}`, ddl, 'index', {
+      schema,
+      table,
+      name,
+      onSaved: () => openTable(id, schema, table),
+    });
+  } catch (error) {
+    await showAlert(error?.message || 'Could not load the index definition', 'Index unavailable');
+  }
+}
+
+let programmingRequest = 0;
+let programmingEditorTarget = null;
+
+function programmingEditorIsDirty() {
+  return Boolean(programmingEditorTarget && byId('programming-editor').value !== programmingEditorTarget.originalDdl);
+}
+
+function setProgrammingEditorStatus(message, tone = '') {
+  const status = byId('programming-editor-status');
+  status.textContent = message;
+  status.className = `form-status ${tone}`.trim();
+}
+
+function clearProgrammingEditor(message = 'Select an object to start editing.') {
+  programmingEditorTarget = null;
+  const editor = byId('programming-editor');
+  editor.disabled = true;
+  setProgrammingEditorValue('');
+  byId('programming-editor-kind').textContent = 'CODE EDITOR';
+  byId('programming-editor-title').textContent = 'Select an object';
+  byId('programming-reload').disabled = true;
+  byId('programming-validate').disabled = true;
+  byId('programming-save').disabled = true;
+  setProgrammingEditorStatus(message);
+  renderProgrammingGithubBranches();
+}
+
+function setProgrammingEditorTarget(target, ddl) {
+  programmingEditorTarget = { ...target, originalDdl: ddl, deployedDdl: ddl };
+  const editor = byId('programming-editor');
+  editor.disabled = false;
+  setProgrammingEditorValue(ddl);
+  byId('programming-editor-kind').textContent = target.kind.toUpperCase();
+  byId('programming-editor-title').textContent = target.title;
+  byId('programming-reload').disabled = false;
+  byId('programming-validate').disabled = !['function', 'procedure'].includes(target.kind);
+  byId('programming-save').disabled = false;
+  setProgrammingEditorStatus(target.isNew ? 'New definition — edit and save when ready.' : 'Definition loaded.', 'success');
+  byId('programming-browser-screen').hidden = true;
+  byId('programming-editor-screen').hidden = false;
+  document.querySelector('.programming-panel').classList.add('editor-open');
+  byId('programming-github-diff').hidden = true;
+  void loadProgrammingGithub();
+  editor.focus();
+}
+
+async function returnToProgrammingBrowser() {
+  if (!await confirmProgrammingEditorReplacement()) return;
+  byId('programming-editor-screen').hidden = true;
+  byId('programming-browser-screen').hidden = false;
+  document.querySelector('.programming-panel').classList.remove('editor-open');
+  clearProgrammingEditor();
+}
+
+async function confirmProgrammingEditorReplacement() {
+  if (!programmingEditorIsDirty()) return true;
+  return showConfirm('This definition has unsaved changes. Discard them and continue?', 'Discard changes?', false, 'Discard');
+}
+
+async function selectRoutineDefinition(id, schema, object, preferredArgs = null) {
+  const definitions = await invoke('function_definitions', { id, schema, name: object.name });
+  if (!definitions.length) throw new Error('Definition not found');
+  if (preferredArgs !== null) {
+    const preferred = definitions.find((item) => item.args === preferredArgs);
+    if (preferred) return preferred;
+  }
+  return definitions[0];
+}
+
+async function openProgrammingObject(id, schema, object, options = {}) {
+  if (!options.skipDiscardCheck && !await confirmProgrammingEditorReplacement()) return;
+  setProgrammingEditorStatus(`Loading ${object.name}…`);
+  try {
+    let ddl = object.definition || '';
+    let args = options.preferredArgs ?? object.identity_arguments ?? null;
+    if (object.kind === 'view') {
+      const payload = await invoke('table_detail', { id, schema, table: object.name });
+      ddl = payload.ddl;
+    } else if (['function', 'procedure'].includes(object.kind)) {
+      const selected = await selectRoutineDefinition(id, schema, object, args);
+      if (!selected) { setProgrammingEditorStatus('Object selection cancelled.'); return; }
+      ddl = selected.ddl;
+      args = selected.args;
+    } else if (object.kind === 'trigger') {
+      ddl = ddl.replace(/^CREATE\s+TRIGGER/i, 'CREATE OR REPLACE TRIGGER');
+    }
+    if (!ddl.trim()) throw new Error('Definition not found');
+    const signature = args === null ? '' : `(${args})`;
+    setProgrammingEditorTarget({
+      id,
+      schema,
+      name: object.name,
+      kind: object.kind,
+      title: `${schema}.${object.name}${signature}`,
+      source: object,
+      args,
+      isNew: false,
+    }, ddl);
+  } catch (error) {
+    setProgrammingEditorStatus(error?.message || 'Could not load the definition', 'error');
+  }
+}
+
+async function reloadProgrammingDefinition() {
+  const target = programmingEditorTarget;
+  if (!target || !await confirmProgrammingEditorReplacement()) return;
+  if (target.isNew) {
+    setProgrammingEditorValue(target.originalDdl);
+    setProgrammingEditorStatus('Template restored.', 'success');
+    return;
+  }
+  await openProgrammingObject(target.id, target.schema, target.source, { skipDiscardCheck: true, preferredArgs: target.args });
+}
+
+async function validateProgrammingDefinition() {
+  const target = programmingEditorTarget;
+  if (!target || !['function', 'procedure'].includes(target.kind)) return;
+  const button = byId('programming-validate');
+  button.disabled = true;
+  setProgrammingEditorStatus('Validating in a rolled-back transaction…');
+  try {
+    const error = await invoke('validate_function_definition', { id: target.id, ddl: byId('programming-editor').value });
+    setProgrammingEditorStatus(error || 'Definition is valid.', error ? 'error' : 'success');
+  } catch (error) {
+    setProgrammingEditorStatus(error?.message || 'Validation failed', 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function saveProgrammingDefinition() {
+  const target = programmingEditorTarget;
+  if (!target) return;
+  const button = byId('programming-save');
+  const ddl = byId('programming-editor').value;
+  button.disabled = true;
+  setProgrammingEditorStatus('Saving definition…');
+  try {
+    if (target.kind === 'view') await invoke('save_view_definition', { id: target.id, schema: target.schema, name: target.name, ddl });
+    else if (target.kind === 'trigger') await invoke('save_trigger_definition', { id: target.id, ddl });
+    else await invoke('save_function_definition', { id: target.id, ddl });
+    target.originalDdl = ddl;
+    target.deployedDdl = ddl;
+    target.isNew = false;
+    setProgrammingEditorStatus('Definition saved.', 'success');
+    await loadProgrammingObjects(target.id, target.schema);
+  } catch (error) {
+    setProgrammingEditorStatus(error?.message || 'Could not save the definition', 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function newProgrammingDefinition(kind) {
+  const id = byId('programming-connection').value;
+  const schema = byId('programming-schema').value;
+  if (!id || !schema || !await confirmProgrammingEditorReplacement()) return;
+  const isTrigger = kind === 'trigger';
+  setProgrammingEditorTarget({
+    id,
+    schema,
+    name: null,
+    kind,
+    title: `New ${kind} in ${schema}`,
+    source: null,
+    args: null,
+    isNew: true,
+  }, isTrigger ? triggerTemplate(schema) : functionTemplate(schema));
+}
+
+function programmingGithubPath(target = programmingEditorTarget) {
+  if (!target?.name) return null;
+  const folder = { view: 'views', function: 'functions', procedure: 'procedures', trigger: 'triggers' }[target.kind] || `${target.kind}s`;
+  const safe = (part) => String(part).replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'object';
+  const overload = target.args ? `__${safe(target.args)}` : '';
+  return `${safe(target.schema)}/${folder}/${safe(target.name)}${overload}.sql`;
+}
+
+function renderProgrammingGithubBranches() {
+  const branch = byId('programming-github-branch');
+  const base = byId('programming-github-base');
+  const previousBranch = branch.value;
+  const previousBase = base.value;
+  branch.replaceChildren(new Option(githubConnection?.connected ? 'Choose branch' : 'Connect GitHub in Preferences', ''));
+  base.replaceChildren(new Option('Base branch', ''));
+  for (const item of githubBranches) {
+    branch.append(new Option(`${item.name}${item.protected ? ' · protected' : ''}`, item.name));
+    base.append(new Option(item.name, item.name));
+  }
+  const fallback = githubConnection?.default_branch || githubBranches[0]?.name || '';
+  branch.value = githubBranches.some((item) => item.name === previousBranch) ? previousBranch : fallback;
+  base.value = githubBranches.some((item) => item.name === previousBase) ? previousBase : fallback;
+  const ready = Boolean(githubConnection?.connected && githubBranches.length && programmingGithubPath());
+  branch.disabled = !ready;
+  base.disabled = !ready;
+  byId('programming-github-message').disabled = !ready;
+  for (const id of ['programming-github-load', 'programming-github-diff-deployed', 'programming-github-diff-branches', 'programming-github-commit', 'programming-github-pr']) byId(id).disabled = !ready;
+  byId('programming-github-status').textContent = githubConnection?.connected
+    ? `${githubConnection.owner}/${githubConnection.repository}`
+    : 'GitHub not connected';
+}
+
+async function loadProgrammingGithub() {
+  try {
+    if (!githubConnection) githubConnection = await invoke('github_status');
+    if (!githubConnection.connected) {
+      githubBranches = [];
+      renderProgrammingGithubBranches();
+      return;
+    }
+    githubBranches = await invoke('github_branches');
+    renderProgrammingGithubBranches();
+  } catch (error) {
+    githubBranches = [];
+    renderProgrammingGithubBranches();
+    byId('programming-github-status').textContent = error?.message || 'GitHub unavailable';
+  }
+}
+
+function lineDiff(before, after, beforeLabel, afterLabel) {
+  const left = before.replace(/\r\n/g, '\n').split('\n');
+  const right = after.replace(/\r\n/g, '\n').split('\n');
+  let prefix = 0;
+  while (prefix < left.length && prefix < right.length && left[prefix] === right[prefix]) prefix += 1;
+  let suffix = 0;
+  while (suffix < left.length - prefix && suffix < right.length - prefix && left[left.length - 1 - suffix] === right[right.length - 1 - suffix]) suffix += 1;
+  const contextStart = Math.max(0, prefix - 3);
+  const leftEnd = Math.min(left.length, left.length - suffix + 3);
+  const rightEnd = Math.min(right.length, right.length - suffix + 3);
+  const output = [`--- ${beforeLabel}`, `+++ ${afterLabel}`, `@@ -${contextStart + 1},${leftEnd - contextStart} +${contextStart + 1},${rightEnd - contextStart} @@`];
+  for (let index = contextStart; index < prefix; index += 1) output.push(` ${left[index]}`);
+  for (let index = prefix; index < left.length - suffix; index += 1) output.push(`-${left[index]}`);
+  for (let index = prefix; index < right.length - suffix; index += 1) output.push(`+${right[index]}`);
+  for (let index = Math.max(prefix, right.length - suffix); index < rightEnd; index += 1) output.push(` ${right[index]}`);
+  if (before === after) output.push(' No differences.');
+  return output.join('\n');
+}
+
+function showProgrammingGithubDiff(diff) {
+  const panel = byId('programming-github-diff');
+  panel.textContent = diff || 'No differences.';
+  panel.hidden = false;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function loadProgrammingGithubFile() {
+  const target = programmingEditorTarget;
+  const branch = byId('programming-github-branch').value;
+  const path = programmingGithubPath(target);
+  if (!target || !branch || !path || !await confirmProgrammingEditorReplacement()) return;
+  setProgrammingEditorStatus(`Loading ${path} from ${branch}…`);
+  try {
+    const content = await invoke('github_file', { branch, path });
+    if (content === null) throw new Error(`The definition does not exist on branch ${branch}.`);
+    setProgrammingEditorValue(content);
+    target.originalDdl = content;
+    target.activeBranch = branch;
+    setProgrammingEditorStatus(`Loaded from GitHub branch ${branch}.`, 'success');
+  } catch (error) {
+    setProgrammingEditorStatus(error?.message || 'Could not load the GitHub definition', 'error');
+  }
+}
+
+async function diffProgrammingDeployed() {
+  const target = programmingEditorTarget;
+  const branch = byId('programming-github-branch').value;
+  const path = programmingGithubPath(target);
+  if (!target || !branch || !path) return;
+  setProgrammingEditorStatus(`Comparing deployed definition with ${branch}…`);
+  try {
+    const content = await invoke('github_file', { branch, path });
+    showProgrammingGithubDiff(lineDiff(target.deployedDdl, content || '', 'deployed database', `github/${branch}/${path}`));
+    setProgrammingEditorStatus(`Deployed definition compared with ${branch}.`, 'success');
+  } catch (error) {
+    setProgrammingEditorStatus(error?.message || 'Could not compare the deployed definition', 'error');
+  }
+}
+
+async function diffProgrammingBranches() {
+  const head = byId('programming-github-branch').value;
+  const base = byId('programming-github-base').value;
+  if (!head || !base) return;
+  setProgrammingEditorStatus(`Comparing ${base} with ${head}…`);
+  try {
+    showProgrammingGithubDiff(await invoke('github_compare', { base, head }));
+    setProgrammingEditorStatus(`Branches ${base} and ${head} compared.`, 'success');
+  } catch (error) {
+    setProgrammingEditorStatus(error?.message || 'Could not compare branches', 'error');
+  }
+}
+
+async function commitProgrammingGithubFile() {
+  const target = programmingEditorTarget;
+  const branch = byId('programming-github-branch').value;
+  const path = programmingGithubPath(target);
+  const message = value('programming-github-message');
+  if (!target || !branch || !path) return;
+  if (!message) {
+    setProgrammingEditorStatus('Enter a commit message first.', 'error');
+    byId('programming-github-message').focus();
+    return;
+  }
+  setProgrammingEditorStatus(`Committing ${path} to ${branch}…`);
+  try {
+    const url = await invoke('github_commit_file', { branch, path, content: byId('programming-editor').value, message });
+    target.originalDdl = byId('programming-editor').value;
+    target.activeBranch = branch;
+    byId('programming-github-message').value = '';
+    setProgrammingEditorStatus(`Committed to ${branch}. ${url}`, 'success');
+  } catch (error) {
+    setProgrammingEditorStatus(error?.message || 'Could not commit the definition', 'error');
+  }
+}
+
+function openProgrammingPullRequestForm() {
+  const form = byId('programming-github-pr-form');
+  form.hidden = false;
+  const target = programmingEditorTarget;
+  if (!byId('programming-github-pr-title').value) byId('programming-github-pr-title').value = target ? `Update ${target.schema}.${target.name}` : '';
+  byId('programming-github-pr-title').focus();
+}
+
+async function createProgrammingPullRequest(event) {
+  event.preventDefault();
+  const head = byId('programming-github-branch').value;
+  const base = byId('programming-github-base').value;
+  const title = value('programming-github-pr-title');
+  const body = value('programming-github-pr-body');
+  setProgrammingEditorStatus(`Creating pull request from ${head} to ${base}…`);
+  try {
+    const pull = await invoke('github_create_pull_request', { title, body, head, base });
+    byId('programming-github-pr-form').hidden = true;
+    await navigator.clipboard.writeText(pull.html_url);
+    setProgrammingEditorStatus(`Pull request #${pull.number} created. Link copied to clipboard.`, 'success');
+  } catch (error) {
+    setProgrammingEditorStatus(error?.message || 'Could not create the pull request', 'error');
+  }
+}
+
+function programmingGroup(title, objects, id, schema) {
+  const panel = document.createElement('section'); panel.className = 'data-panel programming-group';
+  const heading = document.createElement('div'); heading.className = 'programming-group-heading';
+  const label = document.createElement('h3'); label.textContent = title;
+  const count = document.createElement('span'); count.className = 'badge'; count.textContent = String(objects.length);
+  heading.append(label, count); panel.append(heading);
+  if (!objects.length) {
+    const empty = document.createElement('div'); empty.className = 'empty-state compact'; empty.textContent = `No ${title.toLowerCase()} in this schema`; panel.append(empty); return panel;
+  }
+  for (const object of objects) {
+    const row = document.createElement('article'); row.className = 'programming-object';
+    const detail = document.createElement('div');
+    const name = document.createElement('strong'); name.textContent = object.name;
+    const signature = document.createElement('small'); signature.textContent = object.detail || object.kind;
+    detail.append(name, signature);
+    const actions = document.createElement('div'); actions.className = 'programming-object-actions';
+    const open = document.createElement('button'); open.className = 'button small'; open.type = 'button'; open.textContent = object.kind === 'trigger' ? 'Table' : 'Open';
+    open.addEventListener('click', () => object.kind === 'view' ? openTable(id, schema, object.name, 'view') : openSchemaObject(id, schema, object));
+    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = 'Edit';
+    edit.addEventListener('click', () => void openProgrammingObject(id, schema, object));
+    actions.append(open, edit); row.append(detail, actions); panel.append(row);
+  }
+  return panel;
+}
+
+async function loadProgrammingObjects(id, schema) {
+  const request = ++programmingRequest;
+  const content = byId('programming-content');
+  const status = byId('programming-status');
+  if (!id || !schema) {
+    content.replaceChildren(errorState('Choose a connection and schema', 'Views, functions, procedures and triggers will appear here.'));
+    status.textContent = '';
+    return;
+  }
+  state.selectedConnectionId = id;
+  state.selectedSchema = schema;
+  byId('programming-new-function').disabled = false;
+  byId('programming-new-trigger').disabled = false;
+  content.replaceChildren(errorState('Loading programming objects…', 'Reading views, functions, procedures and triggers.'));
+  status.textContent = `Loading ${schema}…`;
+  try {
+    const [objects, tables] = await Promise.all([
+      invoke('list_schema_objects', { id, schema }),
+      invoke('list_tables', { id, schema }),
+    ]);
+    if (request !== programmingRequest || byId('programming-schema').value !== schema) return;
+    const programming = groupSchemaObjects(objects).programming;
+    const functions = programming.filter((object) => object.kind === 'function');
+    const procedures = programming.filter((object) => object.kind === 'procedure');
+    const triggers = programming.filter((object) => object.kind === 'trigger');
+    const views = tables.filter((object) => object.kind === 'view').map((object) => ({ ...object, detail: formatEstimatedRows(object.estimated_rows) }));
+    content.replaceChildren(
+      programmingGroup('Views', views, id, schema),
+      programmingGroup('Functions', functions, id, schema),
+      programmingGroup('Procedures', procedures, id, schema),
+      programmingGroup('Triggers', triggers, id, schema),
+    );
+    const total = programming.length + views.length;
+    status.textContent = `${total} programming object${total === 1 ? '' : 's'} in ${schema}`;
+  } catch (error) {
+    if (request !== programmingRequest) return;
+    content.replaceChildren(errorState('Programming objects unavailable', 'Check schema permissions and try again.'));
+    status.textContent = error?.message || 'Could not load programming objects';
+  }
+}
+
+async function loadProgrammingSchemas(id) {
+  const request = ++programmingRequest;
+  const schemaSelect = byId('programming-schema');
+  const previous = schemaSelect.value;
+  schemaSelect.replaceChildren(new Option('Select a schema', ''));
+  schemaSelect.disabled = true;
+  byId('programming-new-function').disabled = true;
+  byId('programming-new-trigger').disabled = true;
+  if (!id) {
+    byId('programming-content').replaceChildren(errorState('Choose a connected connection', 'Schemas and programming objects will appear here.'));
+    byId('programming-status').textContent = '';
+    return;
+  }
+  byId('programming-content').replaceChildren(errorState('Loading schemas…', 'Reading the selected database.'));
+  try {
+    const schemas = await invoke('list_schemas', { id });
+    if (request !== programmingRequest || byId('programming-connection').value !== id) return;
+    for (const schema of schemas) schemaSelect.append(new Option(schema.name, schema.name));
+    schemaSelect.disabled = false;
+    const preferred = schemas.some((schema) => schema.name === previous) ? previous : schemas.some((schema) => schema.name === state.selectedSchema) ? state.selectedSchema : schemas[0]?.name || '';
+    schemaSelect.value = preferred;
+    await loadProgrammingObjects(id, preferred);
+  } catch (error) {
+    if (request !== programmingRequest) return;
+    byId('programming-content').replaceChildren(errorState('Schemas unavailable', 'Reconnect and try again.'));
+    byId('programming-status').textContent = error?.message || 'Could not load schemas';
+  }
+}
+
+function openProgramming() {
+  const connection = byId('programming-connection');
+  if (!connection.value && state.connections.some((item) => item.id === state.selectedConnectionId && item.state === 'connected')) connection.value = state.selectedConnectionId;
+  void loadProgrammingSchemas(connection.value);
 }
 
 function tableMaintenancePanel(id, schema, table, detail) {
@@ -1793,17 +2422,17 @@ function returnToExplorer() {
   restoreExplorerState();
 }
 
-async function openTable(id, schema, table) {
+async function openTable(id, schema, table, kind = 'table') {
   rememberExplorerState();
-  switchView('table-detail'); byId('detail-title').textContent = table; byId('detail-eyebrow').textContent = `${schema.toUpperCase()} · TABLE DETAIL`; byId('detail-summary').textContent = 'Loading';
+  switchView('table-detail'); byId('detail-title').textContent = table; byId('detail-eyebrow').textContent = `${schema.toUpperCase()} · ${kind === 'view' ? 'VIEW' : 'TABLE'} DETAIL`; byId('detail-summary').textContent = 'Loading';
   const content = byId('detail-content'); content.replaceChildren(errorState('Loading table detail…', ''));
   try {
     const payload = await invoke('table_detail', { id, schema, table }); const detail = payload.detail; content.replaceChildren(); byId('detail-summary').textContent = `${detail.row_estimate ?? 0} estimated rows`;
-    content.append(tableMaintenancePanel(id, schema, table, detail));
+    if (kind === 'table') content.append(tableMaintenancePanel(id, schema, table, detail));
     content.append(tableDataPanel(id, schema, table));
     content.append(dataPanel('Columns', (detail.columns || []).map((row) => [row.name, `${row.full_type || row.data_type}${row.is_nullable ? '' : ' · NOT NULL'}${row.is_primary_key ? ' · PK' : ''}`])));
     content.append(dataPanel('Constraints', (detail.constraints || []).map((row) => [row.name, `${row.type}: ${row.definition}`])));
-    content.append(dataPanel('Indexes', (detail.indexes || []).map((row) => [row.name, row.definition])));
+    if (kind === 'table') content.append(indexPanel(id, schema, table, detail.indexes || []));
     content.append(foreignKeyMapPanel(id, detail.fk_map || []));
     content.append(dataPanel('Column statistics', (payload.column_stats || []).map((row) => [row.column, `${row.null_frac == null ? '—' : `${(row.null_frac * 100).toFixed(1)}% null`} · ${row.n_distinct == null ? '—' : `${row.n_distinct} distinct`}`])));
     content.append(codePanel('DDL', payload.ddl));
@@ -2219,6 +2848,15 @@ function filterExplorerTree() {
       if (row) row.hidden = !matches; else item.hidden = !matches;
       tableMatches ||= matches;
     }
+    for (const folder of children?.querySelectorAll('.tree-folder') || []) {
+      const hasMatch = [...folder.querySelectorAll('.tree-item')].some((item) => !item.closest('.tree-object-row')?.hidden);
+      folder.hidden = Boolean(query) && !hasMatch;
+      if (query && hasMatch) {
+        folder.querySelector('.tree-folder-children').hidden = false;
+        folder.querySelector('.tree-folder-toggle').setAttribute('aria-expanded', 'true');
+        folder.querySelector('.tree-folder-marker').textContent = '▾';
+      }
+    }
     const loadFailed = group.dataset.loadState === 'error';
     group.hidden = Boolean(query) && !schemaMatches && !tableMatches && !loadFailed;
   }
@@ -2240,6 +2878,47 @@ function explorerSection(children, label) {
   heading.className = 'tree-section-label';
   heading.textContent = label;
   children.append(heading);
+}
+
+function explorerFolder(children, label) {
+  const folder = document.createElement('section'); folder.className = 'tree-folder';
+  const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'tree-folder-toggle'; toggle.setAttribute('aria-expanded', 'true');
+  const labelNode = document.createElement('span'); labelNode.textContent = label;
+  const marker = document.createElement('span'); marker.className = 'tree-folder-marker'; marker.textContent = '▾';
+  toggle.append(marker, labelNode);
+  const content = document.createElement('div'); content.className = 'tree-folder-children';
+  toggle.addEventListener('click', () => {
+    content.hidden = !content.hidden;
+    toggle.setAttribute('aria-expanded', String(!content.hidden));
+    marker.textContent = content.hidden ? '▸' : '▾';
+  });
+  folder.append(toggle, content); children.append(folder); return content;
+}
+
+function appendSchemaObjectRow(parent, id, schemaName, object) {
+  const icons = { function: 'ƒ', procedure: '⚙', sequence: '↗', trigger: '⚡' };
+  const item = document.createElement('button'); item.type = 'button'; item.className = 'tree-item schema-object';
+  const name = document.createElement('span'); name.className = 'tree-item-label'; name.textContent = `${icons[object.kind]} ${object.name}`;
+  const detail = document.createElement('small'); detail.textContent = object.detail || object.kind;
+  item.append(name, detail); item.addEventListener('click', () => openSchemaObject(id, schemaName, object));
+  const row = document.createElement('div'); row.className = 'tree-object-row';
+  if (object.kind === 'sequence') {
+    const next = document.createElement('button'); next.className = 'button small tree-object-action'; next.type = 'button'; next.textContent = 'Next';
+    next.addEventListener('click', () => void advanceSequence(id, schemaName, object.name));
+    const reset = document.createElement('button'); reset.className = 'button small danger tree-object-action'; reset.type = 'button'; reset.textContent = 'Reset';
+    reset.addEventListener('click', () => void resetSequence(id, schemaName, object.name));
+    const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = 'Edit';
+    edit.addEventListener('click', () => editSequenceDefinition(id, schemaName, object));
+    row.append(item, next, reset, edit);
+  } else {
+    const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = 'Edit';
+    edit.addEventListener('click', () => {
+      if (object.kind === 'trigger') void openProgrammingFromExplorer(id, schemaName, object);
+      else void openProgrammingFromExplorer(id, schemaName, object);
+    });
+    row.append(item, edit);
+  }
+  parent.append(row);
 }
 
 function openAdminForConnection(id) {
@@ -2345,10 +3024,10 @@ function renderExplorerTables(id, schemaName, children, tables, objects = []) {
     const estimate = document.createElement('small');
     estimate.textContent = formatEstimatedRows(table.estimated_rows);
     tableItem.append(tableName, estimate);
-    tableItem.addEventListener('click', () => openTable(id, schemaName, table.name));
+    tableItem.addEventListener('click', () => openTable(id, schemaName, table.name, table.kind));
+    const row = document.createElement('div'); row.className = 'tree-table-row';
+    const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = 'Edit';
     if (table.kind === 'table') {
-      const row = document.createElement('div'); row.className = 'tree-table-row';
-      const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = 'Edit';
       edit.addEventListener('click', async () => {
         edit.disabled = true;
         try {
@@ -2363,61 +3042,20 @@ function renderExplorerTables(id, schemaName, children, tables, objects = []) {
           edit.disabled = false;
         }
       });
-      row.append(tableItem, edit); children.append(row);
     } else {
-      children.append(tableItem);
+      edit.addEventListener('click', () => void editViewDefinition(id, schemaName, table.name));
     }
+    row.append(tableItem, edit); children.append(row);
   }
-  const groups = [
-    ['Functions & procedures', ['function', 'procedure'], { function: 'ƒ', procedure: '⚙' }],
-    ['Sequences', ['sequence'], { sequence: '↗' }],
-    ['Triggers', ['trigger'], { trigger: '⚡' }],
-  ];
-  for (const [label, kinds, icons] of groups) {
-    const matching = objects.filter((object) => kinds.includes(object.kind));
-    if (!matching.length) continue;
-    explorerSection(children, label);
-    for (const object of matching) {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'tree-item schema-object';
-      const name = document.createElement('span');
-      name.className = 'tree-item-label';
-      name.textContent = `${icons[object.kind]} ${object.name}`;
-      const detail = document.createElement('small');
-      detail.textContent = object.detail || object.kind;
-      item.append(name, detail);
-      item.addEventListener('click', () => openSchemaObject(id, schemaName, object));
-      if (['sequence', 'function', 'procedure', 'trigger'].includes(object.kind)) {
-        const row = document.createElement('div'); row.className = 'tree-object-row';
-        if (object.kind === 'sequence') {
-          const next = document.createElement('button'); next.className = 'button small tree-object-action'; next.type = 'button'; next.textContent = 'Next';
-          next.addEventListener('click', () => void advanceSequence(id, schemaName, object.name));
-          const reset = document.createElement('button'); reset.className = 'button small danger tree-object-action'; reset.type = 'button'; reset.textContent = 'Reset';
-          reset.addEventListener('click', () => void resetSequence(id, schemaName, object.name));
-          row.append(item, next, reset);
-        } else {
-          const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = 'Edit';
-          edit.addEventListener('click', () => {
-            if (object.kind === 'trigger') {
-              const ddl = (object.definition || '').replace(/^CREATE\s+TRIGGER/i, 'CREATE OR REPLACE TRIGGER');
-              definitionEditorDialog(id, `Trigger · ${schemaName}.${object.name}`, ddl, 'trigger');
-            } else void editFunctionDefinition(id, schemaName, object.name);
-          });
-          row.append(item, edit);
-        }
-        children.append(row);
-      } else {
-        children.append(item);
-      }
-    }
+  const { programming, sequences } = groupSchemaObjects(objects);
+  const programmingArea = explorerFolder(children, 'Programming');
+  if (programming.length) {
+    for (const object of programming) appendSchemaObjectRow(programmingArea, id, schemaName, object);
+  } else {
+    const empty = document.createElement('div'); empty.className = 'tree-folder-empty'; empty.textContent = 'No functions, procedures or triggers'; programmingArea.append(empty);
   }
-  if (!tables.length && !objects.length) {
-    const empty = document.createElement('div');
-    empty.className = 'empty-state';
-    empty.textContent = 'No objects in this schema';
-    children.append(empty);
-  }
+  if (sequences.length) explorerSection(children, 'Sequences');
+  for (const object of sequences) appendSchemaObjectRow(children, id, schemaName, object);
 }
 
 function cancelExplorerSchemaLoad(group, schemaName) {
@@ -2558,9 +3196,10 @@ function switchView(name) {
     button.classList.toggle('active', active);
     if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   }
-  for (const view of ['connections', 'explorer', 'dashboard', 'admin', 'assistant', 'query', 'preferences', 'table-detail', 'erd']) byId(`view-${view}`).hidden = view !== name;
+  for (const view of ['connections', 'explorer', 'programming', 'dashboard', 'admin', 'assistant', 'query', 'preferences', 'table-detail', 'erd']) byId(`view-${view}`).hidden = view !== name;
   byId('page-title').textContent = name === 'preferences' ? 'Preferences' : name[0].toUpperCase() + name.slice(1);
   if (name === 'explorer') renderExplorerConnections();
+  if (name === 'programming') openProgramming();
   if (name === 'dashboard') loadDashboard(byId('dashboard-connection').value);
   if (name === 'admin') loadAdmin(byId('admin-connection').value);
   if (name === 'assistant') loadAssistant(byId('assistant-connection').value);
@@ -2569,6 +3208,7 @@ function switchView(name) {
 const paletteCommands = [
   ['Connections', 'Manage saved PostgreSQL connections', 'connections'],
   ['Explorer', 'Browse schemas and tables', 'explorer'],
+  ['Programming', 'Develop views, functions, procedures and triggers', 'programming'],
   ['Dashboard', 'Inspect database health and metrics', 'dashboard'],
   ['Administration', 'Review activity, locks and extensions', 'admin', null, 'administration'],
   ['Backup & Restore', 'Protect or restore PostgreSQL data', 'admin', null, 'backup'],
@@ -2618,7 +3258,7 @@ async function renderCommandPalette(filter = '') {
       item.append(title, hint);
       item.addEventListener('click', () => {
         closeCommandPalette();
-        if (result.table) openTable(state.selectedConnectionId, result.schema, result.table);
+        if (result.table) openTable(state.selectedConnectionId, result.schema, result.table, result.kind === 'view' ? 'view' : 'table');
         else switchView('explorer');
       });
       list.append(item);
@@ -2823,6 +3463,20 @@ byId('sql-editor').addEventListener('scroll', () => {
   overlay.scrollLeft = byId('sql-editor').scrollLeft;
   hideAutocomplete();
 });
+byId('programming-editor').addEventListener('input', () => {
+  syncProgrammingEditorHighlight();
+  if (programmingEditorIsDirty()) setProgrammingEditorStatus('Unsaved changes.');
+});
+byId('programming-editor').addEventListener('scroll', () => {
+  const overlay = byId('programming-editor-highlight');
+  overlay.scrollTop = byId('programming-editor').scrollTop;
+  overlay.scrollLeft = byId('programming-editor').scrollLeft;
+});
+byId('programming-editor').addEventListener('keydown', (event) => {
+  if (!(event.ctrlKey || event.metaKey)) return;
+  if (event.key.toLowerCase() === 's') { event.preventDefault(); void saveProgrammingDefinition(); }
+  if (event.key === 'Enter') { event.preventDefault(); void validateProgrammingDefinition(); }
+});
 byId('query-connection').addEventListener('change', () => { void completionIndexFor(byId('query-connection').value); });
 document.addEventListener('click', (event) => {
   if (!byId('sql-autocomplete').hidden && !event.target.closest('.sql-editor-wrap')) hideAutocomplete();
@@ -2831,9 +3485,9 @@ byId('open-erd').addEventListener('click', openErd);
 byId('back-to-explorer').addEventListener('click', returnToExplorer);
 byId('new-schema').addEventListener('click', () => void createSchemaFromExplorer());
 byId('new-table').addEventListener('click', () => openCreateTableDialog(state.selectedConnectionId, state.selectedSchema));
-byId('new-function').addEventListener('click', () => definitionEditorDialog(state.selectedConnectionId, `New function · ${state.selectedSchema}`, functionTemplate(state.selectedSchema), 'function'));
+byId('new-function').addEventListener('click', () => void newProgrammingFromExplorer('function'));
 byId('new-sequence').addEventListener('click', () => void createSequenceFromExplorer());
-byId('new-trigger').addEventListener('click', () => openTriggerCreator(state.selectedConnectionId, state.selectedSchema));
+byId('new-trigger').addEventListener('click', () => void newProgrammingFromExplorer('trigger'));
 byId('explorer-filter').addEventListener('input', (event) => {
   state.explorerFilter = event.target.value;
   filterExplorerTree();
@@ -2841,6 +3495,21 @@ byId('explorer-filter').addEventListener('input', (event) => {
 });
 byId('dashboard-connection').addEventListener('change', () => loadDashboard(byId('dashboard-connection').value));
 byId('admin-connection').addEventListener('change', () => loadAdmin(byId('admin-connection').value));
+byId('programming-connection').addEventListener('change', () => void loadProgrammingSchemas(byId('programming-connection').value));
+byId('programming-schema').addEventListener('change', () => void loadProgrammingObjects(byId('programming-connection').value, byId('programming-schema').value));
+byId('programming-new-function').addEventListener('click', () => void newProgrammingDefinition('function'));
+byId('programming-new-trigger').addEventListener('click', () => void newProgrammingDefinition('trigger'));
+byId('programming-back').addEventListener('click', () => void returnToProgrammingBrowser());
+byId('programming-reload').addEventListener('click', () => void reloadProgrammingDefinition());
+byId('programming-validate').addEventListener('click', () => void validateProgrammingDefinition());
+byId('programming-save').addEventListener('click', () => void saveProgrammingDefinition());
+byId('programming-github-load').addEventListener('click', () => void loadProgrammingGithubFile());
+byId('programming-github-diff-deployed').addEventListener('click', () => void diffProgrammingDeployed());
+byId('programming-github-diff-branches').addEventListener('click', () => void diffProgrammingBranches());
+byId('programming-github-commit').addEventListener('click', () => void commitProgrammingGithubFile());
+byId('programming-github-pr').addEventListener('click', openProgrammingPullRequestForm);
+byId('programming-github-pr-cancel').addEventListener('click', () => { byId('programming-github-pr-form').hidden = true; });
+byId('programming-github-pr-form').addEventListener('submit', (event) => void createProgrammingPullRequest(event));
 byId('backup-connection').addEventListener('change', () => { const connection = state.connections.find((item) => item.id === byId('backup-connection').value); if (connection) byId('restore-database').value = connection.database; });
 byId('assistant-connection').addEventListener('change', () => loadAssistant(byId('assistant-connection').value));
 byId('run-backup').addEventListener('click', () => runBackup(false));
@@ -2853,6 +3522,8 @@ byId('send-assistant').addEventListener('click', sendAssistant);
 byId('clear-assistant').addEventListener('click', async () => { const id = byId('assistant-connection').value; if (!id) return; await invoke('clear_assistant_history', { id }); loadAssistant(id); });
 for (const button of document.querySelectorAll('[data-preference-section]')) button.addEventListener('click', () => showPreferenceSection(button.dataset.preferenceSection));
 byId('ai-settings-form').addEventListener('submit', saveAssistantSettings);
+byId('github-settings-form').addEventListener('submit', connectGithub);
+byId('github-disconnect').addEventListener('click', () => void disconnectGithub());
 byId('ai-provider').addEventListener('change', (event) => changeAssistantProvider(event.target.value));
 byId('refresh-ai-models').addEventListener('click', () => void loadAssistantModels());
 byId('save-ai-key').addEventListener('click', () => void saveAssistantKey());

@@ -19,6 +19,7 @@
         <nav>
           <button class="nav-item active" data-icon="↔" data-view="connections" aria-current="page" title="Connections" type="button">Connections</button>
           <button class="nav-item" data-icon="◈" data-view="explorer" title="Explorer" type="button">Explorer</button>
+          <button class="nav-item" data-icon="ƒ" data-view="programming" title="Programming" type="button">Programming</button>
           <button class="nav-item" data-icon="▦" data-view="dashboard" title="Dashboard" type="button">Dashboard</button>
           <button class="nav-item" data-icon="⚙" data-view="admin" title="Administration" type="button">Administration</button>
           <button class="nav-item" data-icon="✦" data-view="assistant" title="Assistant" type="button">Assistant</button>
@@ -93,6 +94,59 @@
             <div class="explorer-layout"><div id="explorer-connections" class="tree-pane"></div><div id="explorer-tree" class="tree-pane tree-content"><div class="empty-state"><strong>Choose a connection</strong><span>Schema objects load on demand.</span></div></div></div>
           </section>
         </section>
+        <section id="view-programming" class="view" hidden>
+          <section class="panel programming-panel">
+            <div class="panel-heading">
+              <div><span class="eyebrow">DATABASE CODE</span><h2>Programming</h2></div>
+              <div class="form-actions programming-controls">
+                <select id="programming-connection" aria-label="Programming connection"><option value="">Select a connected connection</option></select>
+                <select id="programming-schema" aria-label="Programming schema" disabled><option value="">Select a schema</option></select>
+                <button class="button small" id="programming-new-function" type="button" disabled>New function</button>
+                <button class="button small" id="programming-new-trigger" type="button" disabled>New trigger</button>
+              </div>
+            </div>
+            <div id="programming-status" class="form-status" role="status"></div>
+            <div id="programming-browser-screen" class="programming-browser-screen">
+              <div class="programming-browser" aria-label="Database code objects">
+                <div id="programming-content" class="programming-content"><div class="empty-state"><strong>Choose a connection and schema</strong><span>Views, functions, procedures and triggers will appear here.</span></div></div>
+              </div>
+            </div>
+              <section id="programming-editor-screen" class="programming-editor-panel" aria-label="Database code editor" hidden>
+                <div class="programming-editor-heading">
+                  <div class="programming-editor-identity"><button class="button small" id="programming-back" type="button">← Back</button><div><span class="eyebrow" id="programming-editor-kind">CODE EDITOR</span><h3 id="programming-editor-title">Select an object</h3></div></div>
+                  <div class="form-actions">
+                    <button class="button small" id="programming-reload" type="button" disabled>Reload</button>
+                    <button class="button small" id="programming-validate" type="button" disabled>Validate</button>
+                    <button class="button small primary" id="programming-save" type="button" disabled>Save</button>
+                  </div>
+                </div>
+                <div class="programming-github-toolbar">
+                  <span class="badge" id="programming-github-status">GitHub not connected</span>
+                  <label>Open branch<select id="programming-github-branch" disabled><option value="">Connect GitHub in Preferences</option></select></label>
+                  <label>Compare with<select id="programming-github-base" disabled><option value="">Base branch</option></select></label>
+                  <label>Commit message<input id="programming-github-message" disabled placeholder="Update database definition" /></label>
+                  <div class="form-actions">
+                    <button class="button small" id="programming-github-load" type="button" disabled>Load branch</button>
+                    <button class="button small" id="programming-github-diff-deployed" type="button" disabled>Diff deployed</button>
+                    <button class="button small" id="programming-github-diff-branches" type="button" disabled>Diff branches</button>
+                    <button class="button small" id="programming-github-commit" type="button" disabled>Commit</button>
+                    <button class="button small primary" id="programming-github-pr" type="button" disabled>Create PR</button>
+                  </div>
+                </div>
+                <form id="programming-github-pr-form" class="programming-github-pr-form" hidden>
+                  <label>Pull request title<input id="programming-github-pr-title" required placeholder="Describe the database change" /></label>
+                  <label>Description<textarea id="programming-github-pr-body" rows="3" placeholder="Explain the change, rollout and validation"></textarea></label>
+                  <div class="form-actions"><button class="button small" id="programming-github-pr-cancel" type="button">Cancel</button><button class="button small primary" type="submit">Open pull request</button></div>
+                </form>
+                <div class="sql-editor-wrap programming-editor-wrap">
+                  <pre class="sql-editor-highlight" id="programming-editor-highlight" aria-hidden="true"></pre>
+                  <textarea id="programming-editor" spellcheck="false" autocomplete="off" disabled placeholder="Select a view, function, procedure or trigger to edit its definition."></textarea>
+                </div>
+                <div class="programming-editor-footer"><div id="programming-editor-status" class="form-status" role="status">Select an object to start editing.</div><span class="query-hint">Ctrl+S saves. Ctrl+Enter validates functions and procedures.</span></div>
+                <pre id="programming-github-diff" class="github-diff" hidden></pre>
+              </section>
+          </section>
+        </section>
         <section id="view-dashboard" class="view" hidden>
           <section class="panel"><div class="panel-heading"><div><span class="eyebrow">DATABASE OVERVIEW</span><h2>Dashboard</h2></div><select id="dashboard-connection"><option value="">Select a connected connection</option></select></div><div id="dashboard-content" class="dashboard-content"><div class="empty-state"><strong>Choose a connection</strong><span>KPIs and database health load from PostgreSQL.</span></div></div></section>
         </section>
@@ -165,6 +219,7 @@
               <div class="preferences-tabs" role="tablist" aria-label="Preference sections">
                 <button class="preference-tab active" data-preference-section="appearance" type="button" role="tab" aria-selected="true">Appearance</button>
                 <button class="preference-tab" data-preference-section="ai" type="button" role="tab" aria-selected="false">AI Assistant</button>
+                <button class="preference-tab" data-preference-section="github" type="button" role="tab" aria-selected="false">GitHub</button>
                 <button class="preference-tab" data-preference-section="updates" type="button" role="tab" aria-selected="false">Updates</button>
                 <button class="preference-tab" data-preference-section="about" type="button" role="tab" aria-selected="false">About</button>
               </div>
@@ -200,14 +255,29 @@
                   </div>
                   <div id="ai-settings-status" class="form-status" role="status"></div>
                 </section>
+                <section class="preference-section" data-preference-panel="github" hidden>
+                  <span class="eyebrow">SOURCE CONTROL</span><h3>Connect GitHub</h3><p>Version database definitions with branches, diffs, commits and pull requests. The token is stored only in the system Secret Service.</p>
+                  <form id="github-settings-form" class="github-settings-form">
+                    <div class="form-grid">
+                      <label>Owner or organization<input id="github-owner" autocomplete="off" spellcheck="false" placeholder="acme" /></label>
+                      <label>Repository<input id="github-repository" autocomplete="off" spellcheck="false" placeholder="database-code" /></label>
+                      <label>Definitions root path<input id="github-root-path" autocomplete="off" spellcheck="false" placeholder="database/definitions" /></label>
+                      <label>Default base branch<input id="github-default-branch" autocomplete="off" spellcheck="false" placeholder="main" /></label>
+                    </div>
+                    <label>Personal access token<input id="github-token" type="password" autocomplete="new-password" spellcheck="false" placeholder="Fine-grained token with repository access" /></label>
+                    <div class="form-actions"><button class="button primary" id="github-connect" type="submit">Save and connect</button><button class="button danger" id="github-disconnect" type="button">Disconnect</button></div>
+                  </form>
+                  <div id="github-settings-status" class="form-status" role="status"></div>
+                  <p class="preference-note">Recommended token permissions: Contents read/write and Pull requests read/write for the selected repository.</p>
+                </section>
                 <section class="preference-section" data-preference-panel="updates" hidden>
                   <span class="eyebrow">RELEASES</span><h3>Application updates</h3><p>Draco checks the latest published release in the official GitHub repository. Updates are never installed automatically.</p>
                   <label class="check-row preference-check"><input id="check-updates-startup" type="checkbox" checked /> Check for updates when Draco starts</label>
-                  <div class="update-card"><div><strong id="update-title">Draco is ready to check</strong><small id="update-detail">Current version: 2.0.3</small></div><div class="form-actions"><button class="button small" id="copy-release-link" type="button" hidden>Copy release link</button><button class="button primary" id="check-updates" type="button">Check now</button></div></div>
+                  <div class="update-card"><div><strong id="update-title">Draco is ready to check</strong><small id="update-detail">Current version: 2.1.0</small></div><div class="form-actions"><button class="button small" id="copy-release-link" type="button" hidden>Copy release link</button><button class="button primary" id="check-updates" type="button">Check now</button></div></div>
                 </section>
                 <section class="preference-section" data-preference-panel="about" hidden>
                   <div class="about-grid">
-                    <div class="about-copy"><span class="brand-mark about-mark">D</span><span class="eyebrow">POSTGRESQL WORKBENCH</span><h3>Draco <span id="about-version">2.0.3</span></h3><p>A native, open-source workspace for PostgreSQL administration and query development.</p><dl><div><dt>License</dt><dd>GPL-3.0-or-later</dd></div><div><dt>Repository</dt><dd>github.com/britors/Draco</dd></div></dl></div>
+                    <div class="about-copy"><span class="brand-mark about-mark">D</span><span class="eyebrow">POSTGRESQL WORKBENCH</span><h3>Draco <span id="about-version">2.1.0</span></h3><p>A native, open-source workspace for PostgreSQL administration and query development.</p><dl><div><dt>License</dt><dd>GPL-3.0-or-later</dd></div><div><dt>Repository</dt><dd>github.com/britors/Draco</dd></div></dl></div>
                     <div class="donation-card"><span class="eyebrow">SUPPORT DRACO</span><h3>Donate with Pix</h3><p>Scan the QR code or copy the key. Choose any amount and confirm the recipient in your bank app.</p><img class="pix-qr" src="./pix-donation.svg" alt="QR Code for a Pix donation" width="280" height="280" /><div class="form-actions donation-actions"><button class="button small" id="copy-pix-key" type="button">Copy key</button><button class="button primary" id="copy-pix-code" type="button">Copy Pix code</button></div><small id="pix-status" role="status"></small></div>
                   </div>
                 </section>

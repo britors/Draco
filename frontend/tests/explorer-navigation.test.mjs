@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { quoteSqlIdentifier, schemaObjectSql } from '../dist/explorer-navigation.js';
+import { groupSchemaObjects, quoteSqlIdentifier, schemaObjectSql } from '../dist/explorer-navigation.js';
 
 test('PostgreSQL identifiers are quoted before being placed in navigation SQL', () => {
   assert.equal(quoteSqlIdentifier('Mixed Case'), '"Mixed Case"');
@@ -22,4 +22,16 @@ test('routines and sequences open safe SQL templates', () => {
     'SELECT * FROM "app"."item_id_seq";',
   );
   assert.equal(schemaObjectSql('app', { kind: 'trigger', name: 'audit' }), null);
+});
+
+test('programming objects are grouped separately from sequences', () => {
+  const objects = [
+    { kind: 'function', name: 'calculate' },
+    { kind: 'sequence', name: 'items_id_seq' },
+    { kind: 'procedure', name: 'refresh' },
+    { kind: 'trigger', name: 'audit' },
+  ];
+  const grouped = groupSchemaObjects(objects);
+  assert.deepEqual(grouped.programming.map((object) => object.kind), ['function', 'procedure', 'trigger']);
+  assert.deepEqual(grouped.sequences.map((object) => object.kind), ['sequence']);
 });

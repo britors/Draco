@@ -5,7 +5,7 @@ artefato oficial é o app **Tauri 2**.
 
 - Repositório: <https://github.com/britors/Draco>
 - Identificador desktop: `org.lyraos.Draco`
-- Versão do workspace: `2.0.4`
+- Versão do workspace: `2.1.0`
 - Licença: GPL-3.0-or-later
 - Binário oficial: `target/release/draco`
 
@@ -74,8 +74,10 @@ A bridge registrada em `src-tauri/src/main.rs` oferece:
 
 A UI Tauri já cobre browse/edit paginado por PK, criação/alteração visual de
 tabelas (incluindo FK inline e troca de PK), criação de schema/sequence/trigger,
-edição validada de funções/procedures/triggers, edição de roles e jobs e reset
-de sequences. Os DTOs nunca aceitam um lote de `ALTER TABLE` pronto: o serviço
+uma área principal Programming com editor SQL dedicado (sem modal) para
+views/funções/procedures/triggers, GitHub nativo com branches/diffs/commit/PR,
+edição validada desses objetos e de sequences, recriação transacional de índices comuns, edição
+de roles e jobs e reset de sequences. Os DTOs nunca aceitam um lote de `ALTER TABLE` pronto: o serviço
 reconsulta a estrutura atual, valida os campos e reconstrói o diff no Rust.
 Antes de ampliar uma superfície, conferir o contrato em
 `docs/architecture/tauri-application-contract.md` e os comandos registrados em
@@ -167,7 +169,7 @@ colocar a senha no ambiente. A última execução documentada passou contra
 PostgreSQL 18.4, mas ainda não cobre webview instalada, SSH/jump host real nem
 as três APIs de IA.
 
-O workspace, o RPM/OBS e o AppStream estão em `2.0.4`. Releases devem usar uma
+O workspace, o RPM/OBS e o AppStream estão em `2.1.0`. Releases devem usar uma
 tag imutável; nunca reutilizar uma tag nem gerar o tarball de um branch mutável.
 
 ## Documentação que acompanha mudanças

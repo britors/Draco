@@ -89,6 +89,11 @@ O shell inicial em `src-tauri` expõe:
 | `health` | smoke check do backend Rust |
 | `preferences` / `save_preferences` | ler e persistir tema, cor de destaque e checagem automática de atualização |
 | `check_for_updates` | consultar a última release pública no GitHub e comparar com a versão instalada |
+| `github_status` / `connect_github` / `disconnect_github` | configurar repositório e manter o token exclusivamente no Secret Service |
+| `github_branches` / `github_file` | listar branches e ler a definição SQL versionada em uma branch |
+| `github_commit_file` | criar ou atualizar o arquivo da definição na branch selecionada |
+| `github_compare` | obter o diff nativo entre duas branches do repositório |
+| `github_create_pull_request` | abrir um pull request da branch de trabalho para a base selecionada |
 | `list_connections` | listar metadados e estados |
 | `save_connection` / `delete_connection` | persistir metadados sem senha |
 | `connect_stored` / `disconnect` | ciclo de vida usando o Secret Service no backend |
@@ -99,10 +104,14 @@ O shell inicial em `src-tauri` expõe:
 | `list_history` / `delete_history_entry` / `clear_history` | histórico limitado a 50 itens |
 | `list_snippets` / `save_snippet` / `rename_snippet` / `delete_snippet` | snippets nomeados e vinculados à conexão |
 | `list_schemas` / `list_tables` | introspecção lazy do Explorer |
-| `list_schema_objects` | funções, procedures, sequences e triggers por schema |
+| `list_schema_objects` | funções/procedures com assinatura, sequences com definição editável e triggers por schema |
 | `completion_data` | schemas/tabelas/colunas/funções do banco inteiro num round trip, para o autocomplete do Editor SQL |
 | `dashboard` | KPIs, saúde do banco e maiores tabelas |
 | `table_detail` | colunas, constraints, índices, FKs, DDL e estatísticas de coluna |
+| `save_view_definition` | salvar somente `CREATE OR REPLACE VIEW` para a view selecionada |
+| `save_sequence_definition` | salvar somente `ALTER SEQUENCE` para a sequence selecionada |
+| `index_definition` | obter `pg_get_indexdef` de um índice comum pertencente à tabela selecionada |
+| `save_index_definition` | recriar um índice comum com `DROP` + `CREATE INDEX` na mesma transação |
 | `erd` | tabelas e relações de um schema |
 | `admin` | activity e locks |
 | `cancel_activity` | cancelar somente a query de um PID explícito, preservando a sessão |
@@ -133,3 +142,24 @@ link da release para o usuário decidir.
 Erros de driver, Secret Service e operações externas são convertidos para um envelope sem detalhes
 sensíveis antes de serem enviados pelo IPC. Backup/restore não transportam stdout/stderr das
 ferramentas: o resultado contém apenas sucesso, cancelamento e exit code.
+
+## Contrato dos editores de objetos
+
+O frontend oferece Programming como área principal de desenvolvimento do banco, com seleção de
+conexão/schema e acesso direto a views, functions, procedures e triggers. Cada objeto abre uma
+tela dedicada com botão Voltar e o mesmo editor com realce usado no SQL Editor; definições de
+programação não são editadas em modal. Quando o GitHub está conectado em Preferências, a tela
+também oferece branches, leitura/commit do arquivo versionado, diff contra a definição implantada,
+comparação entre branches e criação de pull request. Explorer e
+Administration continuam cobrindo descoberta estrutural e operações de DBA, enquanto o SQL
+Editor permanece responsável pela execução de consultas e scripts.
+
+Os editores de views, sequences e índices não expõem execução SQL genérica. Cada método recebe o
+schema, o objeto selecionado e uma única definição, valida o prefixo e confirma que os
+identificadores do DDL ainda apontam para esse mesmo objeto. O protocolo estendido do PostgreSQL
+rejeita instruções adicionais no mesmo payload.
+
+Índices pertencentes a constraints (`PRIMARY KEY`, `UNIQUE` ou `EXCLUDE`) carregam
+`constraint_name` no detalhe da tabela e não podem ser recriados pelo editor de índices. Para os
+demais, o backend executa o `DROP INDEX` gerado pelo Draco e o `CREATE INDEX` revisado pelo usuário
+na mesma transação; qualquer falha restaura o índice original.

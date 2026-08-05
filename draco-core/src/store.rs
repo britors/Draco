@@ -228,6 +228,25 @@ pub fn patch_settings(f: impl FnOnce(&mut AppSettings)) -> Result<AppSettings> {
     Ok(settings)
 }
 
+// ── GitHub integration ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GithubSettings {
+    pub owner: String,
+    pub repository: String,
+    pub root_path: String,
+    pub default_branch: String,
+}
+
+pub fn get_github_settings() -> GithubSettings {
+    read_toml("github-settings.toml")
+}
+
+pub fn save_github_settings(settings: &GithubSettings) -> Result<()> {
+    write_toml("github-settings.toml", settings)
+}
+
 // ── AI Assistant ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

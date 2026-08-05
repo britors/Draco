@@ -1,4 +1,15 @@
 -------------------------------------------------------------------
+Wed Aug 05 17:35:57 UTC 2026 - rodrigo@w3ti.com.br
+
+- Versão 2.1.0: adicionada a área Programming com editor SQL dedicado para
+  views, functions, procedures e triggers.
+- Integração nativa com GitHub via Secret Service, incluindo branches, leitura
+  e commit de definições, diff com o banco implantado, comparação entre
+  branches e criação de pull requests.
+- Adicionados editores validados para views e sequences e recriação
+  transacional de índices comuns.
+
+-------------------------------------------------------------------
 Wed Aug 05 14:08:49 UTC 2026 - rodrigo@w3ti.com.br
 
 - Versão 2.0.5: corrigido o ícone ausente no desktop Linux.

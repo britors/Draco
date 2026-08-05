@@ -118,15 +118,20 @@ pub struct FunctionInfo {
     pub kind: RoutineKind,
     pub return_type: String,
     pub specific_name: String,
+    pub identity_arguments: String,
 }
 
 pub async fn get_functions(driver: &PostgresDriver, schema: &str) -> Result<Vec<FunctionInfo>> {
     let rows = driver
         .query(
-            "SELECT routine_name, routine_type, data_type, specific_name \
-             FROM information_schema.routines \
-             WHERE routine_schema = $1 AND routine_type IN ('FUNCTION','PROCEDURE') \
-             ORDER BY routine_name",
+            "SELECT p.proname AS routine_name, \
+                    CASE p.prokind WHEN 'p' THEN 'PROCEDURE' ELSE 'FUNCTION' END AS routine_type, \
+                    COALESCE(pg_get_function_result(p.oid), '') AS data_type, \
+                    p.oid::text AS specific_name, \
+                    pg_get_function_identity_arguments(p.oid) AS identity_arguments \
+             FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace \
+             WHERE n.nspname = $1 AND p.prokind IN ('f', 'p') \
+             ORDER BY p.proname, pg_get_function_identity_arguments(p.oid)",
             &[&schema],
         )
         .await?;
@@ -137,6 +142,7 @@ pub async fn get_functions(driver: &PostgresDriver, schema: &str) -> Result<Vec<
             kind: if get_str(r, "routine_type") == "PROCEDURE" { RoutineKind::Procedure } else { RoutineKind::Function },
             return_type: get_str(r, "data_type"),
             specific_name: get_str(r, "specific_name"),
+            identity_arguments: get_str(r, "identity_arguments"),
         })
         .collect())
 }
@@ -277,7 +283,7 @@ pub async fn get_table_estimates(driver: &PostgresDriver, schema: &str) -> Resul
 pub async fn get_table_ddl(driver: &PostgresDriver, schema: &str, table: &str) -> Result<String> {
     let oid_rows = driver
         .query(
-            "SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
+            "SELECT c.oid, c.relkind::text AS relkind FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
              WHERE c.relname = $2 AND n.nspname = $1",
             &[&schema, &table],
         )
@@ -286,6 +292,23 @@ pub async fn get_table_ddl(driver: &PostgresDriver, schema: &str, table: &str) -
         return Ok(format!("-- Table \"{schema}\".\"{table}\" not found"));
     };
     let oid: u32 = oid_row.try_get("oid").unwrap_or(0);
+    let relkind = get_str(oid_row, "relkind");
+    let q_schema = quote_ident(schema);
+    let q_table = quote_ident(table);
+
+    if relkind == "v" {
+        let rows = driver
+            .query("SELECT pg_get_viewdef($1::oid, true) AS definition", &[&oid])
+            .await?;
+        let definition = rows
+            .first()
+            .map(|row| get_str(row, "definition"))
+            .unwrap_or_default();
+        return Ok(format!(
+            "CREATE OR REPLACE VIEW {q_schema}.{q_table} AS\n{};",
+            definition.trim_end_matches(';')
+        ));
+    }
 
     let columns = driver
         .query(
@@ -306,9 +329,6 @@ pub async fn get_table_ddl(driver: &PostgresDriver, schema: &str, table: &str) -
             &[&oid],
         )
         .await?;
-
-    let q_schema = quote_ident(schema);
-    let q_table = quote_ident(table);
 
     let mut lines: Vec<String> = columns
         .iter()
@@ -338,6 +358,7 @@ pub struct IndexInfo {
     pub size: String,
     pub is_unique: bool,
     pub is_primary: bool,
+    pub constraint_name: Option<String>,
 }
 
 pub async fn get_indexes(driver: &PostgresDriver, schema: &str, table: &str) -> Result<Vec<IndexInfo>> {
@@ -345,11 +366,13 @@ pub async fn get_indexes(driver: &PostgresDriver, schema: &str, table: &str) -> 
         .query(
             "SELECT i.relname AS index_name, pg_get_indexdef(ix.indexrelid) AS index_def, \
                     pg_size_pretty(pg_relation_size(ix.indexrelid)) AS index_size, \
-                    ix.indisunique AS is_unique, ix.indisprimary AS is_primary \
+                    ix.indisunique AS is_unique, ix.indisprimary AS is_primary, \
+                    con.conname AS constraint_name \
              FROM pg_index ix \
              JOIN pg_class i ON i.oid = ix.indexrelid \
              JOIN pg_class t ON t.oid = ix.indrelid \
              JOIN pg_namespace n ON n.oid = t.relnamespace \
+             LEFT JOIN pg_constraint con ON con.conindid = ix.indexrelid \
              WHERE n.nspname = $1 AND t.relname = $2 \
              ORDER BY ix.indisprimary DESC, ix.indisunique DESC, i.relname",
             &[&schema, &table],
@@ -363,6 +386,7 @@ pub async fn get_indexes(driver: &PostgresDriver, schema: &str, table: &str) -> 
             size: get_str(r, "index_size"),
             is_unique: get_bool(r, "is_unique"),
             is_primary: get_bool(r, "is_primary"),
+            constraint_name: get_opt_str(r, "constraint_name"),
         })
         .collect())
 }

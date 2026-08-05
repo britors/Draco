@@ -1,7 +1,7 @@
 {
   "name": "draco-tauri-frontend-contracts",
   "private": true,
-  "version": "2.0.5",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "check": "node --check dist/app.js && node --check dist/ai-query-review.js && node --check dist/result-export.js && node --check dist/sql-highlight.js && node --check dist/sql-autocomplete.js && node --check dist/virtual-list.js && node --check dist/explorer-navigation.js && node --check dist/result-columns.js",

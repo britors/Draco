@@ -13,6 +13,7 @@ use std::time::Instant;
 use draco_core::assistant;
 use draco_core::connection::{validate_connection, DbConnection, DbConnectionDraft};
 use draco_core::error::CoreError;
+use draco_core::github;
 use draco_core::manager::{ConnectionManager, ConnectionStatus};
 use draco_core::postgres::backup::{
     DumpFormat, DumpOptions, RestoreOptions, ToolConnection, ToolEvent,
@@ -20,7 +21,8 @@ use draco_core::postgres::backup::{
 use draco_core::postgres::{backup, queries, test_connection_with_ssh, PostgresDriver};
 use draco_core::secrets;
 use draco_core::store;
-pub use draco_core::store::{AccentColor, AppTheme};
+pub use draco_core::github::{GithubBranch, GithubConnection, GithubPullRequest};
+pub use draco_core::store::{AccentColor, AppTheme, GithubSettings};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, watch, Mutex};
 
@@ -38,6 +40,8 @@ pub enum ApplicationError {
     ConnectionNotActive(String),
     #[error("assistant error: {0}")]
     Assistant(String),
+    #[error("github error: {0}")]
+    Github(String),
     #[error("operation error: {0}")]
     Operation(String),
     #[error(transparent)]
@@ -144,6 +148,7 @@ pub struct SchemaObjectView {
     pub name: String,
     pub kind: SchemaObjectKind,
     pub detail: Option<String>,
+    pub identity_arguments: Option<String>,
     pub parent_table: Option<String>,
     pub definition: Option<String>,
 }
@@ -967,7 +972,15 @@ impl Application {
                     queries::RoutineKind::Function => SchemaObjectKind::Function,
                     queries::RoutineKind::Procedure => SchemaObjectKind::Procedure,
                 },
-                detail: (!routine.return_type.is_empty()).then_some(routine.return_type),
+                detail: Some(match routine.kind {
+                    queries::RoutineKind::Function => {
+                        format!("({}) → {}", routine.identity_arguments, routine.return_type)
+                    }
+                    queries::RoutineKind::Procedure => {
+                        format!("({})", routine.identity_arguments)
+                    }
+                }),
+                identity_arguments: Some(routine.identity_arguments),
                 parent_table: None,
                 definition: None,
             })
@@ -975,14 +988,16 @@ impl Application {
         objects.extend(sequences?.into_iter().map(|sequence| SchemaObjectView {
             name: sequence.name,
             kind: SchemaObjectKind::Sequence,
-            detail: None,
+            detail: Some(sequence.detail),
+            identity_arguments: None,
             parent_table: None,
-            definition: None,
+            definition: Some(sequence.definition),
         }));
         objects.extend(triggers?.into_iter().map(|trigger| SchemaObjectView {
             name: trigger.name,
             kind: SchemaObjectKind::Trigger,
             detail: Some(format!("on {}", trigger.table)),
+            identity_arguments: None,
             parent_table: Some(trigger.table),
             definition: Some(trigger.definition),
         }));
@@ -1256,6 +1271,89 @@ impl Application {
         validate_schema_object_name(name, "Sequence")?;
         let (driver, _) = self.connected_driver(id).await?;
         queries::create_sequence(&driver, schema, name).await?;
+        Ok(())
+    }
+
+    pub async fn save_view_definition(
+        &self,
+        id: &str,
+        schema: &str,
+        name: &str,
+        ddl: &str,
+    ) -> Result<()> {
+        validate_schema_object_name(schema, "Schema")?;
+        validate_schema_object_name(name, "View")?;
+        validate_view_ddl(ddl, schema, name)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::save_object_definition(&driver, ddl).await?;
+        Ok(())
+    }
+
+    pub async fn save_sequence_definition(
+        &self,
+        id: &str,
+        schema: &str,
+        name: &str,
+        ddl: &str,
+    ) -> Result<()> {
+        validate_schema_object_name(schema, "Schema")?;
+        validate_schema_object_name(name, "Sequence")?;
+        validate_sequence_ddl(ddl, schema, name)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::save_object_definition(&driver, ddl).await?;
+        Ok(())
+    }
+
+    pub async fn index_definition(
+        &self,
+        id: &str,
+        schema: &str,
+        table: &str,
+        name: &str,
+    ) -> Result<String> {
+        validate_table_name(schema, table)?;
+        validate_schema_object_name(name, "Index")?;
+        let (driver, _) = self.connected_driver(id).await?;
+        let Some((ddl, constraint_name)) =
+            queries::get_index_ddl(&driver, schema, table, name).await?
+        else {
+            return Err(ApplicationError::InvalidInput(
+                "Index was not found".to_string(),
+            ));
+        };
+        if let Some(constraint_name) = constraint_name {
+            return Err(ApplicationError::InvalidInput(format!(
+                "Index is managed by constraint {constraint_name}"
+            )));
+        }
+        Ok(ddl)
+    }
+
+    pub async fn save_index_definition(
+        &self,
+        id: &str,
+        schema: &str,
+        table: &str,
+        name: &str,
+        ddl: &str,
+    ) -> Result<()> {
+        validate_table_name(schema, table)?;
+        validate_schema_object_name(name, "Index")?;
+        validate_index_ddl(ddl, schema, table, name)?;
+        let (driver, _) = self.connected_driver(id).await?;
+        let Some((_, constraint_name)) =
+            queries::get_index_ddl(&driver, schema, table, name).await?
+        else {
+            return Err(ApplicationError::InvalidInput(
+                "Index was not found".to_string(),
+            ));
+        };
+        if let Some(constraint_name) = constraint_name {
+            return Err(ApplicationError::InvalidInput(format!(
+                "Index is managed by constraint {constraint_name}"
+            )));
+        }
+        queries::replace_index_definition(&driver, schema, table, name, ddl).await?;
         Ok(())
     }
 
@@ -1711,6 +1809,70 @@ impl Application {
         assistant::clear_key(provider)
             .await
             .map_err(|error| ApplicationError::Assistant(error.to_string()))
+    }
+
+    pub async fn github_status(&self) -> Result<GithubConnection> {
+        github::status()
+            .await
+            .map_err(|error| ApplicationError::Github(error.to_string()))
+    }
+
+    pub async fn connect_github(
+        &self,
+        settings: GithubSettings,
+        token: &str,
+    ) -> Result<GithubConnection> {
+        github::connect(&settings, token)
+            .await
+            .map_err(|error| ApplicationError::Github(error.to_string()))
+    }
+
+    pub async fn disconnect_github(&self) -> Result<()> {
+        github::clear_token()
+            .await
+            .map_err(|error| ApplicationError::Github(error.to_string()))
+    }
+
+    pub async fn github_branches(&self) -> Result<Vec<GithubBranch>> {
+        github::branches()
+            .await
+            .map_err(|error| ApplicationError::Github(error.to_string()))
+    }
+
+    pub async fn github_file(&self, branch: &str, path: &str) -> Result<Option<String>> {
+        github::file(branch, path)
+            .await
+            .map_err(|error| ApplicationError::Github(error.to_string()))
+    }
+
+    pub async fn github_commit_file(
+        &self,
+        branch: &str,
+        path: &str,
+        content: &str,
+        message: &str,
+    ) -> Result<String> {
+        github::commit_file(branch, path, content, message)
+            .await
+            .map_err(|error| ApplicationError::Github(error.to_string()))
+    }
+
+    pub async fn github_compare(&self, base: &str, head: &str) -> Result<String> {
+        github::compare(base, head)
+            .await
+            .map_err(|error| ApplicationError::Github(error.to_string()))
+    }
+
+    pub async fn github_create_pull_request(
+        &self,
+        title: &str,
+        body: &str,
+        head: &str,
+        base: &str,
+    ) -> Result<GithubPullRequest> {
+        github::create_pull_request(title, body, head, base)
+            .await
+            .map_err(|error| ApplicationError::Github(error.to_string()))
     }
 
     pub fn assistant_history(&self, id: &str) -> Vec<assistant::AiMessage> {
@@ -2313,6 +2475,193 @@ fn build_alter_table_preview(
     })
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct SqlObjectName {
+    schema: Option<String>,
+    name: String,
+}
+
+struct DdlCursor<'a> {
+    input: &'a str,
+    offset: usize,
+}
+
+impl<'a> DdlCursor<'a> {
+    fn new(input: &'a str) -> Self {
+        Self { input, offset: 0 }
+    }
+
+    fn skip_whitespace(&mut self) {
+        while let Some(ch) = self.input[self.offset..].chars().next() {
+            if !ch.is_whitespace() {
+                break;
+            }
+            self.offset += ch.len_utf8();
+        }
+    }
+
+    fn keyword(&mut self, expected: &str) -> bool {
+        self.skip_whitespace();
+        let remaining = &self.input[self.offset..];
+        let Some(candidate) = remaining.get(..expected.len()) else {
+            return false;
+        };
+        if !candidate.eq_ignore_ascii_case(expected) {
+            return false;
+        }
+        if remaining[expected.len()..]
+            .chars()
+            .next()
+            .is_some_and(|ch| ch.is_alphanumeric() || matches!(ch, '_' | '$'))
+        {
+            return false;
+        }
+        self.offset += expected.len();
+        true
+    }
+
+    fn identifier(&mut self) -> Option<String> {
+        self.skip_whitespace();
+        let remaining = &self.input[self.offset..];
+        if remaining.starts_with('"') {
+            self.offset += 1;
+            let mut identifier = String::new();
+            loop {
+                let rest = &self.input[self.offset..];
+                let ch = rest.chars().next()?;
+                self.offset += ch.len_utf8();
+                if ch == '"' {
+                    if self.input[self.offset..].starts_with('"') {
+                        identifier.push('"');
+                        self.offset += 1;
+                    } else {
+                        return Some(identifier);
+                    }
+                } else {
+                    identifier.push(ch);
+                }
+            }
+        }
+
+        let mut end = 0;
+        for (index, ch) in remaining.char_indices() {
+            if ch.is_alphanumeric() || matches!(ch, '_' | '$') {
+                end = index + ch.len_utf8();
+            } else {
+                break;
+            }
+        }
+        if end == 0 {
+            return None;
+        }
+        self.offset += end;
+        Some(remaining[..end].to_ascii_lowercase())
+    }
+
+    fn qualified_name(&mut self) -> Option<SqlObjectName> {
+        let first = self.identifier()?;
+        self.skip_whitespace();
+        if self.input[self.offset..].starts_with('.') {
+            self.offset += 1;
+            Some(SqlObjectName {
+                schema: Some(first),
+                name: self.identifier()?,
+            })
+        } else {
+            Some(SqlObjectName {
+                schema: None,
+                name: first,
+            })
+        }
+    }
+}
+
+fn validate_definition_text<'a>(ddl: &'a str, label: &str) -> Result<&'a str> {
+    let ddl = ddl.trim();
+    if ddl.is_empty() || ddl.len() > 2_097_152 || ddl.contains('\0') {
+        return Err(ApplicationError::InvalidInput(format!(
+            "{label} definition is required and must be at most 2 MiB"
+        )));
+    }
+    Ok(ddl)
+}
+
+fn require_target(
+    target: Option<SqlObjectName>,
+    schema: &str,
+    name: &str,
+    label: &str,
+    require_schema: bool,
+) -> Result<()> {
+    let matches = target.is_some_and(|target| {
+        target.name == name
+            && target
+                .schema
+                .as_deref()
+                .is_none_or(|target_schema| target_schema == schema)
+            && (!require_schema || target.schema.is_some())
+    });
+    if matches {
+        Ok(())
+    } else {
+        Err(ApplicationError::InvalidInput(format!(
+            "The {label} definition must target the selected object"
+        )))
+    }
+}
+
+fn validate_view_ddl(ddl: &str, schema: &str, name: &str) -> Result<()> {
+    let ddl = validate_definition_text(ddl, "View")?;
+    let mut cursor = DdlCursor::new(ddl);
+    if !(cursor.keyword("CREATE")
+        && cursor.keyword("OR")
+        && cursor.keyword("REPLACE")
+        && cursor.keyword("VIEW"))
+    {
+        return Err(ApplicationError::InvalidInput(
+            "Only CREATE OR REPLACE VIEW definitions are accepted".to_string(),
+        ));
+    }
+    require_target(cursor.qualified_name(), schema, name, "view", true)
+}
+
+fn validate_sequence_ddl(ddl: &str, schema: &str, name: &str) -> Result<()> {
+    let ddl = validate_definition_text(ddl, "Sequence")?;
+    let mut cursor = DdlCursor::new(ddl);
+    if !(cursor.keyword("ALTER") && cursor.keyword("SEQUENCE")) {
+        return Err(ApplicationError::InvalidInput(
+            "Only ALTER SEQUENCE definitions are accepted".to_string(),
+        ));
+    }
+    require_target(cursor.qualified_name(), schema, name, "sequence", true)
+}
+
+fn validate_index_ddl(ddl: &str, schema: &str, table: &str, name: &str) -> Result<()> {
+    let ddl = validate_definition_text(ddl, "Index")?;
+    let mut cursor = DdlCursor::new(ddl);
+    if !cursor.keyword("CREATE") {
+        return Err(ApplicationError::InvalidInput(
+            "Only CREATE INDEX definitions are accepted".to_string(),
+        ));
+    }
+    cursor.keyword("UNIQUE");
+    if !cursor.keyword("INDEX") || cursor.keyword("CONCURRENTLY") {
+        return Err(ApplicationError::InvalidInput(
+            "Only transactional CREATE [UNIQUE] INDEX definitions are accepted".to_string(),
+        ));
+    }
+    let index_target = cursor.qualified_name();
+    if !cursor.keyword("ON") {
+        return Err(ApplicationError::InvalidInput(
+            "The index definition must identify its table".to_string(),
+        ));
+    }
+    cursor.keyword("ONLY");
+    let table_target = cursor.qualified_name();
+    require_target(index_target, schema, name, "index", false)?;
+    require_target(table_target, schema, table, "index table", true)
+}
+
 fn validate_function_ddl(ddl: &str) -> Result<()> {
     let ddl = ddl.trim();
     if ddl.is_empty() || ddl.len() > 2_097_152 || ddl.contains('\0') {
@@ -2714,6 +3063,7 @@ mod tests {
             name: "audit_change".to_string(),
             kind: SchemaObjectKind::Trigger,
             detail: Some("on accounts".to_string()),
+            identity_arguments: None,
             parent_table: Some("accounts".to_string()),
             definition: Some("CREATE TRIGGER audit_change".to_string()),
         };
@@ -2965,6 +3315,60 @@ mod tests {
         )
         .is_ok());
         assert!(validate_trigger_ddl("DROP TRIGGER audit ON items").is_err());
+        assert!(validate_view_ddl(
+            "CREATE OR REPLACE VIEW \"app\".\"daily totals\" AS SELECT 1",
+            "app",
+            "daily totals"
+        )
+        .is_ok());
+        assert!(validate_view_ddl(
+            "CREATE OR REPLACE VIEW other.daily_totals AS SELECT 1",
+            "app",
+            "daily_totals"
+        )
+        .is_err());
+        assert!(validate_sequence_ddl(
+            "ALTER SEQUENCE app.items_id_seq INCREMENT BY 2 NO CYCLE",
+            "app",
+            "items_id_seq"
+        )
+        .is_ok());
+        assert!(
+            validate_sequence_ddl("DROP SEQUENCE app.items_id_seq", "app", "items_id_seq").is_err()
+        );
+        assert!(validate_index_ddl(
+            "CREATE UNIQUE INDEX items_slug_idx ON app.items USING btree (slug)",
+            "app",
+            "items",
+            "items_slug_idx"
+        )
+        .is_ok());
+        assert!(validate_index_ddl(
+            "CREATE INDEX CONCURRENTLY items_slug_idx ON app.items (slug)",
+            "app",
+            "items",
+            "items_slug_idx"
+        )
+        .is_err());
+        assert!(validate_index_ddl(
+            "CREATE INDEX other_idx ON app.items (slug)",
+            "app",
+            "items",
+            "items_slug_idx"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn ddl_cursor_unquotes_postgres_identifiers() {
+        let mut cursor = DdlCursor::new("  \"Mixed \"\"Schema\".plain_name ");
+        assert_eq!(
+            cursor.qualified_name(),
+            Some(SqlObjectName {
+                schema: Some("Mixed \"Schema".to_string()),
+                name: "plain_name".to_string(),
+            })
+        );
     }
 
     #[test]

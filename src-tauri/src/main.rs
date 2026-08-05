@@ -5,9 +5,10 @@ use draco_app::{
     AssistantReplyView, BackupFormat, BackupOptionsInput, BrowseTableView, CompletionDataView,
     ConnectionInput, ConnectionView, CreateRoleInput, CreateTableInput, CronJobInput,
     CronJobRunView, CronJobsView, DashboardView, DeleteTableRowInput, ErdView, ExtensionsView,
-    FileAuthorizationPurpose, FunctionDefinitionView, Health, HistoryView, InsertTableRowInput,
-    PreferencesView, QueryResult, QueryStatsView, RestoreOptionsInput, RoleView, SchemaObjectView,
-    SchemaView, SearchResultView, SnippetInput, SnippetView, TableDetailView,
+    FileAuthorizationPurpose, FunctionDefinitionView, GithubBranch, GithubConnection,
+    GithubPullRequest, GithubSettings, Health, HistoryView, InsertTableRowInput, PreferencesView,
+    QueryResult, QueryStatsView, RestoreOptionsInput, RoleView, SchemaObjectView, SchemaView,
+    SearchResultView, SnippetInput, SnippetView, TableDetailView,
     TableMaintenanceOperation, TableView, ToolResultView, TriggerInput, UpdateRoleInput,
     UpdateStatusView, UpdateTableCellInput,
 };
@@ -51,6 +52,10 @@ impl From<ApplicationError> for CommandError {
             ApplicationError::Assistant(_) | ApplicationError::Operation(_) => Self {
                 code: "operation_error",
                 message: "The requested operation could not be completed".to_string(),
+            },
+            ApplicationError::Github(message) => Self {
+                code: "github_error",
+                message,
             },
             // Keep driver, filesystem and Secret Service details out of IPC responses. Detailed
             // diagnostics belong in a bounded, redacted backend diagnostic event later (#111).
@@ -480,6 +485,63 @@ async fn create_sequence(
 }
 
 #[tauri::command]
+async fn save_view_definition(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    name: String,
+    ddl: String,
+) -> Result<(), CommandError> {
+    state
+        .save_view_definition(&id, &schema, &name, &ddl)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn save_sequence_definition(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    name: String,
+    ddl: String,
+) -> Result<(), CommandError> {
+    state
+        .save_sequence_definition(&id, &schema, &name, &ddl)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn index_definition(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    name: String,
+) -> Result<String, CommandError> {
+    state
+        .index_definition(&id, &schema, &table, &name)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn save_index_definition(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    name: String,
+    ddl: String,
+) -> Result<(), CommandError> {
+    state
+        .save_index_definition(&id, &schema, &table, &name, &ddl)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
 async fn create_trigger(
     state: State<'_, Application>,
     id: String,
@@ -819,6 +881,78 @@ async fn cancel_operation(
 }
 
 #[tauri::command]
+async fn github_status(state: State<'_, Application>) -> Result<GithubConnection, CommandError> {
+    state.github_status().await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn connect_github(
+    state: State<'_, Application>,
+    settings: GithubSettings,
+    token: String,
+) -> Result<GithubConnection, CommandError> {
+    state.connect_github(settings, &token).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn disconnect_github(state: State<'_, Application>) -> Result<(), CommandError> {
+    state.disconnect_github().await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn github_branches(
+    state: State<'_, Application>,
+) -> Result<Vec<GithubBranch>, CommandError> {
+    state.github_branches().await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn github_file(
+    state: State<'_, Application>,
+    branch: String,
+    path: String,
+) -> Result<Option<String>, CommandError> {
+    state.github_file(&branch, &path).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn github_commit_file(
+    state: State<'_, Application>,
+    branch: String,
+    path: String,
+    content: String,
+    message: String,
+) -> Result<String, CommandError> {
+    state
+        .github_commit_file(&branch, &path, &content, &message)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn github_compare(
+    state: State<'_, Application>,
+    base: String,
+    head: String,
+) -> Result<String, CommandError> {
+    state.github_compare(&base, &head).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn github_create_pull_request(
+    state: State<'_, Application>,
+    title: String,
+    body: String,
+    head: String,
+    base: String,
+) -> Result<GithubPullRequest, CommandError> {
+    state
+        .github_create_pull_request(&title, &body, &head, &base)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
 fn assistant_settings(state: State<'_, Application>) -> Result<Settings, CommandError> {
     Ok(state.assistant_settings())
 }
@@ -930,6 +1064,10 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             preview_alter_table,
             alter_table,
             create_sequence,
+            save_view_definition,
+            save_sequence_definition,
+            index_definition,
+            save_index_definition,
             create_trigger,
             function_definitions,
             validate_function_definition,
@@ -959,6 +1097,14 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             choose_restore_input,
             run_restore,
             cancel_operation,
+            github_status,
+            connect_github,
+            disconnect_github,
+            github_branches,
+            github_file,
+            github_commit_file,
+            github_compare,
+            github_create_pull_request,
             assistant_settings,
             save_assistant_settings,
             assistant_models,

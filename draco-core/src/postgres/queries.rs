@@ -21,6 +21,7 @@ mod sequences;
 mod roles;
 mod extensions;
 mod function_editor;
+mod object_editor;
 mod cron;
 
 pub use introspection::*;
@@ -38,4 +39,5 @@ pub use sequences::*;
 pub use roles::*;
 pub use extensions::*;
 pub use function_editor::*;
+pub use object_editor::*;
 pub use cron::*;

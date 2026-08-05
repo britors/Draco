@@ -15,3 +15,10 @@ export function schemaObjectSql(schema, object) {
   }
   return null;
 }
+
+export function groupSchemaObjects(objects = []) {
+  return {
+    programming: objects.filter((object) => ['function', 'procedure', 'trigger'].includes(object.kind)),
+    sequences: objects.filter((object) => object.kind === 'sequence'),
+  };
+}

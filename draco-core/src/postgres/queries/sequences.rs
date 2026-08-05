@@ -6,17 +6,46 @@ use super::helpers::*;
 #[derive(Debug, Clone, Serialize)]
 pub struct SequenceInfo {
     pub name: String,
+    pub definition: String,
+    pub detail: String,
 }
 
 pub async fn get_sequences(driver: &PostgresDriver, schema: &str) -> Result<Vec<SequenceInfo>> {
     let rows = driver
         .query(
-            "SELECT relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
-             WHERE c.relkind = 'S' AND n.nspname = $1 ORDER BY relname",
+            "SELECT sequencename AS name, data_type, start_value::text, min_value::text, \
+                    max_value::text, increment_by::text, cycle, cache_size::text, \
+                    last_value::text \
+             FROM pg_sequences WHERE schemaname = $1 ORDER BY sequencename",
             &[&schema],
         )
         .await?;
-    Ok(rows.iter().map(|r| SequenceInfo { name: get_str(r, "name") }).collect())
+    Ok(rows
+        .iter()
+        .map(|r| {
+            let name = get_str(r, "name");
+            let cycle = get_bool(r, "cycle");
+            let last_value = get_opt_str(r, "last_value");
+            SequenceInfo {
+                definition: format!(
+                    "ALTER SEQUENCE {}.{}\n  AS {}\n  INCREMENT BY {}\n  MINVALUE {}\n  MAXVALUE {}\n  START WITH {}\n  CACHE {}\n  {};",
+                    quote_ident(schema),
+                    quote_ident(&name),
+                    get_str(r, "data_type"),
+                    get_str(r, "increment_by"),
+                    get_str(r, "min_value"),
+                    get_str(r, "max_value"),
+                    get_str(r, "start_value"),
+                    get_str(r, "cache_size"),
+                    if cycle { "CYCLE" } else { "NO CYCLE" },
+                ),
+                detail: last_value
+                    .map(|value| format!("last value {value}"))
+                    .unwrap_or_else(|| "value unavailable".to_string()),
+                name,
+            }
+        })
+        .collect())
 }
 
 pub async fn create_sequence(driver: &PostgresDriver, schema: &str, name: &str) -> Result<()> {
