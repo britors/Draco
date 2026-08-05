@@ -8,9 +8,9 @@ use draco_app::{
     FileAuthorizationPurpose, FunctionDefinitionView, GithubBranch, GithubConnection,
     GithubPullRequest, GithubSettings, Health, HistoryView, InsertTableRowInput, PreferencesView,
     QueryResult, QueryStatsView, RestoreOptionsInput, RoleView, SchemaObjectView, SchemaView,
-    SearchResultView, SnippetInput, SnippetView, TableDetailView,
-    TableMaintenanceOperation, TableView, ToolResultView, TriggerInput, UpdateRoleInput,
-    UpdateStatusView, UpdateTableCellInput,
+    SearchResultView, SnippetInput, SnippetView, TableDetailView, TableMaintenanceOperation,
+    TableView, ToolResultView, TriggerInput, UpdateRoleInput, UpdateStatusView,
+    UpdateTableCellInput,
 };
 use draco_core::assistant::{AiMessage, Provider, Settings};
 use serde::{Deserialize, Serialize};
@@ -891,7 +891,10 @@ async fn connect_github(
     settings: GithubSettings,
     token: String,
 ) -> Result<GithubConnection, CommandError> {
-    state.connect_github(settings, &token).await.map_err(Into::into)
+    state
+        .connect_github(settings, &token)
+        .await
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -900,9 +903,7 @@ async fn disconnect_github(state: State<'_, Application>) -> Result<(), CommandE
 }
 
 #[tauri::command]
-async fn github_branches(
-    state: State<'_, Application>,
-) -> Result<Vec<GithubBranch>, CommandError> {
+async fn github_branches(state: State<'_, Application>) -> Result<Vec<GithubBranch>, CommandError> {
     state.github_branches().await.map_err(Into::into)
 }
 

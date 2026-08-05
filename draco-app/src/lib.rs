@@ -14,6 +14,7 @@ use draco_core::assistant;
 use draco_core::connection::{validate_connection, DbConnection, DbConnectionDraft};
 use draco_core::error::CoreError;
 use draco_core::github;
+pub use draco_core::github::{GithubBranch, GithubConnection, GithubPullRequest};
 use draco_core::manager::{ConnectionManager, ConnectionStatus};
 use draco_core::postgres::backup::{
     DumpFormat, DumpOptions, RestoreOptions, ToolConnection, ToolEvent,
@@ -21,7 +22,6 @@ use draco_core::postgres::backup::{
 use draco_core::postgres::{backup, queries, test_connection_with_ssh, PostgresDriver};
 use draco_core::secrets;
 use draco_core::store;
-pub use draco_core::github::{GithubBranch, GithubConnection, GithubPullRequest};
 pub use draco_core::store::{AccentColor, AppTheme, GithubSettings};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, watch, Mutex};
