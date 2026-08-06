@@ -342,12 +342,27 @@ select:not(:disabled):active { background-color: var(--color-surface-raised); }
 .programming-panel.editor-open > .panel-heading, .programming-panel.editor-open > #programming-status { display: none; }
 .programming-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; }
 .programming-editor-identity { display: flex; align-items: center; min-width: 0; gap: 14px; }
+.assistant-heading-identity { display: flex; align-items: center; min-width: 0; gap: 14px; }
 .programming-editor-heading h3 { max-width: 640px; margin: 3px 0 0; overflow: hidden; color: var(--color-text); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 .programming-github-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-top: 16px; padding: 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); }
 .programming-github-toolbar > label { display: grid; min-width: 150px; gap: 5px; color: var(--color-text-subtle); font-size: 10px; text-transform: uppercase; }
 .programming-github-toolbar select { min-width: 160px; padding-block: 7px; }
 .programming-github-toolbar .form-actions { margin-left: auto; }
 .programming-github-pr-form { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(300px, 1.3fr) auto; align-items: end; gap: 12px; margin-top: 10px; padding: 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); }
+.programming-function-form { display: grid; gap: 12px; margin-top: 16px; padding: 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); }
+.programming-function-form[hidden] { display: none; }
+.programming-function-form .object-form-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.programming-function-form .pf-extra-field { grid-column: 1 / -1; }
+.pf-returns-row { display: flex; align-items: center; gap: 6px; }
+.pf-returns-row select { flex: 1; min-width: 0; }
+.function-param-list { display: grid; gap: 8px; }
+.function-param-row { display: grid; grid-template-columns: minmax(110px, .8fr) minmax(130px, 1.1fr) minmax(150px, 1.3fr) minmax(150px, 1.3fr) auto; align-items: end; gap: 8px; padding: 10px; border: 1px solid #292a34; border-radius: 8px; background: #11131a; }
+.function-param-row label { min-width: 0; }
+.function-param-row.return-column-row { grid-template-columns: minmax(160px, 1.4fr) minmax(160px, 1.4fr) auto; }
+.programming-ddl-preview-wrap { display: grid; gap: 6px; margin-top: 12px; }
+.programming-ddl-preview-wrap[hidden] { display: none; }
+.programming-ddl-preview-wrap .object-sql-preview { max-height: 260px; }
+html[data-theme="light"] .function-param-row { border-color: var(--color-border); background: #f8f6f2; }
 .programming-github-pr-form[hidden] { display: none; }
 .programming-github-pr-form label { display: grid; gap: 5px; color: var(--color-text-subtle); font-size: 10px; text-transform: uppercase; }
 .programming-github-pr-form textarea { min-height: 68px; resize: vertical; }

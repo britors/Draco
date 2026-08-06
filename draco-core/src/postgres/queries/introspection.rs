@@ -119,6 +119,10 @@ pub struct FunctionInfo {
     pub return_type: String,
     pub specific_name: String,
     pub identity_arguments: String,
+    /// True when the function/procedure was installed by `CREATE EXTENSION` (`pg_depend`
+    /// records an unconditional `'e'` dependency on it) rather than authored by a user —
+    /// it must be dropped by dropping/altering the extension, never directly.
+    pub is_extension: bool,
 }
 
 pub async fn get_functions(driver: &PostgresDriver, schema: &str) -> Result<Vec<FunctionInfo>> {
@@ -128,7 +132,11 @@ pub async fn get_functions(driver: &PostgresDriver, schema: &str) -> Result<Vec<
                     CASE p.prokind WHEN 'p' THEN 'PROCEDURE' ELSE 'FUNCTION' END AS routine_type, \
                     COALESCE(pg_get_function_result(p.oid), '') AS data_type, \
                     p.oid::text AS specific_name, \
-                    pg_get_function_identity_arguments(p.oid) AS identity_arguments \
+                    pg_get_function_identity_arguments(p.oid) AS identity_arguments, \
+                    EXISTS ( \
+                        SELECT 1 FROM pg_depend d \
+                        WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e' \
+                    ) AS is_extension \
              FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace \
              WHERE n.nspname = $1 AND p.prokind IN ('f', 'p') \
              ORDER BY p.proname, pg_get_function_identity_arguments(p.oid)",
@@ -143,6 +151,7 @@ pub async fn get_functions(driver: &PostgresDriver, schema: &str) -> Result<Vec<
             return_type: get_str(r, "data_type"),
             specific_name: get_str(r, "specific_name"),
             identity_arguments: get_str(r, "identity_arguments"),
+            is_extension: get_bool(r, "is_extension"),
         })
         .collect())
 }

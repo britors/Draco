@@ -604,6 +604,50 @@ async fn save_trigger_definition(
 }
 
 #[tauri::command]
+async fn run_routine(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    name: String,
+    is_procedure: bool,
+    params: Vec<Option<String>>,
+) -> Result<QueryResult, CommandError> {
+    state
+        .run_routine(&id, &schema, &name, is_procedure, params)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn delete_routine(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    name: String,
+    identity_arguments: String,
+    is_procedure: bool,
+) -> Result<(), CommandError> {
+    state
+        .delete_routine(&id, &schema, &name, &identity_arguments, is_procedure)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn delete_trigger(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    name: String,
+) -> Result<(), CommandError> {
+    state
+        .delete_trigger(&id, &schema, &table, &name)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
 async fn erd(
     state: State<'_, Application>,
     id: String,
@@ -1074,6 +1118,9 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             validate_function_definition,
             save_function_definition,
             save_trigger_definition,
+            run_routine,
+            delete_routine,
+            delete_trigger,
             erd,
             admin,
             cancel_activity,
