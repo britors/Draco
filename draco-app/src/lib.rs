@@ -151,6 +151,9 @@ pub struct SchemaObjectView {
     pub identity_arguments: Option<String>,
     pub parent_table: Option<String>,
     pub definition: Option<String>,
+    /// True when PostgreSQL created this object as part of an extension rather than a user
+    /// authoring it directly — the UI must not offer to delete these.
+    pub is_extension: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -983,6 +986,7 @@ impl Application {
                 identity_arguments: Some(routine.identity_arguments),
                 parent_table: None,
                 definition: None,
+                is_extension: routine.is_extension,
             })
             .collect::<Vec<_>>();
         objects.extend(sequences?.into_iter().map(|sequence| SchemaObjectView {
@@ -992,6 +996,7 @@ impl Application {
             identity_arguments: None,
             parent_table: None,
             definition: Some(sequence.definition),
+            is_extension: false,
         }));
         objects.extend(triggers?.into_iter().map(|trigger| SchemaObjectView {
             name: trigger.name,
@@ -1000,6 +1005,7 @@ impl Application {
             identity_arguments: None,
             parent_table: Some(trigger.table),
             definition: Some(trigger.definition),
+            is_extension: trigger.is_extension,
         }));
         Ok(objects)
     }
@@ -1421,6 +1427,52 @@ impl Application {
         validate_trigger_ddl(ddl)?;
         let (driver, _) = self.connected_driver(id).await?;
         queries::save_function(&driver, ddl).await?;
+        Ok(())
+    }
+
+    /// Runs an existing, already-deployed function or procedure with the given IN/INOUT/
+    /// VARIADIC argument values (bound as real query parameters, never interpolated into SQL).
+    pub async fn run_routine(
+        &self,
+        id: &str,
+        schema: &str,
+        name: &str,
+        is_procedure: bool,
+        params: Vec<Option<String>>,
+    ) -> Result<QueryResult> {
+        validate_schema_object_name(schema, "Schema")?;
+        validate_schema_object_name(name, if is_procedure { "Procedure" } else { "Function" })?;
+        let (driver, _) = self.connected_driver(id).await?;
+        let started = Instant::now();
+        let result = queries::call_routine(&driver, schema, name, is_procedure, &params).await?;
+        Ok(QueryResult {
+            columns: result.columns,
+            rows: result.rows,
+            duration_ms: started.elapsed().as_millis() as u64,
+        })
+    }
+
+    pub async fn delete_routine(
+        &self,
+        id: &str,
+        schema: &str,
+        name: &str,
+        identity_arguments: &str,
+        is_procedure: bool,
+    ) -> Result<()> {
+        validate_schema_object_name(schema, "Schema")?;
+        validate_schema_object_name(name, if is_procedure { "Procedure" } else { "Function" })?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::drop_routine(&driver, schema, name, identity_arguments, is_procedure).await?;
+        Ok(())
+    }
+
+    pub async fn delete_trigger(&self, id: &str, schema: &str, table: &str, name: &str) -> Result<()> {
+        validate_schema_object_name(schema, "Schema")?;
+        validate_schema_object_name(table, "Table")?;
+        validate_schema_object_name(name, "Trigger")?;
+        let (driver, _) = self.connected_driver(id).await?;
+        queries::drop_trigger(&driver, schema, table, name).await?;
         Ok(())
     }
 

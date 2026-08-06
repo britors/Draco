@@ -49,6 +49,96 @@ pub async fn call_function(driver: &PostgresDriver, sql: &str) -> Result<Functio
     execute_query(driver, sql).await
 }
 
+fn validate_type_list(value: &str) -> Result<()> {
+    if value.len() > 500
+        || value.contains('\0')
+        || value.contains(';')
+        || value.contains("--")
+        || value.contains("/*")
+        || value.contains("*/")
+        || value.chars().any(char::is_control)
+    {
+        return Err(crate::error::CoreError::Other("Argument type list is invalid".to_string()));
+    }
+    Ok(())
+}
+
+/// Looks up the extension (if any) that owns `schema.name(identity_arguments)` via `pg_depend`'s
+/// `'e'` (extension member) dependency — the same relationship `\dx+` reports. A hit means the
+/// object was installed by `CREATE EXTENSION`, not authored by a user, and must not be dropped
+/// directly (PostgreSQL itself would refuse without `CASCADE`, but we want a clear message
+/// instead of a raw driver error, and to keep the UI from offering the action at all).
+async fn extension_owning_routine(
+    driver: &PostgresDriver,
+    schema: &str,
+    name: &str,
+    identity_arguments: &str,
+) -> Result<Option<String>> {
+    let qualified = format!("{}.{}({})", quote_ident(schema), quote_ident(name), identity_arguments);
+    // `to_regprocedure($1)` rather than `$1::regprocedure`: a direct cast on the parameter makes
+    // Postgres infer $1's type as `regprocedure` (an OID type) itself, which tokio-postgres can't
+    // encode a Rust `String` into ("error serializing parameter 0"). Calling the function instead
+    // resolves $1 to its declared `text` argument type, which `String` serializes fine as.
+    let rows = driver
+        .query(
+            "SELECT e.extname FROM pg_depend d \
+             JOIN pg_extension e ON e.oid = d.refobjid \
+             WHERE d.classid = 'pg_proc'::regclass AND d.deptype = 'e' AND d.objid = to_regprocedure($1)",
+            &[&qualified],
+        )
+        .await?;
+    Ok(rows.first().map(|r| get_str(r, "extname")))
+}
+
+/// Drops a function or procedure. `identity_arguments` is the exact parameter type list
+/// PostgreSQL itself reports via `pg_get_function_identity_arguments` (e.g. `"integer, text"`)
+/// — required so DROP resolves the right overload instead of every overload sharing the name.
+pub async fn drop_routine(
+    driver: &PostgresDriver,
+    schema: &str,
+    name: &str,
+    identity_arguments: &str,
+    is_procedure: bool,
+) -> Result<()> {
+    validate_type_list(identity_arguments)?;
+    let kind = if is_procedure { "PROCEDURE" } else { "FUNCTION" };
+    if let Some(extname) = extension_owning_routine(driver, schema, name, identity_arguments).await? {
+        return Err(crate::error::CoreError::Other(format!(
+            "\"{name}\" was installed by the \"{extname}\" extension and can't be dropped directly. Drop or alter the extension instead."
+        )));
+    }
+    let qualified = format!("{}.{}", quote_ident(schema), quote_ident(name));
+    let sql = format!("DROP {kind} {qualified}({identity_arguments})");
+    driver.query(&sql, &[]).await?;
+    Ok(())
+}
+
+/// Runs an existing function/procedure with caller-supplied arguments, bound as real `$N`
+/// parameters (never interpolated into the SQL text) so a value like `1); DROP TABLE x; --`
+/// is just a literal text argument, not executable SQL. `params` covers only the IN/INOUT/
+/// VARIADIC positions in call order — OUT-only parameters aren't passed by the caller in
+/// PostgreSQL's own call syntax, so the UI must already have filtered those out.
+pub async fn call_routine(
+    driver: &PostgresDriver,
+    schema: &str,
+    name: &str,
+    is_procedure: bool,
+    params: &[Option<String>],
+) -> Result<FunctionTestResult> {
+    let placeholders: Vec<String> = (1..=params.len()).map(|i| format!("${i}")).collect();
+    let qualified = format!("{}.{}", quote_ident(schema), quote_ident(name));
+    let sql = if is_procedure {
+        format!("CALL {}({})", qualified, placeholders.join(", "))
+    } else {
+        format!("SELECT * FROM {}({})", qualified, placeholders.join(", "))
+    };
+    let values: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
+        params.iter().map(|value| value as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
+    let rows = driver.query(&sql, &values).await?;
+    let columns = rows.first().map(|r| r.columns().iter().map(|c| c.name().to_string()).collect()).unwrap_or_default();
+    Ok(FunctionTestResult { columns, rows: rows.iter().map(row_to_json_map).collect() })
+}
+
 /// Result shape shared by the SQL query editor and the function tester — same "run arbitrary
 /// SQL, get columns + rows back" operation either way.
 pub type QueryResult = FunctionTestResult;

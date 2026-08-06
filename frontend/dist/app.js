@@ -5,6 +5,7 @@ import { visibleRange } from './virtual-list.js';
 import { groupSchemaObjects, schemaObjectSql } from './explorer-navigation.js';
 import { clampResultColumnWidth } from './result-columns.js';
 import { AI_QUERY_REVIEW_FOCUSES, buildAiQueryReviewMessage } from './ai-query-review.js';
+import { assembleFunctionDdl, formatFunctionParameters, parseFunctionParameters, sliceFunctionDdl } from './function-ddl.js';
 
 const invoke = window.__TAURI__?.core?.invoke;
 const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
@@ -13,6 +14,12 @@ let dialogResolver = null;
 let aiReviewRequest = null;
 let aiReviewReturnFocus = null;
 let aiReviewFocus = 'general';
+// Set right before switchView('assistant') by every "jump to the Assistant from elsewhere"
+// entry point (Review with AI from the SQL/Programming editors, "Ask assistant" on a query
+// stat) so the Assistant page can offer a way back to wherever the user actually came from.
+// Cleared whenever the user navigates to Assistant directly via the sidebar/topbar nav instead.
+let assistantReturnView = null;
+const ASSISTANT_BACK_LABELS = { query: '← Back to SQL Editor', programming: '← Back to Programming', admin: '← Back to Administration' };
 
 const PIX_KEY = 'britors@live.com';
 const PIX_COPY_AND_PASTE = '00020126380014BR.GOV.BCB.PIX0116britors@live.com5204000053039865802BR5906BRITOR6009SAO PAULO62070503***63044B68';
@@ -367,6 +374,11 @@ function setProgrammingEditorValue(text) {
 const completionCache = new Map();
 let autocompleteItems = [];
 let autocompleteActive = 0;
+// Which editor/popup pair the suggestions currently on screen belong to — the SQL editor and
+// the Programming body editor each have their own popup (they live in different, mutually
+// hidden views) but share this same selection/accept machinery.
+let autocompleteEditor = null;
+let autocompletePopup = null;
 
 async function completionIndexFor(id) {
   if (!id) return buildCompletionIndex(null);
@@ -382,14 +394,15 @@ async function completionIndexFor(id) {
 }
 
 function hideAutocomplete() {
-  const popup = byId('sql-autocomplete');
-  popup.hidden = true;
-  popup.replaceChildren();
+  if (autocompletePopup) { autocompletePopup.hidden = true; autocompletePopup.replaceChildren(); }
   autocompleteItems = [];
+  autocompleteEditor = null;
+  autocompletePopup = null;
 }
 
 function setActiveSuggestion(index) {
-  const popup = byId('sql-autocomplete');
+  const popup = autocompletePopup;
+  if (!popup) return;
   const options = [...popup.querySelectorAll('.sql-suggestion')];
   options.forEach((option, i) => {
     option.classList.toggle('active', i === index);
@@ -401,14 +414,15 @@ function setActiveSuggestion(index) {
 
 function acceptSuggestion(index = autocompleteActive) {
   const suggestion = autocompleteItems[index];
-  if (!suggestion) return;
-  const editor = byId('sql-editor');
+  const editor = autocompleteEditor;
+  if (!suggestion || !editor) return;
   const { text, caret } = applySuggestion(editor.value, editor.selectionStart, suggestion);
   editor.value = text;
   editor.setSelectionRange(caret, caret);
-  syncEditorHighlight();
-  saveCurrentQueryTab();
+  const isProgrammingEditor = editor === byId('programming-editor');
   hideAutocomplete();
+  if (isProgrammingEditor) { syncProgrammingEditorHighlight(); notifyProgrammingFormChanged(); }
+  else { syncEditorHighlight(); saveCurrentQueryTab(); }
   editor.focus();
 }
 
@@ -438,10 +452,11 @@ function caretPixelPosition(textarea, offset) {
   return { top: offsetTop + lineHeight - textarea.scrollTop, left: offsetLeft - textarea.scrollLeft };
 }
 
-function renderAutocomplete(items, position) {
+function renderAutocomplete(items, position, editor, popup) {
   autocompleteItems = items;
   autocompleteActive = 0;
-  const popup = byId('sql-autocomplete');
+  autocompleteEditor = editor;
+  autocompletePopup = popup;
   popup.replaceChildren();
   items.forEach((item, index) => {
     const option = document.createElement('li');
@@ -464,13 +479,20 @@ function renderAutocomplete(items, position) {
   popup.style.left = `${position.left}px`;
 }
 
-async function updateAutocomplete() {
-  const editor = byId('sql-editor');
+async function updateAutocompleteFor(editor, popup, connectionId) {
   if (editor.selectionStart !== editor.selectionEnd) { hideAutocomplete(); return; }
-  const index = await completionIndexFor(byId('query-connection').value);
+  const index = await completionIndexFor(connectionId);
   const suggestions = suggest(index, editor.value, editor.selectionStart);
   if (!suggestions.length) { hideAutocomplete(); return; }
-  renderAutocomplete(suggestions, caretPixelPosition(editor, editor.selectionStart));
+  renderAutocomplete(suggestions, caretPixelPosition(editor, editor.selectionStart), editor, popup);
+}
+
+async function updateAutocomplete() {
+  await updateAutocompleteFor(byId('sql-editor'), byId('sql-autocomplete'), byId('query-connection').value);
+}
+
+async function updateProgrammingAutocomplete() {
+  await updateAutocompleteFor(byId('programming-editor'), byId('programming-sql-autocomplete'), programmingEditorTarget?.id);
 }
 
 function saveCurrentQueryTab() {
@@ -946,36 +968,60 @@ function closeAiReviewDialog({ restoreFocus = true } = {}) {
   aiReviewReturnFocus = null;
 }
 
-function openAiReviewDialog() {
-  const connectionId = byId('query-connection').value;
-  const sql = selectedQueryText().trim();
-  if (!connectionId) { byId('query-status').textContent = 'Select a connected connection'; return; }
-  if (!sql) { byId('query-status').textContent = 'Write a query before reviewing it with AI'; return; }
-  saveCurrentQueryTab();
-  aiReviewRequest = { connectionId, sql };
+/** Shared by the SQL editor's and the Programming editor's "Review with AI" entry points. */
+function openAiReviewDialogFor(connectionId, sql, title, returnView) {
+  aiReviewRequest = { connectionId, sql, returnView };
   aiReviewReturnFocus = document.activeElement;
   setAiReviewFocus('general');
+  byId('ai-review-title').textContent = title;
   byId('ai-review-query-preview').textContent = sql;
   byId('ai-review-note').value = '';
   byId('ai-review-dialog').hidden = false;
   window.setTimeout(() => document.querySelector('[data-ai-review-focus="general"]')?.focus(), 0);
 }
 
+function openAiReviewDialog() {
+  const connectionId = byId('query-connection').value;
+  const sql = selectedQueryText().trim();
+  if (!connectionId) { byId('query-status').textContent = 'Select a connected connection'; return; }
+  if (!sql) { byId('query-status').textContent = 'Write a query before reviewing it with AI'; return; }
+  saveCurrentQueryTab();
+  openAiReviewDialogFor(connectionId, sql, 'Review query with AI', 'query');
+}
+
+function openProgrammingAiReviewDialog() {
+  const target = programmingEditorTarget;
+  if (!target?.id) { setProgrammingEditorStatus('Select a connected connection', 'error'); return; }
+  let ddl;
+  try { ddl = currentProgrammingDdl().trim(); }
+  catch (error) { setProgrammingEditorStatus(error?.message || 'Complete the required fields before reviewing it with AI', 'error'); return; }
+  if (!ddl) { setProgrammingEditorStatus('Write a definition before reviewing it with AI', 'error'); return; }
+  openAiReviewDialogFor(target.id, ddl, `Review this ${target.kind} with AI`, 'programming');
+}
+
+function goToAssistant(returnView) {
+  assistantReturnView = returnView;
+  const back = byId('assistant-back');
+  back.hidden = !returnView;
+  back.textContent = ASSISTANT_BACK_LABELS[returnView] || '← Back';
+  switchView('assistant');
+}
+
 async function submitAiReview() {
   if (!aiReviewRequest) return;
-  const { connectionId, sql } = aiReviewRequest;
+  const { connectionId, sql, returnView } = aiReviewRequest;
   const message = buildAiQueryReviewMessage(aiReviewFocus, sql, byId('ai-review-note').value);
   closeAiReviewDialog({ restoreFocus: false });
   byId('assistant-connection').value = connectionId;
   byId('assistant-message').value = message;
-  switchView('assistant');
+  goToAssistant(returnView);
   await sendAssistant();
 }
 
 async function askAssistantAboutQueryStat(id, queryStat) {
   byId('assistant-connection').value = id;
   byId('assistant-message').value = `Analyze this query for performance. pg_stat_statements recorded ${queryStat.calls} calls, ${queryStat.mean_exec_ms.toFixed(1)} ms mean execution time, ${queryStat.total_exec_ms.toFixed(1)} ms total execution time, and ${queryStat.rows} rows returned in total.\n\n\`\`\`sql\n${queryStat.query}\n\`\`\``;
-  switchView('assistant');
+  goToAssistant('admin');
   await sendAssistant();
 }
 
@@ -1106,6 +1152,7 @@ function objectDialog(title) {
 }
 
 const TABLE_COLUMN_TYPES = ['text', 'varchar(255)', 'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'boolean', 'numeric(10,2)', 'real', 'double precision', 'date', 'timestamp with time zone', 'uuid', 'jsonb'];
+byId('pg-type-suggestions').append(...TABLE_COLUMN_TYPES.map((type) => new Option(type, type)));
 
 function checkboxControl(labelText, checked = false) {
   const label = document.createElement('label'); label.className = 'check-row';
@@ -1266,10 +1313,6 @@ function openTriggerCreator(id, schema, onCreated = null) {
   dialog.actions.append(create);
 }
 
-function functionTemplate(schema) {
-  return `CREATE OR REPLACE FUNCTION ${quotePreviewIdentifier(schema)}.${quotePreviewIdentifier('function_name')}()\nRETURNS void\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  -- function body\nEND;\n$$;`;
-}
-
 function triggerTemplate(schema) {
   return `CREATE OR REPLACE TRIGGER ${quotePreviewIdentifier('trigger_name')}\nBEFORE INSERT ON ${quotePreviewIdentifier(schema)}.${quotePreviewIdentifier('table_name')}\nFOR EACH ROW\nEXECUTE FUNCTION ${quotePreviewIdentifier(schema)}.${quotePreviewIdentifier('function_name')}();`;
 }
@@ -1363,8 +1406,262 @@ async function editIndexDefinition(id, schema, table, name) {
 let programmingRequest = 0;
 let programmingEditorTarget = null;
 
+// New/opened functions and procedures are edited as structured fields (schema, name,
+// parameters, returns, language) plus a body-only code editor instead of one free-text
+// DDL blob. `sliceFunctionDdl` splits an existing definition into that shape and verifies
+// its own work by reassembling it; when it can't confidently do that (unusual formatting,
+// LANGUAGE C, etc.) `target.structured` stays false and the editor falls back to holding
+// the full DDL exactly like views and triggers always have.
+// plpgsql (the default language) requires a BEGIN...END block — a bare SQL statement is not
+// a valid plpgsql body on its own. RETURN QUERY is the usual way to produce rows for a
+// SETOF/TABLE(...) return type; a scalar return uses a plain RETURN instead.
+const FUNCTION_TEMPLATE_BODY = '\nBEGIN\n  -- for SETOF/TABLE(...) returns: RETURN QUERY SELECT ...;\n  -- for a scalar/void return: RETURN ...; (or omit RETURN for void)\nEND;\n';
+
+function defaultFunctionHeader(kind, schema) {
+  const isProcedure = kind === 'procedure';
+  return { kind: isProcedure ? 'procedure' : 'function', schema: schema || null, name: '', params: [], returns: isProcedure ? null : 'void', language: 'plpgsql', extra: '', tag: null };
+}
+
+function refreshProgrammingDdlPreview() {
+  const wrap = byId('programming-ddl-preview-wrap');
+  const target = programmingEditorTarget;
+  if (!target?.structured) { wrap.hidden = true; byId('programming-ddl-preview').textContent = ''; return; }
+  wrap.hidden = false;
+  try { byId('programming-ddl-preview').textContent = currentProgrammingDdl(); }
+  catch (error) { byId('programming-ddl-preview').textContent = `-- ${error?.message || 'Complete the required fields to preview the assembled SQL'}`; }
+}
+
+function notifyProgrammingFormChanged() {
+  if (programmingEditorIsDirty()) setProgrammingEditorStatus('Unsaved changes.');
+  refreshProgrammingDdlPreview();
+}
+
+function functionParamRow(initial = {}) {
+  const row = document.createElement('div'); row.className = 'function-param-row';
+  const mode = selectInput(['', 'IN', 'OUT', 'INOUT', 'VARIADIC'], initial.mode || ''); mode.className = 'pf-param-mode';
+  const name = textInput(initial.name || '', 'param_name'); name.className = 'pf-param-name';
+  const type = textInput(initial.type || '', 'integer'); type.className = 'pf-param-type';
+  const defaultValue = textInput(initial.default || '', 'default expression'); defaultValue.className = 'pf-param-default';
+  const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = 'Remove';
+  remove.addEventListener('click', () => { row.remove(); notifyProgrammingFormChanged(); });
+  row.append(labeledControl('Mode', mode), labeledControl('Name', name), labeledControl('Type', type), labeledControl('Default', defaultValue), remove);
+  return row;
+}
+
+// The Returns field is a kind selector (void/record/trigger need nothing else; a scalar
+// type, SETOF <type> and TABLE(columns) need a complement) plus a "…" button that opens a
+// small picker for that complement. `#pf-returns` (hidden) always holds the actual raw
+// PostgreSQL RETURNS clause text — the kind select and detail button are just a friendlier
+// way to edit it. classifyReturns/composeReturns convert between the two representations.
+function classifyReturns(returns) {
+  const raw = (returns || 'void').trim();
+  const lower = raw.toLowerCase();
+  if (!raw || lower === 'void') return { kind: 'void', detail: '' };
+  if (lower === 'record') return { kind: 'record', detail: '' };
+  if (lower === 'trigger') return { kind: 'trigger', detail: '' };
+  const setofMatch = raw.match(/^SETOF\s+([\s\S]+)$/i);
+  if (setofMatch) return { kind: 'setof', detail: setofMatch[1].trim() };
+  const tableMatch = raw.match(/^TABLE\s*\(([\s\S]*)\)$/i);
+  if (tableMatch) return { kind: 'table', detail: tableMatch[1].trim() };
+  return { kind: 'scalar', detail: raw };
+}
+
+function composeReturns(kind, detail) {
+  if (kind === 'scalar') return detail || 'integer';
+  if (kind === 'setof') return `SETOF ${detail || 'text'}`;
+  if (kind === 'table') return `TABLE(${detail})`;
+  return kind;
+}
+
+function syncPfReturnsDetailButton() {
+  const kind = byId('pf-returns-kind').value;
+  const button = byId('pf-returns-detail');
+  button.hidden = !['scalar', 'setof', 'table'].includes(kind);
+  button.textContent = kind === 'table' ? 'Columns…' : '…';
+}
+
+function setPfReturnsFromKind(kind, detail) {
+  byId('pf-returns-kind').value = kind;
+  byId('pf-returns').value = composeReturns(kind, detail);
+  syncPfReturnsDetailButton();
+}
+
+/**
+ * A "pick a PostgreSQL type" control: a select preloaded with the same common types offered
+ * for table columns, plus an "Other…" option that reveals a free-text field for anything not
+ * on the list (arrays, precision types, extension types, etc.). Shared by the scalar/SETOF
+ * return-type picker and each row of the return-table column editor.
+ */
+// A free-text type field with native browser autocomplete (via <datalist>) instead of a rigid
+// <select>: presets like "varchar(255)" or "numeric(10,2)" are offered as suggestions but stay
+// fully editable, so the length/precision can be changed without an escape-hatch "Other…" step.
+function typeTextControl(initial, placeholder = 'integer') {
+  const input = textInput(initial || '', placeholder);
+  input.setAttribute('list', 'pg-type-suggestions');
+  input.setAttribute('autocapitalize', 'off');
+  return { input, value: () => input.value.trim() };
+}
+
+function openReturnTypeDialog(initial, onApply) {
+  const dialog = objectDialog('Return type');
+  const type = typeTextControl(initial);
+  dialog.body.append(labeledControl('Type', type.input));
+  const apply = document.createElement('button'); apply.className = 'button primary'; apply.type = 'button'; apply.textContent = 'Apply';
+  apply.addEventListener('click', () => {
+    const value = type.value();
+    if (!value) { dialog.status.textContent = 'Enter a type'; return; }
+    onApply(value);
+    dialog.close();
+  });
+  dialog.actions.append(apply);
+}
+
+function returnColumnRow(initial = {}) {
+  const row = document.createElement('div'); row.className = 'function-param-row return-column-row';
+  const name = textInput(initial.name || '', 'column_name'); name.className = 'rc-name';
+  const type = typeTextControl(initial.type || ''); type.input.classList.add('rc-type');
+  const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = 'Remove';
+  remove.addEventListener('click', () => row.remove());
+  row.append(labeledControl('Column', name), labeledControl('Type', type.input), remove);
+  return row;
+}
+
+function readReturnColumnRow(row) {
+  return {
+    mode: null,
+    name: row.querySelector('.rc-name').value.trim() || null,
+    type: row.querySelector('.rc-type').value.trim(),
+    default: null,
+  };
+}
+
+function openReturnTableDialog(initialRaw, onApply) {
+  const dialog = objectDialog('Return table columns');
+  const list = document.createElement('div'); list.className = 'function-param-list';
+  const initialColumns = initialRaw ? parseFunctionParameters(initialRaw) : [];
+  list.append(...(initialColumns.length ? initialColumns : [{ name: '', type: '' }]).map((column) => returnColumnRow(column)));
+  const add = document.createElement('button'); add.className = 'button small'; add.type = 'button'; add.textContent = 'Add column';
+  add.addEventListener('click', () => list.append(returnColumnRow()));
+  dialog.body.append(list, add);
+  const apply = document.createElement('button'); apply.className = 'button primary'; apply.type = 'button'; apply.textContent = 'Apply';
+  apply.addEventListener('click', () => {
+    const columns = [...list.children].map(readReturnColumnRow);
+    if (!columns.length || columns.some((column) => !column.name || !column.type)) { dialog.status.textContent = 'Every column needs a name and a type'; return; }
+    onApply(formatFunctionParameters(columns));
+    dialog.close();
+  });
+  dialog.actions.append(apply);
+}
+
+function openPfReturnsDetailDialog() {
+  const kind = byId('pf-returns-kind').value;
+  const current = classifyReturns(value('pf-returns'));
+  if (kind === 'table') {
+    openReturnTableDialog(current.detail, (raw) => { setPfReturnsFromKind('table', raw); notifyProgrammingFormChanged(); });
+  } else {
+    openReturnTypeDialog(current.detail, (type) => { setPfReturnsFromKind(kind, type); notifyProgrammingFormChanged(); });
+  }
+}
+
+function renderProgrammingFunctionForm(target) {
+  const container = byId('programming-function-form');
+  if (!target || !target.structured) { container.hidden = true; byId('pf-params').replaceChildren(); return; }
+  container.hidden = false;
+  const header = target.header || defaultFunctionHeader(target.kind, target.schema);
+
+  const schemaSelect = byId('pf-schema');
+  const schemaOptions = [...byId('programming-schema').options].map((option) => option.value).filter(Boolean);
+  if (header.schema && !schemaOptions.includes(header.schema)) schemaOptions.push(header.schema);
+  schemaSelect.replaceChildren(...schemaOptions.map((schema) => new Option(schema, schema)));
+  schemaSelect.value = header.schema || byId('programming-schema').value || '';
+
+  byId('pf-name').value = header.name || '';
+
+  byId('pf-returns-field').hidden = header.kind === 'procedure';
+  const returnsInfo = classifyReturns(header.returns);
+  setPfReturnsFromKind(returnsInfo.kind, returnsInfo.detail);
+
+  const languageSelect = byId('pf-language');
+  const customInput = byId('pf-language-custom');
+  const known = [...languageSelect.options].some((option) => option.value === header.language);
+  languageSelect.value = known ? header.language : '__custom__';
+  customInput.hidden = known;
+  customInput.value = known ? '' : (header.language || '');
+
+  byId('pf-extra').value = header.extra || '';
+
+  byId('pf-params').replaceChildren(...header.params.map((param) => functionParamRow(param)));
+}
+
+function functionFormLanguageValue() {
+  const select = byId('pf-language');
+  return select.value === '__custom__' ? value('pf-language-custom') : select.value;
+}
+
+/** Reads the structured header fields back out of the DOM (the live source of truth while editing). */
+function readFunctionFormHeader() {
+  const schema = value('pf-schema');
+  const name = value('pf-name');
+  if (!schema || !name) throw new Error('Schema and name are required');
+  const params = [...byId('pf-params').children].map((row) => ({
+    mode: row.querySelector('.pf-param-mode').value || null,
+    name: row.querySelector('.pf-param-name').value.trim() || null,
+    type: row.querySelector('.pf-param-type').value.trim(),
+    default: row.querySelector('.pf-param-default').value.trim() || null,
+  }));
+  if (params.some((param) => !param.type)) throw new Error('Every parameter needs a type');
+  const kind = programmingEditorTarget?.kind === 'procedure' ? 'procedure' : 'function';
+  return {
+    kind,
+    schema,
+    name,
+    params,
+    returns: kind === 'function' ? (value('pf-returns') || 'void') : null,
+    language: functionFormLanguageValue() || 'plpgsql',
+    extra: value('pf-extra'),
+    tag: programmingEditorTarget?.header?.tag || null,
+  };
+}
+
+/** Populates the editor (and structured form, when applicable) from a full DDL string and returns the canonical assembled DDL to use as the dirty-tracking baseline. */
+function applyProgrammingDdl(target, ddl, { isNew = false } = {}) {
+  target.structured = false;
+  target.header = null;
+  let editorValue = ddl;
+  let canonical = ddl;
+  if (['function', 'procedure'].includes(target.kind)) {
+    if (isNew) {
+      target.structured = true;
+      target.header = defaultFunctionHeader(target.kind, target.schema);
+      editorValue = FUNCTION_TEMPLATE_BODY;
+      canonical = assembleFunctionDdl(target.header, editorValue);
+    } else {
+      const sliced = sliceFunctionDdl(ddl, target.kind);
+      if (sliced) {
+        target.structured = true;
+        target.header = sliced.header;
+        editorValue = sliced.body;
+        canonical = assembleFunctionDdl(sliced.header, sliced.body);
+      }
+    }
+  }
+  setProgrammingEditorValue(editorValue);
+  renderProgrammingFunctionForm(target);
+  return canonical;
+}
+
+/** The full DDL that would be saved/validated/committed right now — assembled from the structured form when active, or the raw editor content otherwise. */
+function currentProgrammingDdl() {
+  const target = programmingEditorTarget;
+  if (!target) return '';
+  if (target.structured) return assembleFunctionDdl(readFunctionFormHeader(), byId('programming-editor').value);
+  return byId('programming-editor').value;
+}
+
 function programmingEditorIsDirty() {
-  return Boolean(programmingEditorTarget && byId('programming-editor').value !== programmingEditorTarget.originalDdl);
+  if (!programmingEditorTarget) return false;
+  try { return currentProgrammingDdl() !== programmingEditorTarget.originalDdl; }
+  catch { return true; }
 }
 
 function setProgrammingEditorStatus(message, tone = '') {
@@ -1378,30 +1675,41 @@ function clearProgrammingEditor(message = 'Select an object to start editing.') 
   const editor = byId('programming-editor');
   editor.disabled = true;
   setProgrammingEditorValue('');
+  renderProgrammingFunctionForm(null);
+  refreshProgrammingDdlPreview();
   byId('programming-editor-kind').textContent = 'CODE EDITOR';
   byId('programming-editor-title').textContent = 'Select an object';
   byId('programming-reload').disabled = true;
   byId('programming-validate').disabled = true;
+  byId('programming-review-ai').disabled = true;
   byId('programming-save').disabled = true;
   setProgrammingEditorStatus(message);
   renderProgrammingGithubBranches();
 }
 
 function setProgrammingEditorTarget(target, ddl) {
-  programmingEditorTarget = { ...target, originalDdl: ddl, deployedDdl: ddl };
+  programmingEditorTarget = { ...target };
+  const canonical = applyProgrammingDdl(programmingEditorTarget, ddl, { isNew: Boolean(target.isNew) });
+  programmingEditorTarget.originalDdl = canonical;
+  programmingEditorTarget.deployedDdl = canonical;
   const editor = byId('programming-editor');
   editor.disabled = false;
-  setProgrammingEditorValue(ddl);
   byId('programming-editor-kind').textContent = target.kind.toUpperCase();
   byId('programming-editor-title').textContent = target.title;
   byId('programming-reload').disabled = false;
   byId('programming-validate').disabled = !['function', 'procedure'].includes(target.kind);
+  byId('programming-review-ai').disabled = false;
   byId('programming-save').disabled = false;
-  setProgrammingEditorStatus(target.isNew ? 'New definition — edit and save when ready.' : 'Definition loaded.', 'success');
+  const structured = programmingEditorTarget.structured;
+  const statusMessage = target.isNew
+    ? (structured ? 'New definition — fill in the fields and body, then save.' : 'New definition — edit and save when ready.')
+    : (structured ? 'Definition loaded — schema, name, parameters, returns and language are editable above; only the body is in the code editor.' : 'Definition loaded.');
+  setProgrammingEditorStatus(statusMessage, 'success');
   byId('programming-browser-screen').hidden = true;
   byId('programming-editor-screen').hidden = false;
   document.querySelector('.programming-panel').classList.add('editor-open');
   byId('programming-github-diff').hidden = true;
+  refreshProgrammingDdlPreview();
   void loadProgrammingGithub();
   editor.focus();
 }
@@ -1467,7 +1775,10 @@ async function reloadProgrammingDefinition() {
   const target = programmingEditorTarget;
   if (!target || !await confirmProgrammingEditorReplacement()) return;
   if (target.isNew) {
-    setProgrammingEditorValue(target.originalDdl);
+    const canonical = applyProgrammingDdl(target, target.originalDdl, { isNew: true });
+    target.originalDdl = canonical;
+    target.deployedDdl = canonical;
+    refreshProgrammingDdlPreview();
     setProgrammingEditorStatus('Template restored.', 'success');
     return;
   }
@@ -1478,10 +1789,13 @@ async function validateProgrammingDefinition() {
   const target = programmingEditorTarget;
   if (!target || !['function', 'procedure'].includes(target.kind)) return;
   const button = byId('programming-validate');
+  let ddl;
+  try { ddl = currentProgrammingDdl(); }
+  catch (error) { setProgrammingEditorStatus(error?.message || 'Complete the required fields first', 'error'); return; }
   button.disabled = true;
   setProgrammingEditorStatus('Validating in a rolled-back transaction…');
   try {
-    const error = await invoke('validate_function_definition', { id: target.id, ddl: byId('programming-editor').value });
+    const error = await invoke('validate_function_definition', { id: target.id, ddl });
     setProgrammingEditorStatus(error || 'Definition is valid.', error ? 'error' : 'success');
   } catch (error) {
     setProgrammingEditorStatus(error?.message || 'Validation failed', 'error');
@@ -1494,7 +1808,9 @@ async function saveProgrammingDefinition() {
   const target = programmingEditorTarget;
   if (!target) return;
   const button = byId('programming-save');
-  const ddl = byId('programming-editor').value;
+  let ddl;
+  try { ddl = currentProgrammingDdl(); }
+  catch (error) { setProgrammingEditorStatus(error?.message || 'Complete the required fields before saving', 'error'); return; }
   button.disabled = true;
   setProgrammingEditorStatus('Saving definition…');
   try {
@@ -1504,8 +1820,26 @@ async function saveProgrammingDefinition() {
     target.originalDdl = ddl;
     target.deployedDdl = ddl;
     target.isNew = false;
+    if (target.structured) {
+      const header = readFunctionFormHeader();
+      target.schema = header.schema;
+      target.name = header.name;
+      target.title = `${header.schema}.${header.name}`;
+      byId('programming-editor-title').textContent = target.title;
+      // The saved definition may live in a different schema than the one picked in the
+      // toolbar (the Schema field in the form is independently editable) — keep the toolbar
+      // in sync so loadProgrammingObjects' own "did the user switch schema mid-flight" guard
+      // (which compares against byId('programming-schema').value) doesn't discard this refresh
+      // and leave the new/moved definition invisible until the dropdown is touched by hand.
+      const schemaSelect = byId('programming-schema');
+      if (schemaSelect.value !== target.schema && [...schemaSelect.options].some((option) => option.value === target.schema)) {
+        schemaSelect.value = target.schema;
+      }
+    }
     setProgrammingEditorStatus('Definition saved.', 'success');
     await loadProgrammingObjects(target.id, target.schema);
+    const kindLabel = { view: 'View', trigger: 'Trigger', function: 'Function', procedure: 'Procedure' }[target.kind] || 'Definition';
+    await showAlert(`${kindLabel} saved successfully.`, 'Saved');
   } catch (error) {
     setProgrammingEditorStatus(error?.message || 'Could not save the definition', 'error');
   } finally {
@@ -1527,7 +1861,7 @@ async function newProgrammingDefinition(kind) {
     source: null,
     args: null,
     isNew: true,
-  }, isTrigger ? triggerTemplate(schema) : functionTemplate(schema));
+  }, isTrigger ? triggerTemplate(schema) : '');
 }
 
 function programmingGithubPath(target = programmingEditorTarget) {
@@ -1614,9 +1948,10 @@ async function loadProgrammingGithubFile() {
   try {
     const content = await invoke('github_file', { branch, path });
     if (content === null) throw new Error(`The definition does not exist on branch ${branch}.`);
-    setProgrammingEditorValue(content);
-    target.originalDdl = content;
+    const canonical = applyProgrammingDdl(target, content, { isNew: false });
+    target.originalDdl = canonical;
     target.activeBranch = branch;
+    refreshProgrammingDdlPreview();
     setProgrammingEditorStatus(`Loaded from GitHub branch ${branch}.`, 'success');
   } catch (error) {
     setProgrammingEditorStatus(error?.message || 'Could not load the GitHub definition', 'error');
@@ -1662,10 +1997,13 @@ async function commitProgrammingGithubFile() {
     byId('programming-github-message').focus();
     return;
   }
+  let content;
+  try { content = currentProgrammingDdl(); }
+  catch (error) { setProgrammingEditorStatus(error?.message || 'Complete the required fields first', 'error'); return; }
   setProgrammingEditorStatus(`Committing ${path} to ${branch}…`);
   try {
-    const url = await invoke('github_commit_file', { branch, path, content: byId('programming-editor').value, message });
-    target.originalDdl = byId('programming-editor').value;
+    const url = await invoke('github_commit_file', { branch, path, content, message });
+    target.originalDdl = content;
     target.activeBranch = branch;
     byId('programming-github-message').value = '';
     setProgrammingEditorStatus(`Committed to ${branch}. ${url}`, 'success');
@@ -1699,7 +2037,39 @@ async function createProgrammingPullRequest(event) {
   }
 }
 
-function programmingGroup(title, objects, id, schema) {
+function programmingObjectKindLabel(kind) {
+  return kind === 'procedure' ? 'procedure' : kind === 'trigger' ? 'trigger' : 'function';
+}
+
+/**
+ * Drops a function, procedure or trigger after a type-to-confirm prompt (same pattern as
+ * dropping an extension or a role). Objects PostgreSQL installed via `CREATE EXTENSION`
+ * (`object.is_extension`, set from the `pg_depend` check the backend also re-checks before
+ * the actual `DROP`) are refused up front with an explanation instead of a confirm dialog —
+ * they can only go away with the extension itself.
+ */
+async function deleteSchemaProgrammingObject(id, schema, object, onDeleted) {
+  const kindLabel = programmingObjectKindLabel(object.kind);
+  if (object.is_extension) {
+    await showAlert(`“${object.name}” was installed by a PostgreSQL extension and can't be deleted here. Drop or alter the extension instead.`, `Cannot delete ${kindLabel}`);
+    return;
+  }
+  const signature = object.kind === 'trigger' ? `on ${schema}.${object.parent_table}` : `(${object.identity_arguments || ''})`;
+  const confirmation = await showDangerPrompt(`Type ${object.name} to permanently drop this ${kindLabel} ${signature}. This cannot be undone.`, `Drop ${kindLabel}`, `${kindLabel[0].toUpperCase()}${kindLabel.slice(1)} name`, object.name);
+  if (confirmation !== object.name) { if (confirmation !== null) await showAlert(`The ${kindLabel} name did not match. Nothing was dropped.`, `${kindLabel[0].toUpperCase()}${kindLabel.slice(1)} not dropped`); return; }
+  try {
+    if (object.kind === 'trigger') {
+      await invoke('delete_trigger', { id, schema, table: object.parent_table, name: object.name });
+    } else {
+      await invoke('delete_routine', { id, schema, name: object.name, identityArguments: object.identity_arguments || '', isProcedure: object.kind === 'procedure' });
+    }
+    await onDeleted?.();
+  } catch (error) {
+    await showAlert(error?.message || `Could not drop the ${kindLabel}`, `${kindLabel[0].toUpperCase()}${kindLabel.slice(1)} not dropped`);
+  }
+}
+
+function programmingGroup(title, objects, id, schema, onChanged) {
   const panel = document.createElement('section'); panel.className = 'data-panel programming-group';
   const heading = document.createElement('div'); heading.className = 'programming-group-heading';
   const label = document.createElement('h3'); label.textContent = title;
@@ -1719,7 +2089,15 @@ function programmingGroup(title, objects, id, schema) {
     open.addEventListener('click', () => object.kind === 'view' ? openTable(id, schema, object.name, 'view') : openSchemaObject(id, schema, object));
     const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = 'Edit';
     edit.addEventListener('click', () => void openProgrammingObject(id, schema, object));
-    actions.append(open, edit); row.append(detail, actions); panel.append(row);
+    actions.append(open, edit);
+    if (['function', 'procedure', 'trigger'].includes(object.kind)) {
+      const del = document.createElement('button'); del.className = 'button small danger'; del.type = 'button'; del.textContent = 'Delete';
+      del.disabled = Boolean(object.is_extension);
+      del.title = object.is_extension ? 'Installed by a PostgreSQL extension — cannot be deleted here' : `Delete this ${object.kind}`;
+      del.addEventListener('click', () => void deleteSchemaProgrammingObject(id, schema, object, onChanged));
+      actions.append(del);
+    }
+    row.append(detail, actions); panel.append(row);
   }
   return panel;
 }
@@ -1736,6 +2114,7 @@ async function loadProgrammingObjects(id, schema) {
   state.selectedConnectionId = id;
   state.selectedSchema = schema;
   byId('programming-new-function').disabled = false;
+  byId('programming-new-procedure').disabled = false;
   byId('programming-new-trigger').disabled = false;
   content.replaceChildren(errorState('Loading programming objects…', 'Reading views, functions, procedures and triggers.'));
   status.textContent = `Loading ${schema}…`;
@@ -1750,11 +2129,12 @@ async function loadProgrammingObjects(id, schema) {
     const procedures = programming.filter((object) => object.kind === 'procedure');
     const triggers = programming.filter((object) => object.kind === 'trigger');
     const views = tables.filter((object) => object.kind === 'view').map((object) => ({ ...object, detail: formatEstimatedRows(object.estimated_rows) }));
+    const refresh = () => loadProgrammingObjects(id, schema);
     content.replaceChildren(
-      programmingGroup('Views', views, id, schema),
-      programmingGroup('Functions', functions, id, schema),
-      programmingGroup('Procedures', procedures, id, schema),
-      programmingGroup('Triggers', triggers, id, schema),
+      programmingGroup('Views', views, id, schema, refresh),
+      programmingGroup('Functions', functions, id, schema, refresh),
+      programmingGroup('Procedures', procedures, id, schema, refresh),
+      programmingGroup('Triggers', triggers, id, schema, refresh),
     );
     const total = programming.length + views.length;
     status.textContent = `${total} programming object${total === 1 ? '' : 's'} in ${schema}`;
@@ -1772,6 +2152,7 @@ async function loadProgrammingSchemas(id) {
   schemaSelect.replaceChildren(new Option('Select a schema', ''));
   schemaSelect.disabled = true;
   byId('programming-new-function').disabled = true;
+  byId('programming-new-procedure').disabled = true;
   byId('programming-new-trigger').disabled = true;
   if (!id) {
     byId('programming-content').replaceChildren(errorState('Choose a connected connection', 'Schemas and programming objects will appear here.'));
@@ -2866,7 +3247,7 @@ function updateExplorerObjectActions() {
   const connected = state.connections.some((connection) => connection.id === state.selectedConnectionId && connection.state === 'connected');
   const hasSchema = connected && Boolean(state.selectedSchema);
   byId('new-schema').disabled = !connected;
-  for (const id of ['new-table', 'new-function', 'new-sequence', 'new-trigger']) byId(id).disabled = !hasSchema;
+  for (const id of ['new-table', 'new-function', 'new-procedure', 'new-sequence', 'new-trigger']) byId(id).disabled = !hasSchema;
 }
 
 function formatEstimatedRows(value) {
@@ -2917,6 +3298,13 @@ function appendSchemaObjectRow(parent, id, schemaName, object) {
       else void openProgrammingFromExplorer(id, schemaName, object);
     });
     row.append(item, edit);
+    if (['function', 'procedure', 'trigger'].includes(object.kind)) {
+      const del = document.createElement('button'); del.className = 'button small danger tree-object-action'; del.type = 'button'; del.textContent = 'Delete';
+      del.disabled = Boolean(object.is_extension);
+      del.title = object.is_extension ? 'Installed by a PostgreSQL extension — cannot be deleted here' : `Delete this ${object.kind}`;
+      del.addEventListener('click', () => void deleteSchemaProgrammingObject(id, schemaName, object, () => row.remove()));
+      row.append(del);
+    }
   }
   parent.append(row);
 }
@@ -3233,7 +3621,13 @@ async function renderCommandPalette(filter = '') {
     const title = document.createElement('strong'); title.textContent = name;
     const hint = document.createElement('small'); hint.textContent = description;
     item.append(title, hint);
-    item.addEventListener('click', () => { closeCommandPalette(); switchView(view); if (querySection) showQueryWorkspaceSection(querySection); if (adminSection) showAdminWorkspaceSection(adminSection); });
+    item.addEventListener('click', () => {
+      closeCommandPalette();
+      if (view === 'assistant') { assistantReturnView = null; byId('assistant-back').hidden = true; }
+      switchView(view);
+      if (querySection) showQueryWorkspaceSection(querySection);
+      if (adminSection) showAdminWorkspaceSection(adminSection);
+    });
     list.append(item);
   }
   if (query.length < 2 || !state.selectedConnectionId) {
@@ -3443,16 +3837,24 @@ byId('cancel-ai-review').addEventListener('click', closeAiReviewDialog);
 for (const element of document.querySelectorAll('[data-close-ai-review]')) element.addEventListener('click', closeAiReviewDialog);
 for (const button of document.querySelectorAll('[data-ai-review-focus]')) button.addEventListener('click', () => setAiReviewFocus(button.dataset.aiReviewFocus));
 byId('clear-history').addEventListener('click', async () => { if (await showConfirm('Clear all saved query history?', 'Clear history', true, 'Clear')) { await invoke('clear_history'); loadHistory(); } });
-byId('sql-editor').addEventListener('keydown', (event) => {
-  const popupOpen = !byId('sql-autocomplete').hidden;
+// Shared by the SQL editor and the Programming body editor: ArrowUp/Down/Enter/Tab/Escape
+// steer the open suggestion popup instead of the editor when one is showing. Returns true if
+// the key was consumed by the popup, so the caller's own shortcuts (Ctrl+Enter, Ctrl+S, ...)
+// can skip acting on it.
+function handleAutocompleteKeydown(event) {
+  const popupOpen = Boolean(autocompletePopup && !autocompletePopup.hidden);
   if (popupOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
     event.preventDefault();
     setActiveSuggestion((autocompleteActive + (event.key === 'ArrowDown' ? 1 : -1) + autocompleteItems.length) % autocompleteItems.length);
-    return;
+    return true;
   }
-  if (popupOpen && (event.key === 'Enter' || event.key === 'Tab')) { event.preventDefault(); acceptSuggestion(); return; }
-  if (popupOpen && event.key === 'Escape') { event.preventDefault(); hideAutocomplete(); return; }
+  if (popupOpen && (event.key === 'Enter' || event.key === 'Tab')) { event.preventDefault(); acceptSuggestion(); return true; }
+  if (popupOpen && event.key === 'Escape') { event.preventDefault(); hideAutocomplete(); return true; }
   if (popupOpen && ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) hideAutocomplete();
+  return false;
+}
+byId('sql-editor').addEventListener('keydown', (event) => {
+  if (handleAutocompleteKeydown(event)) return;
   if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); runQuery(); }
 });
 byId('sql-editor').addEventListener('input', () => { syncEditorHighlight(); void updateAutocomplete(); });
@@ -3465,27 +3867,32 @@ byId('sql-editor').addEventListener('scroll', () => {
 });
 byId('programming-editor').addEventListener('input', () => {
   syncProgrammingEditorHighlight();
-  if (programmingEditorIsDirty()) setProgrammingEditorStatus('Unsaved changes.');
+  notifyProgrammingFormChanged();
+  void updateProgrammingAutocomplete();
 });
+byId('programming-editor').addEventListener('click', hideAutocomplete);
 byId('programming-editor').addEventListener('scroll', () => {
   const overlay = byId('programming-editor-highlight');
   overlay.scrollTop = byId('programming-editor').scrollTop;
   overlay.scrollLeft = byId('programming-editor').scrollLeft;
+  hideAutocomplete();
 });
 byId('programming-editor').addEventListener('keydown', (event) => {
+  if (handleAutocompleteKeydown(event)) return;
   if (!(event.ctrlKey || event.metaKey)) return;
   if (event.key.toLowerCase() === 's') { event.preventDefault(); void saveProgrammingDefinition(); }
   if (event.key === 'Enter') { event.preventDefault(); void validateProgrammingDefinition(); }
 });
 byId('query-connection').addEventListener('change', () => { void completionIndexFor(byId('query-connection').value); });
 document.addEventListener('click', (event) => {
-  if (!byId('sql-autocomplete').hidden && !event.target.closest('.sql-editor-wrap')) hideAutocomplete();
+  if (autocompletePopup && !autocompletePopup.hidden && !event.target.closest('.sql-editor-wrap')) hideAutocomplete();
 });
 byId('open-erd').addEventListener('click', openErd);
 byId('back-to-explorer').addEventListener('click', returnToExplorer);
 byId('new-schema').addEventListener('click', () => void createSchemaFromExplorer());
 byId('new-table').addEventListener('click', () => openCreateTableDialog(state.selectedConnectionId, state.selectedSchema));
 byId('new-function').addEventListener('click', () => void newProgrammingFromExplorer('function'));
+byId('new-procedure').addEventListener('click', () => void newProgrammingFromExplorer('procedure'));
 byId('new-sequence').addEventListener('click', () => void createSequenceFromExplorer());
 byId('new-trigger').addEventListener('click', () => void newProgrammingFromExplorer('trigger'));
 byId('explorer-filter').addEventListener('input', (event) => {
@@ -3498,11 +3905,29 @@ byId('admin-connection').addEventListener('change', () => loadAdmin(byId('admin-
 byId('programming-connection').addEventListener('change', () => void loadProgrammingSchemas(byId('programming-connection').value));
 byId('programming-schema').addEventListener('change', () => void loadProgrammingObjects(byId('programming-connection').value, byId('programming-schema').value));
 byId('programming-new-function').addEventListener('click', () => void newProgrammingDefinition('function'));
+byId('programming-new-procedure').addEventListener('click', () => void newProgrammingDefinition('procedure'));
 byId('programming-new-trigger').addEventListener('click', () => void newProgrammingDefinition('trigger'));
 byId('programming-back').addEventListener('click', () => void returnToProgrammingBrowser());
 byId('programming-reload').addEventListener('click', () => void reloadProgrammingDefinition());
 byId('programming-validate').addEventListener('click', () => void validateProgrammingDefinition());
+byId('programming-review-ai').addEventListener('click', openProgrammingAiReviewDialog);
 byId('programming-save').addEventListener('click', () => void saveProgrammingDefinition());
+byId('pf-add-param').addEventListener('click', () => { byId('pf-params').append(functionParamRow()); notifyProgrammingFormChanged(); });
+byId('pf-language').addEventListener('change', () => {
+  const custom = byId('pf-language').value === '__custom__';
+  byId('pf-language-custom').hidden = !custom;
+  if (custom) byId('pf-language-custom').focus();
+});
+byId('pf-returns-kind').addEventListener('change', () => {
+  const kind = byId('pf-returns-kind').value;
+  const current = classifyReturns(value('pf-returns'));
+  setPfReturnsFromKind(kind, current.kind === kind ? current.detail : '');
+  notifyProgrammingFormChanged();
+  if (['scalar', 'setof', 'table'].includes(kind)) openPfReturnsDetailDialog();
+});
+byId('pf-returns-detail').addEventListener('click', () => openPfReturnsDetailDialog());
+byId('programming-function-form').addEventListener('input', notifyProgrammingFormChanged);
+byId('programming-function-form').addEventListener('change', notifyProgrammingFormChanged);
 byId('programming-github-load').addEventListener('click', () => void loadProgrammingGithubFile());
 byId('programming-github-diff-deployed').addEventListener('click', () => void diffProgrammingDeployed());
 byId('programming-github-diff-branches').addEventListener('click', () => void diffProgrammingBranches());
@@ -3537,7 +3962,19 @@ byId('check-updates').addEventListener('click', () => void checkForUpdates(true)
 byId('copy-release-link').addEventListener('click', async () => { if (!state.releaseUrl) return; await navigator.clipboard.writeText(state.releaseUrl); byId('update-detail').textContent = 'Release link copied'; });
 byId('copy-pix-key').addEventListener('click', async () => { await navigator.clipboard.writeText(PIX_KEY); byId('pix-status').textContent = 'Pix key copied'; });
 byId('copy-pix-code').addEventListener('click', async () => { await navigator.clipboard.writeText(PIX_COPY_AND_PASTE); byId('pix-status').textContent = 'Pix copy-and-paste code copied'; });
-for (const button of document.querySelectorAll('[data-view]')) button.addEventListener('click', () => { switchView(button.dataset.view); if (button.dataset.view === 'query') showQueryWorkspaceSection('editor'); if (button.dataset.view === 'admin') showAdminWorkspaceSection('administration'); });
+for (const button of document.querySelectorAll('[data-view]')) button.addEventListener('click', () => {
+  if (button.dataset.view === 'assistant') { assistantReturnView = null; byId('assistant-back').hidden = true; }
+  switchView(button.dataset.view);
+  if (button.dataset.view === 'query') showQueryWorkspaceSection('editor');
+  if (button.dataset.view === 'admin') showAdminWorkspaceSection('administration');
+});
+byId('assistant-back').addEventListener('click', () => {
+  const target = assistantReturnView;
+  assistantReturnView = null;
+  byId('assistant-back').hidden = true;
+  if (target === 'admin') showAdminWorkspaceSection('administration');
+  if (target) switchView(target);
+});
 bindWindowControls();
 bindSidebarToggle();
 bindAppDialog();

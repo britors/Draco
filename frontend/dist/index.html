@@ -18,9 +18,9 @@
         </div>
         <nav>
           <button class="nav-item active" data-icon="↔" data-view="connections" aria-current="page" title="Connections" type="button">Connections</button>
+          <button class="nav-item" data-icon="▦" data-view="dashboard" title="Dashboard" type="button">Dashboard</button>
           <button class="nav-item" data-icon="◈" data-view="explorer" title="Explorer" type="button">Explorer</button>
           <button class="nav-item" data-icon="ƒ" data-view="programming" title="Programming" type="button">Programming</button>
-          <button class="nav-item" data-icon="▦" data-view="dashboard" title="Dashboard" type="button">Dashboard</button>
           <button class="nav-item" data-icon="⚙" data-view="admin" title="Administration" type="button">Administration</button>
           <button class="nav-item" data-icon="✦" data-view="assistant" title="Assistant" type="button">Assistant</button>
           <button class="nav-item" data-icon="⌘" data-view="query" title="SQL Editor" type="button">SQL Editor</button>
@@ -90,7 +90,7 @@
         </section>
         <section id="view-explorer" class="view" hidden>
           <section class="panel explorer-panel">
-            <div class="panel-heading"><div><span class="eyebrow">LAZY INTROSPECTION</span><h2>Explorer</h2></div><div class="form-actions explorer-actions"><input class="explorer-filter" id="explorer-filter" type="search" placeholder="Filter schemas and objects" aria-label="Filter schemas and objects" autocomplete="off" /><span class="badge" id="explorer-status">Select a connection</span><button class="button small" id="new-schema" type="button" disabled>New schema</button><button class="button small" id="new-table" type="button" disabled>New table</button><button class="button small" id="new-function" type="button" disabled>New function</button><button class="button small" id="new-sequence" type="button" disabled>New sequence</button><button class="button small" id="new-trigger" type="button" disabled>New trigger</button><button class="button small" id="open-erd" type="button" disabled>Open ERD</button></div></div>
+            <div class="panel-heading"><div><span class="eyebrow">LAZY INTROSPECTION</span><h2>Explorer</h2></div><div class="form-actions explorer-actions"><input class="explorer-filter" id="explorer-filter" type="search" placeholder="Filter schemas and objects" aria-label="Filter schemas and objects" autocomplete="off" /><span class="badge" id="explorer-status">Select a connection</span><button class="button small" id="new-schema" type="button" disabled>New schema</button><button class="button small" id="new-table" type="button" disabled>New table</button><button class="button small" id="new-function" type="button" disabled>New function</button><button class="button small" id="new-procedure" type="button" disabled>New procedure</button><button class="button small" id="new-sequence" type="button" disabled>New sequence</button><button class="button small" id="new-trigger" type="button" disabled>New trigger</button><button class="button small" id="open-erd" type="button" disabled>Open ERD</button></div></div>
             <div class="explorer-layout"><div id="explorer-connections" class="tree-pane"></div><div id="explorer-tree" class="tree-pane tree-content"><div class="empty-state"><strong>Choose a connection</strong><span>Schema objects load on demand.</span></div></div></div>
           </section>
         </section>
@@ -102,6 +102,7 @@
                 <select id="programming-connection" aria-label="Programming connection"><option value="">Select a connected connection</option></select>
                 <select id="programming-schema" aria-label="Programming schema" disabled><option value="">Select a schema</option></select>
                 <button class="button small" id="programming-new-function" type="button" disabled>New function</button>
+                <button class="button small" id="programming-new-procedure" type="button" disabled>New procedure</button>
                 <button class="button small" id="programming-new-trigger" type="button" disabled>New trigger</button>
               </div>
             </div>
@@ -117,8 +118,44 @@
                   <div class="form-actions">
                     <button class="button small" id="programming-reload" type="button" disabled>Reload</button>
                     <button class="button small" id="programming-validate" type="button" disabled>Validate</button>
+                    <button class="button small" id="programming-review-ai" type="button" disabled>✦ Review with AI</button>
                     <button class="button small primary" id="programming-save" type="button" disabled>Save</button>
                   </div>
+                </div>
+                <div id="programming-function-form" class="programming-function-form" hidden>
+                  <div class="object-form-grid">
+                    <label>Schema<select id="pf-schema"></select></label>
+                    <label>Name<input id="pf-name" autocomplete="off" placeholder="function_name" /></label>
+                    <label id="pf-returns-field">Returns
+                      <div class="pf-returns-row">
+                        <select id="pf-returns-kind">
+                          <option value="void">void</option>
+                          <option value="scalar">A type…</option>
+                          <option value="setof">SETOF a type…</option>
+                          <option value="table">TABLE of columns…</option>
+                          <option value="record">record</option>
+                          <option value="trigger">trigger</option>
+                        </select>
+                        <button class="button small" id="pf-returns-detail" type="button" aria-label="Define the return type details" hidden>…</button>
+                      </div>
+                    </label>
+                    <input id="pf-returns" type="hidden" />
+                    <label>Language
+                      <select id="pf-language">
+                        <option value="plpgsql">plpgsql</option>
+                        <option value="sql">sql</option>
+                        <option value="plpython3u">plpython3u</option>
+                        <option value="plperl">plperl</option>
+                        <option value="pltcl">pltcl</option>
+                        <option value="__custom__">Other…</option>
+                      </select>
+                    </label>
+                    <input id="pf-language-custom" autocomplete="off" placeholder="language name" aria-label="Custom language name" hidden />
+                    <label class="pf-extra-field">Advanced clauses (kept as-is)<input id="pf-extra" autocomplete="off" placeholder="STRICT / SECURITY DEFINER / SET ..." /></label>
+                  </div>
+                  <div class="function-param-list" id="pf-params"></div>
+                  <button class="button small" id="pf-add-param" type="button">Add parameter</button>
+                  <datalist id="pg-type-suggestions"></datalist>
                 </div>
                 <div class="programming-github-toolbar">
                   <span class="badge" id="programming-github-status">GitHub not connected</span>
@@ -141,6 +178,11 @@
                 <div class="sql-editor-wrap programming-editor-wrap">
                   <pre class="sql-editor-highlight" id="programming-editor-highlight" aria-hidden="true"></pre>
                   <textarea id="programming-editor" spellcheck="false" autocomplete="off" disabled placeholder="Select a view, function, procedure or trigger to edit its definition."></textarea>
+                  <ul class="sql-autocomplete" id="programming-sql-autocomplete" hidden role="listbox" aria-label="SQL suggestions"></ul>
+                </div>
+                <div id="programming-ddl-preview-wrap" class="programming-ddl-preview-wrap" hidden>
+                  <span class="eyebrow">ASSEMBLED SQL</span>
+                  <pre id="programming-ddl-preview" class="object-sql-preview"></pre>
                 </div>
                 <div class="programming-editor-footer"><div id="programming-editor-status" class="form-status" role="status">Select an object to start editing.</div><span class="query-hint">Ctrl+S saves. Ctrl+Enter validates functions and procedures.</span></div>
                 <pre id="programming-github-diff" class="github-diff" hidden></pre>
@@ -179,7 +221,7 @@
         </section>
         <section id="view-assistant" class="view" hidden>
           <section class="panel">
-            <div class="panel-heading"><div><span class="eyebrow">READ-ONLY ADVISOR</span><h2>AI Assistant</h2></div><select id="assistant-connection"><option value="">Select a connected connection</option></select></div>
+            <div class="panel-heading"><div class="assistant-heading-identity"><button class="button small" id="assistant-back" type="button" hidden>← Back</button><div><span class="eyebrow">READ-ONLY ADVISOR</span><h2>AI Assistant</h2></div></div><select id="assistant-connection"><option value="">Select a connected connection</option></select></div>
             <div id="assistant-history" class="assistant-history"><div class="empty-state"><strong>Ask about a query, schema, or execution plan</strong><span>The assistant can inspect the connected database but never changes it.</span></div></div>
             <div class="assistant-compose"><textarea id="assistant-message" rows="3" placeholder="How can I improve this query?"></textarea><div class="form-actions"><button class="button small danger" id="clear-assistant" type="button">Clear</button><button class="button primary" id="send-assistant" type="button">Send</button></div></div>
             <div id="assistant-status" class="form-status" role="status"></div>

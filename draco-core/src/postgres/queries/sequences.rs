@@ -63,12 +63,20 @@ pub struct TriggerInfo {
     pub name: String,
     pub table: String,
     pub definition: String,
+    /// True when the trigger was installed by `CREATE EXTENSION` (`pg_depend` records an
+    /// unconditional `'e'` dependency on it) rather than authored by a user — it must be
+    /// dropped by dropping/altering the extension, never directly.
+    pub is_extension: bool,
 }
 
 pub async fn get_triggers(driver: &PostgresDriver, schema: &str) -> Result<Vec<TriggerInfo>> {
     let rows = driver
         .query(
-            "SELECT t.tgname AS name, c.relname AS table_name, pg_get_triggerdef(t.oid) AS definition \
+            "SELECT t.tgname AS name, c.relname AS table_name, pg_get_triggerdef(t.oid) AS definition, \
+                    EXISTS ( \
+                        SELECT 1 FROM pg_depend d \
+                        WHERE d.classid = 'pg_trigger'::regclass AND d.objid = t.oid AND d.deptype = 'e' \
+                    ) AS is_extension \
              FROM pg_trigger t \
              JOIN pg_class c ON c.oid = t.tgrelid \
              JOIN pg_namespace n ON n.oid = c.relnamespace \
@@ -83,6 +91,7 @@ pub async fn get_triggers(driver: &PostgresDriver, schema: &str) -> Result<Vec<T
             name: get_str(r, "name"),
             table: get_str(r, "table_name"),
             definition: get_str(r, "definition"),
+            is_extension: get_bool(r, "is_extension"),
         })
         .collect())
 }
@@ -143,6 +152,46 @@ pub async fn create_trigger(
         quote_ident(schema),
         quote_ident(table),
         function_name.join("."),
+    );
+    driver.query(&sql, &[]).await?;
+    Ok(())
+}
+
+/// Looks up the extension (if any) that owns trigger `schema.table.name` via `pg_depend`'s `'e'`
+/// (extension member) dependency. A hit means the trigger was installed by `CREATE EXTENSION`,
+/// not authored by a user, and must not be dropped directly.
+async fn extension_owning_trigger(
+    driver: &PostgresDriver,
+    schema: &str,
+    table: &str,
+    name: &str,
+) -> Result<Option<String>> {
+    let rows = driver
+        .query(
+            "SELECT e.extname FROM pg_depend d \
+             JOIN pg_extension e ON e.oid = d.refobjid \
+             JOIN pg_trigger t ON t.oid = d.objid \
+             JOIN pg_class c ON c.oid = t.tgrelid \
+             JOIN pg_namespace n ON n.oid = c.relnamespace \
+             WHERE d.classid = 'pg_trigger'::regclass AND d.deptype = 'e' \
+               AND n.nspname = $1 AND c.relname = $2 AND t.tgname = $3",
+            &[&schema, &table, &name],
+        )
+        .await?;
+    Ok(rows.first().map(|r| get_str(r, "extname")))
+}
+
+pub async fn drop_trigger(driver: &PostgresDriver, schema: &str, table: &str, name: &str) -> Result<()> {
+    if let Some(extname) = extension_owning_trigger(driver, schema, table, name).await? {
+        return Err(crate::error::CoreError::Other(format!(
+            "\"{name}\" was installed by the \"{extname}\" extension and can't be dropped directly. Drop or alter the extension instead."
+        )));
+    }
+    let sql = format!(
+        "DROP TRIGGER {} ON {}.{}",
+        quote_ident(name),
+        quote_ident(schema),
+        quote_ident(table),
     );
     driver.query(&sql, &[]).await?;
     Ok(())
