@@ -43,6 +43,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="2.1.1" date="2026-08-06">
+      <description>
+        <p>Correções de formatação de código sem mudanças funcionais.</p>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-08-05">
       <description>
         <p>Nova bancada Programming para views, functions, procedures e triggers, com editor SQL dedicado e integração GitHub para branches, diffs, commits e pull requests.</p>

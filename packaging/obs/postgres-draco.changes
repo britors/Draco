@@ -1,4 +1,10 @@
 -------------------------------------------------------------------
+Thu Aug 06 16:36:54 UTC 2026 - rodrigo@w3ti.com.br
+
+- Versão 2.1.1: correções de formatação de código (cargo fmt), sem mudanças
+  funcionais.
+
+-------------------------------------------------------------------
 Wed Aug 05 17:35:57 UTC 2026 - rodrigo@w3ti.com.br
 
 - Versão 2.1.0: adicionada a área Programming com editor SQL dedicado para
