@@ -90,7 +90,7 @@ disponível para openSUSE. O nome do pacote OBS não é "draco" simples porque
 esse nome já é usado pelo projeto "graphics" do openSUSE; o aplicativo continua
 se chamando Draco.
 
-> **Release Tauri:** a versão `2.1.0` distribui pacotes nativos no GitHub para
+> **Release Tauri:** a versão `2.1.2` distribui pacotes nativos no GitHub para
 > Windows, Ubuntu, Fedora e openSUSE, corrige o ícone do desktop Linux e mantém
 > o RPM oficial no OBS.
 

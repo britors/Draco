@@ -48,7 +48,7 @@ configuração de um certificado no repositório.
 Os manifests de desenvolvimento (`Cargo.toml`, `tauri.conf.json` e `frontend/package.json`) podem
 estar à frente da última tag publicada. O RPM e a primeira entrada AppStream, porém, sempre
 descrevem a mesma tag imutável. O teste `frontend/tests/distribution.test.mjs` impede divergência
-entre os metadados publicados. A versão `2.1.0` inclui a bancada Programming e integração GitHub;
+entre os metadados publicados. A versão `2.1.2` inclui a bancada Programming e integração GitHub;
 `2.0.4` foi a primeira a publicar os quatro formatos
 nativos no GitHub, além do RPM no OBS.
 

@@ -1,4 +1,15 @@
 -------------------------------------------------------------------
+Thu Aug 06 18:32:22 UTC 2026 - rodrigo@w3ti.com.br
+
+- Versão 2.1.2: concluído o gerenciamento de functions, procedures e triggers
+  na bancada Programming, com criação, execução e exclusão protegida para
+  objetos pertencentes a extensões.
+- Adicionados editor estruturado de rotinas, autocomplete na bancada
+  Programming, criação de procedures e retorno contextual do Assistente de IA.
+- Corrigida a resolução de assinaturas de rotinas no PostgreSQL ao verificar
+  dependências antes da exclusão.
+
+-------------------------------------------------------------------
 Thu Aug 06 16:36:54 UTC 2026 - rodrigo@w3ti.com.br
 
 - Versão 2.1.1: correções de formatação de código (cargo fmt), sem mudanças

@@ -9,7 +9,7 @@ import { assembleFunctionDdl, formatFunctionParameters, parseFunctionParameters,
 
 const invoke = window.__TAURI__?.core?.invoke;
 const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
-const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.1.0', theme: 'dark', accent: 'coral', check_updates_on_startup: true }, releaseUrl: '', queryTabs: [{ id: 1, label: 'Query 1', sql: '' }], currentQueryTabId: 1 };
+const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.1.2', theme: 'dark', accent: 'coral', check_updates_on_startup: true }, releaseUrl: '', queryTabs: [{ id: 1, label: 'Query 1', sql: '' }], currentQueryTabId: 1 };
 let dialogResolver = null;
 let aiReviewRequest = null;
 let aiReviewReturnFocus = null;

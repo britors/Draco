@@ -1441,7 +1441,14 @@ impl Application {
         params: Vec<Option<String>>,
     ) -> Result<QueryResult> {
         validate_schema_object_name(schema, "Schema")?;
-        validate_schema_object_name(name, if is_procedure { "Procedure" } else { "Function" })?;
+        validate_schema_object_name(
+            name,
+            if is_procedure {
+                "Procedure"
+            } else {
+                "Function"
+            },
+        )?;
         let (driver, _) = self.connected_driver(id).await?;
         let started = Instant::now();
         let result = queries::call_routine(&driver, schema, name, is_procedure, &params).await?;
@@ -1461,13 +1468,26 @@ impl Application {
         is_procedure: bool,
     ) -> Result<()> {
         validate_schema_object_name(schema, "Schema")?;
-        validate_schema_object_name(name, if is_procedure { "Procedure" } else { "Function" })?;
+        validate_schema_object_name(
+            name,
+            if is_procedure {
+                "Procedure"
+            } else {
+                "Function"
+            },
+        )?;
         let (driver, _) = self.connected_driver(id).await?;
         queries::drop_routine(&driver, schema, name, identity_arguments, is_procedure).await?;
         Ok(())
     }
 
-    pub async fn delete_trigger(&self, id: &str, schema: &str, table: &str, name: &str) -> Result<()> {
+    pub async fn delete_trigger(
+        &self,
+        id: &str,
+        schema: &str,
+        table: &str,
+        name: &str,
+    ) -> Result<()> {
         validate_schema_object_name(schema, "Schema")?;
         validate_schema_object_name(table, "Table")?;
         validate_schema_object_name(name, "Trigger")?;
@@ -3118,6 +3138,7 @@ mod tests {
             identity_arguments: None,
             parent_table: Some("accounts".to_string()),
             definition: Some("CREATE TRIGGER audit_change".to_string()),
+            is_extension: false,
         };
         let json = serde_json::to_value(trigger).expect("trigger view serializes");
         assert_eq!(json["parent_table"], "accounts");

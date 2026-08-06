@@ -83,7 +83,7 @@ test('frontend invokes only the typed local application bridge', () => {
 test('SQL editor ports the GTK AI review modal and sends only the current query context', () => {
   assert.match(app, /function openAiReviewDialog/);
   assert.match(app, /const sql = selectedQueryText\(\)\.trim\(\)/);
-  assert.match(app, /aiReviewRequest = \{ connectionId, sql \}/);
+  assert.match(app, /aiReviewRequest = \{ connectionId, sql, returnView \}/);
   assert.match(app, /function setAiReviewFocus/);
   assert.match(app, /buildAiQueryReviewMessage\(aiReviewFocus, sql, byId\('ai-review-note'\)\.value\)/);
   assert.match(app, /byId\('assistant-connection'\)\.value = connectionId/);
