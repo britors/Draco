@@ -101,25 +101,38 @@
               <div class="form-actions programming-controls">
                 <select id="programming-connection" aria-label="Programming connection"><option value="">Select a connected connection</option></select>
                 <select id="programming-schema" aria-label="Programming schema" disabled><option value="">Select a schema</option></select>
-                <button class="button small" id="programming-new-function" type="button" disabled>New function</button>
-                <button class="button small" id="programming-new-procedure" type="button" disabled>New procedure</button>
-                <button class="button small" id="programming-new-trigger" type="button" disabled>New trigger</button>
+                <button class="button small" id="programming-new-function" type="button" disabled><span class="button-icon" aria-hidden="true">ƒ</span>New function</button>
+                <button class="button small" id="programming-new-procedure" type="button" disabled><span class="button-icon" aria-hidden="true">▣</span>New procedure</button>
+                <button class="button small" id="programming-new-trigger" type="button" disabled><span class="button-icon" aria-hidden="true">⚡</span>New trigger</button>
+                <button class="button small" id="programming-new-view" type="button" disabled><span class="button-icon" aria-hidden="true">◫</span>New view</button>
               </div>
             </div>
             <div id="programming-status" class="form-status" role="status"></div>
+            <div class="programming-repository-bar" aria-label="Source control workspace">
+              <div class="programming-repository-identity"><span class="repo-mark">⌘</span><div><span class="eyebrow">SOURCE CONTROL</span><strong id="programming-repository-label">Select a repository</strong></div></div>
+              <label>Repository<select id="programming-repository"><option value="">Connect GitHub in Preferences</option></select></label>
+              <label>Branch<select id="programming-workspace-branch"><option value="">Choose a branch</option></select></label>
+              <span class="source-state" id="programming-source-state">No file selected</span>
+              <button class="button small" id="programming-choose-workspace" type="button"><span class="button-icon" aria-hidden="true">⌂</span>Choose folder</button>
+              <button class="button small danger" id="programming-clear-workspace" type="button"><span class="button-icon" aria-hidden="true">×</span>Clear workspace</button>
+              <button class="button small" id="programming-refresh-source" type="button"><span class="button-icon" aria-hidden="true">↻</span>Refresh</button>
+            </div>
             <div id="programming-browser-screen" class="programming-browser-screen">
               <div class="programming-browser" aria-label="Database code objects">
+                <section class="programming-local-files" aria-label="Local SQL files"><div class="programming-local-files-heading"><div><span class="eyebrow">LOCAL WORKSPACE</span><h3>SQL files</h3></div><div class="form-actions"><span class="badge" id="programming-local-files-count">0</span><button class="button small danger" id="programming-clear-workspace-local" type="button"><span class="button-icon" aria-hidden="true">×</span>Remove workspace</button></div></div><div id="programming-local-files-list" class="programming-local-files-list"><div class="empty-state compact">Choose a workspace folder to browse files.</div></div></section>
                 <div id="programming-content" class="programming-content"><div class="empty-state"><strong>Choose a connection and schema</strong><span>Views, functions, procedures and triggers will appear here.</span></div></div>
               </div>
             </div>
               <section id="programming-editor-screen" class="programming-editor-panel" aria-label="Database code editor" hidden>
                 <div class="programming-editor-heading">
-                  <div class="programming-editor-identity"><button class="button small" id="programming-back" type="button">← Back</button><div><span class="eyebrow" id="programming-editor-kind">CODE EDITOR</span><h3 id="programming-editor-title">Select an object</h3></div></div>
+                  <div class="programming-editor-identity"><button class="button small" id="programming-back" type="button"><span class="button-icon" aria-hidden="true">←</span>Back</button><div><span class="eyebrow" id="programming-editor-kind">CODE EDITOR</span><h3 id="programming-editor-title">Select an object</h3></div></div>
                   <div class="form-actions">
-                    <button class="button small" id="programming-reload" type="button" disabled>Reload</button>
-                    <button class="button small" id="programming-validate" type="button" disabled>Validate</button>
-                    <button class="button small" id="programming-review-ai" type="button" disabled>✦ Review with AI</button>
-                    <button class="button small primary" id="programming-save" type="button" disabled>Save</button>
+                    <button class="button small" id="programming-reload" type="button" disabled><span class="button-icon" aria-hidden="true">↻</span>Reload</button>
+                    <button class="button small" id="programming-validate" type="button" disabled><span class="button-icon" aria-hidden="true">✓</span>Validate</button>
+                    <button class="button small" id="programming-review-ai" type="button" disabled><span class="button-icon" aria-hidden="true">✦</span>Review with AI</button>
+                    <button class="button small" id="programming-save-file" type="button" disabled><span class="button-icon" aria-hidden="true">▣</span>Save file</button>
+                    <button class="button small primary" id="programming-save" type="button" disabled><span class="button-icon" aria-hidden="true">⚙</span>Compile</button>
+                    <button class="button small success" id="programming-run" type="button" disabled><span class="button-icon" aria-hidden="true">▶</span>Run</button>
                   </div>
                 </div>
                 <div id="programming-function-form" class="programming-function-form" hidden>
@@ -166,7 +179,8 @@
                     <button class="button small" id="programming-github-load" type="button" disabled>Load branch</button>
                     <button class="button small" id="programming-github-diff-deployed" type="button" disabled>Diff deployed</button>
                     <button class="button small" id="programming-github-diff-branches" type="button" disabled>Diff branches</button>
-                    <button class="button small" id="programming-github-commit" type="button" disabled>Commit</button>
+                    <button class="button small" id="programming-github-commit" type="button" disabled><span class="button-icon" aria-hidden="true">●</span>Commit</button>
+                    <button class="button small primary" id="programming-github-push" type="button" disabled><span class="button-icon" aria-hidden="true">↑</span>Push</button>
                     <button class="button small primary" id="programming-github-pr" type="button" disabled>Create PR</button>
                   </div>
                 </div>
@@ -185,6 +199,7 @@
                   <pre id="programming-ddl-preview" class="object-sql-preview"></pre>
                 </div>
                 <div class="programming-editor-footer"><div id="programming-editor-status" class="form-status" role="status">Select an object to start editing.</div><span class="query-hint">Ctrl+S saves. Ctrl+Enter validates functions and procedures.</span></div>
+                <section id="programming-execution-output" class="programming-execution-output" hidden aria-live="polite"><div class="execution-heading"><div><span class="eyebrow">EXECUTION OUTPUT</span><strong id="programming-execution-summary">Ready</strong></div><button class="button small" id="programming-clear-output" type="button">Clear</button></div><pre id="programming-execution-result"></pre></section>
                 <pre id="programming-github-diff" class="github-diff" hidden></pre>
               </section>
           </section>
@@ -298,16 +313,17 @@
                   <div id="ai-settings-status" class="form-status" role="status"></div>
                 </section>
                 <section class="preference-section" data-preference-panel="github" hidden>
-                  <span class="eyebrow">SOURCE CONTROL</span><h3>Connect GitHub</h3><p>Version database definitions with branches, diffs, commits and pull requests. The token is stored only in the system Secret Service.</p>
+                  <span class="eyebrow">SOURCE CONTROL</span><h3>GitHub credential</h3><p>Save only your GitHub credential here. Repositories, branches, diffs, commits and pull requests are selected in Programming.</p>
                   <form id="github-settings-form" class="github-settings-form">
-                    <div class="form-grid">
+                    <div class="form-grid github-repository-legacy" hidden>
                       <label>Owner or organization<input id="github-owner" autocomplete="off" spellcheck="false" placeholder="acme" /></label>
                       <label>Repository<input id="github-repository" autocomplete="off" spellcheck="false" placeholder="database-code" /></label>
                       <label>Definitions root path<input id="github-root-path" autocomplete="off" spellcheck="false" placeholder="database/definitions" /></label>
                       <label>Default base branch<input id="github-default-branch" autocomplete="off" spellcheck="false" placeholder="main" /></label>
                     </div>
                     <label>Personal access token<input id="github-token" type="password" autocomplete="new-password" spellcheck="false" placeholder="Fine-grained token with repository access" /></label>
-                    <div class="form-actions"><button class="button primary" id="github-connect" type="submit">Save and connect</button><button class="button danger" id="github-disconnect" type="button">Disconnect</button></div>
+                    <label>Scripts folder (optional)<span class="file-picker-row"><input id="programming-workspace-preference" placeholder="No folder selected" readonly /><button class="button small" id="choose-programming-workspace-preference" type="button"><span class="button-icon" aria-hidden="true">⌂</span>Choose…</button><button class="button small danger" id="clear-programming-workspace-preference" type="button"><span class="button-icon" aria-hidden="true">×</span>Clear</button></span></label>
+                    <div class="form-actions"><button class="button primary" id="github-connect" type="submit"><span class="button-icon" aria-hidden="true">↗</span>Save credential</button><button class="button danger" id="github-disconnect" type="button"><span class="button-icon" aria-hidden="true">×</span>Disconnect</button></div>
                   </form>
                   <div id="github-settings-status" class="form-status" role="status"></div>
                   <p class="preference-note">Recommended token permissions: Contents read/write and Pull requests read/write for the selected repository.</p>
@@ -337,6 +353,16 @@
         <label class="sr-only" for="command-search">Filter commands</label>
         <input id="command-search" class="command-search" type="search" placeholder="Search views or database objects…" autocomplete="off" />
         <div id="command-list" class="command-list"></div>
+      </div>
+    </section>
+    <section id="programming-run-dialog" class="app-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="programming-run-title">
+      <div class="app-dialog-backdrop" data-close-programming-run></div>
+      <div class="app-dialog-panel programming-run-panel">
+        <div class="app-dialog-heading"><div><span class="eyebrow">EXECUTE DATABASE CODE</span><h2 id="programming-run-title">Run routine</h2></div><button class="button small" type="button" data-close-programming-run aria-label="Close">Esc</button></div>
+        <p class="programming-run-description">Fill in the input parameters. Values are sent as bound literals and are never interpolated into the routine definition.</p>
+        <div id="programming-run-params" class="programming-run-params"></div>
+        <div id="programming-run-status" class="form-status" role="status"></div>
+        <div class="app-dialog-actions"><button class="button" id="programming-run-cancel" type="button">Cancel</button><button class="button primary" id="programming-run-confirm" type="button">▶ Execute</button></div>
       </div>
     </section>
     <section id="app-dialog" class="app-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="app-dialog-title" aria-describedby="app-dialog-message">

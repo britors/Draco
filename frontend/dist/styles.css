@@ -332,8 +332,25 @@ select:not(:disabled):active { background-color: var(--color-surface-raised); }
 .object-definition-row { grid-template-columns: minmax(0, .8fr) minmax(0, 1.6fr) auto; align-items: center; }
 .object-definition-row .button { justify-self: end; }
 .programming-controls select { min-width: 180px; }
+.button-icon { display: inline-block; margin-right: 5px; font-size: 1.05em; line-height: 1; }
+.programming-repository-bar { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; padding: 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); }
+.programming-repository-identity { display: flex; align-items: center; gap: 9px; min-width: 210px; margin-right: auto; }
+.programming-repository-identity strong { display: block; margin-top: 3px; color: var(--color-text); font-size: 13px; }
+.repo-mark { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 7px; color: var(--color-action-soft); background: color-mix(in srgb, var(--color-action) 14%, transparent); font-size: 17px; }
+.programming-repository-bar label { display: grid; gap: 5px; min-width: 170px; color: var(--color-text-subtle); font-size: 10px; text-transform: uppercase; }
+.programming-repository-bar select { min-width: 170px; padding-block: 7px; }
+.source-state { align-self: center; padding: 5px 8px; border-radius: 999px; color: var(--color-text-subtle); background: var(--color-surface-raised); font-size: 10px; }
+.source-state.dirty { color: #f2c879; }
+.source-state.compiled { color: #98e0b7; }
 .programming-browser, .programming-editor-panel { min-width: 0; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-raised); }
 .programming-browser { min-height: 520px; padding: 12px; }
+.programming-local-files { margin-bottom: 14px; padding: 10px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); }
+.programming-local-files-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.programming-local-files-heading h3 { margin: 3px 0 0; color: var(--color-text); font-size: 13px; }
+.programming-local-files-list { display: grid; gap: 4px; margin-top: 9px; }
+.programming-local-file { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 8px; border-radius: 6px; color: var(--color-text-muted); background: var(--color-surface-raised); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.programming-local-file:hover { color: var(--color-text); background: var(--color-border); }
+.programming-local-file button { flex: 0 0 auto; }
 .programming-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .programming-content > .empty-state { min-height: 240px; }
 .programming-editor-panel { display: flex; min-height: 650px; flex-direction: column; padding: 18px; }
@@ -371,6 +388,15 @@ html[data-theme="light"] .function-param-row { border-color: var(--color-border)
 .programming-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .programming-editor-footer .form-status { margin: 8px 0 0; }
 .programming-editor-footer .query-hint { flex: 0 0 auto; }
+.programming-execution-output { display: grid; gap: 8px; margin-top: 14px; padding: 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); }
+.programming-execution-output[hidden] { display: none; }
+.execution-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.execution-heading strong { display: block; margin-top: 3px; color: var(--color-text); font-size: 12px; }
+.programming-execution-output pre { max-height: 280px; margin: 0; padding: 10px; overflow: auto; border-radius: 7px; color: var(--color-text); background: #0d0f15; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.programming-run-panel { width: min(560px, calc(100vw - 32px)); }
+.programming-run-description { color: var(--color-text-muted); font-size: 12px; }
+.programming-run-params { display: grid; gap: 10px; margin: 12px 0; }
+.programming-run-params label { display: grid; gap: 5px; color: var(--color-text-subtle); font-size: 10px; text-transform: uppercase; }
 .github-diff { max-height: 360px; margin: 12px 0 0; padding: 14px; overflow: auto; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-text); background: #0d0f15; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
 .github-settings-form { display: grid; gap: 16px; }
 .github-settings-form > label { display: grid; gap: 7px; color: var(--color-text-muted); font-size: 12px; }

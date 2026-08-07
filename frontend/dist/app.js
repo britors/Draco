@@ -9,7 +9,7 @@ import { assembleFunctionDdl, formatFunctionParameters, parseFunctionParameters,
 
 const invoke = window.__TAURI__?.core?.invoke;
 const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
-const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.1.2', theme: 'dark', accent: 'coral', check_updates_on_startup: true }, releaseUrl: '', queryTabs: [{ id: 1, label: 'Query 1', sql: '' }], currentQueryTabId: 1 };
+const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.1.2', theme: 'dark', accent: 'coral', check_updates_on_startup: true, programming_workspace: null }, releaseUrl: '', queryTabs: [{ id: 1, label: 'Query 1', sql: '' }], currentQueryTabId: 1 };
 let dialogResolver = null;
 let aiReviewRequest = null;
 let aiReviewReturnFocus = null;
@@ -54,12 +54,16 @@ function syncPreferenceControls() {
   byId('check-updates-startup').checked = state.preferences.check_updates_on_startup;
   byId('about-version').textContent = state.preferences.version;
   byId('update-detail').textContent = `Current version: ${state.preferences.version}`;
+  const workspacePreference = byId('programming-workspace-preference');
+  if (workspacePreference) workspacePreference.value = state.preferences.programming_workspace || '';
 }
 
 async function loadPreferences() {
   try {
     state.preferences = await invoke('preferences');
+    programmingWorkspacePath = state.preferences.programming_workspace || null;
     syncPreferenceControls();
+    if (programmingWorkspacePath) void loadProgrammingLocalFiles();
     return state.preferences;
   } catch {
     applyAppearance(state.preferences);
@@ -234,6 +238,10 @@ async function clearAssistantKey() {
 
 let githubConnection = null;
 let githubBranches = [];
+let githubRepositories = [];
+let pendingGithubCommit = null;
+// Kept as a compatibility marker for older bridge versions that still expose connect_github.
+const legacyGithubConnectCommand = 'connect_github';
 
 function renderGithubConnection(connection) {
   githubConnection = connection;
@@ -244,7 +252,7 @@ function renderGithubConnection(connection) {
   byId('github-disconnect').disabled = !connection.connected;
   const status = byId('github-settings-status');
   status.textContent = connection.connected
-    ? `Connected as ${connection.account_login} · ${connection.owner}/${connection.repository}`
+    ? `Connected as ${connection.account_login}${connection.owner && connection.repository ? ` · ${connection.owner}/${connection.repository}` : ''}`
     : 'GitHub is not connected.';
   status.className = `form-status ${connection.connected ? 'success' : ''}`.trim();
 }
@@ -270,17 +278,19 @@ async function connectGithub(event) {
     status.className = 'form-status error';
     return;
   }
-  const settings = {
-    owner: value('github-owner'),
-    repository: value('github-repository'),
-    root_path: value('github-root-path'),
-    default_branch: value('github-default-branch') || 'main',
-  };
   byId('github-connect').disabled = true;
-  status.textContent = 'Validating repository and credential with GitHub…';
+  status.textContent = 'Validating credential with GitHub…';
   status.className = 'form-status';
   try {
-    renderGithubConnection(await invoke('connect_github', { settings, token }));
+    let connection;
+    try {
+      connection = await invoke('connect_github_token', { token });
+    } catch (tokenError) {
+      // Older installed binaries may not have the credential-only command yet.
+      connection = await invoke('connect_github', { settings: { owner: value('github-owner'), repository: value('github-repository'), root_path: value('github-root-path'), default_branch: value('github-default-branch') || 'main' }, token });
+      if (!connection) throw tokenError;
+    }
+    renderGithubConnection(connection);
     byId('github-token').value = '';
     await loadProgrammingGithub();
   } catch (error) {
@@ -299,6 +309,7 @@ async function disconnectGithub() {
     await invoke('disconnect_github');
     renderGithubConnection({ ...(githubConnection || {}), connected: false, account_login: null });
     githubBranches = [];
+    githubRepositories = [];
     renderProgrammingGithubBranches();
   } catch (error) {
     status.textContent = error?.message || 'Could not disconnect GitHub';
@@ -1317,6 +1328,10 @@ function triggerTemplate(schema) {
   return `CREATE OR REPLACE TRIGGER ${quotePreviewIdentifier('trigger_name')}\nBEFORE INSERT ON ${quotePreviewIdentifier(schema)}.${quotePreviewIdentifier('table_name')}\nFOR EACH ROW\nEXECUTE FUNCTION ${quotePreviewIdentifier(schema)}.${quotePreviewIdentifier('function_name')}();`;
 }
 
+function viewTemplate(schema) {
+  return `CREATE OR REPLACE VIEW ${quotePreviewIdentifier(schema)}.${quotePreviewIdentifier('view_name')} AS\nSELECT\n  *\nFROM ${quotePreviewIdentifier(schema)}.${quotePreviewIdentifier('table_name')};`;
+}
+
 function definitionEditorDialog(id, title, ddl, kind, context = {}) {
   const definitions = {
     function: ['save_function_definition', 'Save definition'],
@@ -1405,6 +1420,10 @@ async function editIndexDefinition(id, schema, table, name) {
 
 let programmingRequest = 0;
 let programmingEditorTarget = null;
+// Session-backed file cache for the prototype. The native filesystem bridge can replace this
+// map without changing the editor workflow once repository checkout paths are available.
+const programmingFileStore = new Map();
+let programmingWorkspacePath = null;
 
 // New/opened functions and procedures are edited as structured fields (schema, name,
 // parameters, returns, language) plus a body-only code editor instead of one free-text
@@ -1416,6 +1435,7 @@ let programmingEditorTarget = null;
 // a valid plpgsql body on its own. RETURN QUERY is the usual way to produce rows for a
 // SETOF/TABLE(...) return type; a scalar return uses a plain RETURN instead.
 const FUNCTION_TEMPLATE_BODY = '\nBEGIN\n  -- for SETOF/TABLE(...) returns: RETURN QUERY SELECT ...;\n  -- for a scalar/void return: RETURN ...; (or omit RETURN for void)\nEND;\n';
+const SQL_FUNCTION_TEMPLATE_BODY = '\nSELECT CURRENT_DATE;\n';
 
 function defaultFunctionHeader(kind, schema) {
   const isProcedure = kind === 'procedure';
@@ -1434,6 +1454,7 @@ function refreshProgrammingDdlPreview() {
 function notifyProgrammingFormChanged() {
   if (programmingEditorIsDirty()) setProgrammingEditorStatus('Unsaved changes.');
   refreshProgrammingDdlPreview();
+  syncProgrammingSourceState();
 }
 
 function functionParamRow(initial = {}) {
@@ -1608,7 +1629,7 @@ function readFunctionFormHeader() {
     name: row.querySelector('.pf-param-name').value.trim() || null,
     type: row.querySelector('.pf-param-type').value.trim(),
     default: row.querySelector('.pf-param-default').value.trim() || null,
-  }));
+  })).filter((param) => param.mode || param.name || param.type || param.default);
   if (params.some((param) => !param.type)) throw new Error('Every parameter needs a type');
   const kind = programmingEditorTarget?.kind === 'procedure' ? 'procedure' : 'function';
   return {
@@ -1664,10 +1685,21 @@ function programmingEditorIsDirty() {
   catch { return true; }
 }
 
-function setProgrammingEditorStatus(message, tone = '') {
+let programmingLastAlert = '';
+let programmingAlertReset = null;
+
+function setProgrammingEditorStatus(message, tone = '', options = {}) {
   const status = byId('programming-editor-status');
   status.textContent = message;
   status.className = `form-status ${tone}`.trim();
+  const isLoadMessage = tone === 'success' && /\bloaded\b|\bopened\b|\bselected\b|workspace selected|^New definition\b/i.test(message);
+  const shouldAlert = options.alert !== false && (tone === 'error' || (tone === 'success' && !isLoadMessage));
+  if (shouldAlert && message && message !== programmingLastAlert) {
+    programmingLastAlert = message;
+    if (programmingAlertReset) window.clearTimeout(programmingAlertReset);
+    programmingAlertReset = window.setTimeout(() => { programmingLastAlert = ''; }, 1200);
+    window.setTimeout(() => { void showAlert(message, tone === 'error' ? 'Programming error' : 'Programming success'); }, 0);
+  }
 }
 
 function clearProgrammingEditor(message = 'Select an object to start editing.') {
@@ -1683,8 +1715,11 @@ function clearProgrammingEditor(message = 'Select an object to start editing.') 
   byId('programming-validate').disabled = true;
   byId('programming-review-ai').disabled = true;
   byId('programming-save').disabled = true;
+  byId('programming-save-file').disabled = true;
+  byId('programming-run').disabled = true;
   setProgrammingEditorStatus(message);
   renderProgrammingGithubBranches();
+  syncProgrammingSourceState();
 }
 
 function setProgrammingEditorTarget(target, ddl) {
@@ -1700,16 +1735,19 @@ function setProgrammingEditorTarget(target, ddl) {
   byId('programming-validate').disabled = !['function', 'procedure'].includes(target.kind);
   byId('programming-review-ai').disabled = false;
   byId('programming-save').disabled = false;
+  byId('programming-save-file').disabled = false;
+  byId('programming-run').disabled = !['function', 'procedure'].includes(target.kind);
   const structured = programmingEditorTarget.structured;
   const statusMessage = target.isNew
     ? (structured ? 'New definition — fill in the fields and body, then save.' : 'New definition — edit and save when ready.')
     : (structured ? 'Definition loaded — schema, name, parameters, returns and language are editable above; only the body is in the code editor.' : 'Definition loaded.');
-  setProgrammingEditorStatus(statusMessage, 'success');
+  setProgrammingEditorStatus(statusMessage, 'success', { alert: Boolean(target.isNew) });
   byId('programming-browser-screen').hidden = true;
   byId('programming-editor-screen').hidden = false;
   document.querySelector('.programming-panel').classList.add('editor-open');
   byId('programming-github-diff').hidden = true;
   refreshProgrammingDdlPreview();
+  syncProgrammingSourceState(target.isNew ? 'New file · not saved' : undefined);
   void loadProgrammingGithub();
   editor.focus();
 }
@@ -1755,6 +1793,8 @@ async function openProgrammingObject(id, schema, object, options = {}) {
       ddl = ddl.replace(/^CREATE\s+TRIGGER/i, 'CREATE OR REPLACE TRIGGER');
     }
     if (!ddl.trim()) throw new Error('Definition not found');
+    const targetPath = programmingGithubPath({ schema, name: object.name, kind: object.kind, args });
+    ddl = programmingFileStore.get(`draco-programming-file:${targetPath}`) || ddl;
     const signature = args === null ? '' : `(${args})`;
     setProgrammingEditorTarget({
       id,
@@ -1814,11 +1854,17 @@ async function saveProgrammingDefinition() {
   button.disabled = true;
   setProgrammingEditorStatus('Saving definition…');
   try {
+    if (target.kind === 'file') {
+      await saveProgrammingFile();
+      button.disabled = false;
+      return;
+    }
     if (target.kind === 'view') await invoke('save_view_definition', { id: target.id, schema: target.schema, name: target.name, ddl });
     else if (target.kind === 'trigger') await invoke('save_trigger_definition', { id: target.id, ddl });
     else await invoke('save_function_definition', { id: target.id, ddl });
     target.originalDdl = ddl;
     target.deployedDdl = ddl;
+    target.fileSavedDdl = ddl;
     target.isNew = false;
     if (target.structured) {
       const header = readFunctionFormHeader();
@@ -1837,6 +1883,7 @@ async function saveProgrammingDefinition() {
       }
     }
     setProgrammingEditorStatus('Definition saved.', 'success');
+    syncProgrammingSourceState('Compiled · saved to PostgreSQL');
     await loadProgrammingObjects(target.id, target.schema);
     const kindLabel = { view: 'View', trigger: 'Trigger', function: 'Function', procedure: 'Procedure' }[target.kind] || 'Definition';
     await showAlert(`${kindLabel} saved successfully.`, 'Saved');
@@ -1845,6 +1892,171 @@ async function saveProgrammingDefinition() {
   } finally {
     button.disabled = false;
   }
+}
+
+function programmingLocalFileKey(target = programmingEditorTarget) {
+  const path = programmingGithubPath(target);
+  return path ? `draco-programming-file:${path}` : null;
+}
+
+async function chooseProgrammingWorkspace() {
+  try {
+    const folder = await invoke('choose_programming_workspace');
+    if (folder) {
+      programmingWorkspacePath = folder;
+      void savePreferences({ programming_workspace: folder });
+      byId('programming-source-state').textContent = `Workspace · ${folder}`;
+      setProgrammingEditorStatus('Programming workspace selected.', 'success');
+      await loadProgrammingLocalFiles();
+    }
+  } catch (error) { setProgrammingEditorStatus(error?.message || 'Could not choose the workspace folder', 'error'); }
+}
+
+async function clearProgrammingWorkspace() {
+  if (!programmingWorkspacePath || !await showConfirm('Remove the Programming workspace from Draco preferences? No files will be deleted.', 'Clear workspace', false, 'Clear')) return;
+  programmingWorkspacePath = null;
+  await savePreferences({ programming_workspace: null });
+  byId('programming-local-files-count').textContent = '0';
+  byId('programming-local-files-list').replaceChildren(errorState('No workspace selected', 'Choose a folder to browse local SQL files.'));
+  byId('programming-source-state').textContent = 'No workspace selected';
+  setProgrammingEditorStatus('Programming workspace cleared.', 'success');
+}
+
+async function loadProgrammingLocalFiles() {
+  const list = byId('programming-local-files-list');
+  const count = byId('programming-local-files-count');
+  if (!programmingWorkspacePath) return;
+  try {
+    const files = await invoke('list_programming_files', { workspace: programmingWorkspacePath });
+    count.textContent = String(files.length);
+    list.replaceChildren();
+    if (!files.length) { list.append(errorState('No SQL files found', 'Save a definition to this workspace to see it here.')); return; }
+    for (const file of files) {
+      const row = document.createElement('div'); row.className = 'programming-local-file';
+      const label = document.createElement('span'); label.textContent = file;
+      const open = document.createElement('button'); open.className = 'button small'; open.type = 'button'; open.innerHTML = '<span class="button-icon" aria-hidden="true">▣</span>Open';
+      open.addEventListener('click', () => void openProgrammingLocalFile(file));
+      row.append(label, open); list.append(row);
+    }
+  } catch (error) { count.textContent = '—'; list.replaceChildren(errorState('Workspace unavailable', error?.message || 'Could not read SQL files.')); }
+}
+
+async function openProgrammingLocalFile(relativePath) {
+  if (!programmingWorkspacePath || !await confirmProgrammingEditorReplacement()) return;
+  try {
+    const content = await invoke('read_programming_file', { workspace: programmingWorkspacePath, relativePath });
+    const name = relativePath.split('/').pop().replace(/\.sql$/i, '');
+    const schema = relativePath.split('/')[0] || byId('programming-schema').value || 'public';
+    const target = { id: byId('programming-connection').value, schema, name, kind: 'file', title: relativePath, source: { name, kind: 'file' }, args: null, isNew: false, localPath: relativePath };
+    setProgrammingEditorTarget(target, content);
+    programmingEditorTarget.originalDdl = content;
+    programmingEditorTarget.deployedDdl = content;
+    byId('programming-validate').disabled = true;
+    byId('programming-run').disabled = true;
+    setProgrammingEditorStatus(`Opened ${relativePath} from disk.`, 'success');
+  } catch (error) { setProgrammingEditorStatus(error?.message || 'Could not open the local file', 'error'); }
+}
+
+async function saveProgrammingFile() {
+  const target = programmingEditorTarget;
+  if (!target) return;
+  let ddl;
+  try {
+    if (target.structured) {
+      const header = readFunctionFormHeader();
+      target.header = header;
+      target.schema = header.schema;
+      target.name = header.name;
+      target.title = `${header.schema}.${header.name}`;
+      byId('programming-editor-title').textContent = target.title;
+    }
+    ddl = currentProgrammingDdl();
+  } catch (error) { setProgrammingEditorStatus(error?.message || 'Complete the required fields before saving', 'error'); return; }
+  const key = programmingLocalFileKey(target);
+  if (!key) { setProgrammingEditorStatus('Save the definition with a schema and name first.', 'error'); return; }
+  try {
+    if (!programmingWorkspacePath) await chooseProgrammingWorkspace();
+    if (programmingWorkspacePath) {
+      const savedPath = await invoke('save_programming_file', { workspace: programmingWorkspacePath, relativePath: programmingGithubPath(target), content: ddl });
+      programmingFileStore.set(key, ddl);
+      target.fileSavedDdl = ddl;
+      setProgrammingEditorStatus(`File saved on disk: ${savedPath || programmingGithubPath(target)}`, 'success');
+    } else {
+      programmingFileStore.set(key, ddl);
+      setProgrammingEditorStatus('File draft saved for this session. Choose a workspace folder to persist it on disk.', 'success');
+    }
+    syncProgrammingSourceState('Saved file · not compiled');
+  } catch (error) {
+    setProgrammingEditorStatus(error?.message || 'Could not save the local file', 'error');
+  }
+}
+
+function openProgrammingRunDialog() {
+  const target = programmingEditorTarget;
+  if (!target || !['function', 'procedure'].includes(target.kind)) return;
+  if (programmingEditorIsDirty()) {
+    setProgrammingEditorStatus('Save or compile the current changes before running.', 'error');
+    return;
+  }
+  const params = byId('programming-run-params');
+  params.replaceChildren();
+  const header = target.header || { params: [] };
+  for (const [index, param] of (header.params || []).entries()) {
+    if (param.mode === 'OUT') continue;
+    const label = document.createElement('label');
+    label.innerHTML = `<span>${param.name || `Parameter ${index + 1}`} · ${param.type}</span>`;
+    const input = document.createElement('input');
+    input.dataset.paramIndex = String(index);
+    input.placeholder = param.default ? `Default: ${param.default}` : 'NULL';
+    input.autocomplete = 'off';
+    label.append(input); params.append(label);
+  }
+  if (!params.children.length) params.append(Object.assign(document.createElement('p'), { className: 'form-status', textContent: 'This routine has no input parameters.' }));
+  byId('programming-run-title').textContent = `Run ${target.kind} ${target.schema}.${target.name}`;
+  byId('programming-run-status').textContent = '';
+  byId('programming-run-dialog').hidden = false;
+  params.querySelector('input')?.focus();
+}
+
+function closeProgrammingRunDialog() { byId('programming-run-dialog').hidden = true; }
+
+function sqlLiteral(raw) {
+  const text = raw.trim();
+  if (!text || /^null$/i.test(text)) return 'NULL';
+  if (/^(true|false)$/i.test(text) || /^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) return text;
+  return `'${text.replaceAll("'", "''")}'`;
+}
+
+async function runProgrammingDefinition() {
+  const target = programmingEditorTarget;
+  if (!target || !['function', 'procedure'].includes(target.kind)) return;
+  const inputs = [...byId('programming-run-params').querySelectorAll('input')];
+  const header = target.header || { params: [] };
+  const args = inputs.map((input) => sqlLiteral(input.value));
+  const qualified = `${target.schema}.${target.name}`;
+  const sql = target.kind === 'procedure' ? `CALL ${qualified}(${args.join(', ')});` : `SELECT * FROM ${qualified}(${args.join(', ')});`;
+  const output = byId('programming-execution-output');
+  const resultView = byId('programming-execution-result');
+  const summary = byId('programming-execution-summary');
+  byId('programming-run-confirm').disabled = true;
+  byId('programming-run-status').textContent = 'Executing…';
+  try {
+    const result = await invoke('execute_query', { id: target.id, sql, operationId: operationId() });
+    output.hidden = false;
+    summary.textContent = `${result.rows?.length || 0} rows · ${result.duration_ms ?? 0} ms`;
+    const displayCell = (cell) => {
+      if (cell == null) return 'NULL';
+      if (typeof cell === 'object') return JSON.stringify(cell);
+      return String(cell);
+    };
+    resultView.textContent = result.columns?.length
+      ? [result.columns.join(' | '), ...(result.rows || []).map((row) => result.columns.map((column) => displayCell(row[column])).join(' | '))].join('\n')
+      : 'Execution completed without a result set.';
+    byId('programming-run-status').textContent = 'Completed.';
+    closeProgrammingRunDialog();
+  } catch (error) {
+    byId('programming-run-status').textContent = error?.message || 'Execution failed.';
+  } finally { byId('programming-run-confirm').disabled = false; }
 }
 
 async function newProgrammingDefinition(kind) {
@@ -1861,11 +2073,12 @@ async function newProgrammingDefinition(kind) {
     source: null,
     args: null,
     isNew: true,
-  }, isTrigger ? triggerTemplate(schema) : '');
+  }, isTrigger ? triggerTemplate(schema) : kind === 'view' ? viewTemplate(schema) : '');
 }
 
 function programmingGithubPath(target = programmingEditorTarget) {
   if (!target?.name) return null;
+  if (target.localPath) return target.localPath;
   const folder = { view: 'views', function: 'functions', procedure: 'procedures', trigger: 'triggers' }[target.kind] || `${target.kind}s`;
   const safe = (part) => String(part).replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'object';
   const overload = target.args ? `__${safe(target.args)}` : '';
@@ -1891,9 +2104,40 @@ function renderProgrammingGithubBranches() {
   base.disabled = !ready;
   byId('programming-github-message').disabled = !ready;
   for (const id of ['programming-github-load', 'programming-github-diff-deployed', 'programming-github-diff-branches', 'programming-github-commit', 'programming-github-pr']) byId(id).disabled = !ready;
+  const pendingForTarget = pendingGithubCommit && pendingGithubCommit.path === programmingGithubPath() && pendingGithubCommit.branch === branch.value;
+  byId('programming-github-push').disabled = !ready || !pendingForTarget;
   byId('programming-github-status').textContent = githubConnection?.connected
     ? `${githubConnection.owner}/${githubConnection.repository}`
     : 'GitHub not connected';
+  renderProgrammingRepositoryWorkspace();
+}
+
+// The repository is a workspace choice, not a credential setting.  The first implementation
+// exposes the connected repository here and keeps the selector ready for the multi-repository
+// provider API that will follow.
+function renderProgrammingRepositoryWorkspace() {
+  const repository = byId('programming-repository');
+  const branch = byId('programming-workspace-branch');
+  if (!repository || !branch) return;
+  const repoValue = githubConnection?.connected ? `${githubConnection.owner}/${githubConnection.repository}` : '';
+  repository.replaceChildren(new Option(repoValue ? 'Choose repository' : 'Connect GitHub in Preferences', ''));
+  for (const item of githubRepositories) {
+    const option = new Option(`${item.owner}/${item.name}${item.private ? ' · private' : ''}`, `${item.owner}/${item.name}`);
+    repository.append(option);
+  }
+  repository.value = repoValue;
+  branch.replaceChildren(new Option(githubConnection?.connected ? 'Choose a branch' : 'Connect GitHub in Preferences', ''));
+  for (const item of githubBranches) branch.append(new Option(item.name, item.name));
+  branch.value = programmingEditorTarget?.activeBranch || githubConnection?.default_branch || '';
+  byId('programming-repository-label').textContent = repoValue || 'Select a repository';
+}
+
+function syncProgrammingSourceState(message) {
+  const stateLabel = byId('programming-source-state');
+  if (!stateLabel) return;
+  const dirty = programmingEditorIsDirty();
+  stateLabel.textContent = message || (dirty ? 'Modified · not compiled' : programmingEditorTarget ? 'Saved file · compiled' : 'No file selected');
+  stateLabel.className = `source-state ${dirty ? 'dirty' : programmingEditorTarget ? 'compiled' : ''}`.trim();
 }
 
 async function loadProgrammingGithub() {
@@ -1904,10 +2148,12 @@ async function loadProgrammingGithub() {
       renderProgrammingGithubBranches();
       return;
     }
-    githubBranches = await invoke('github_branches');
+    githubRepositories = await invoke('github_repositories');
+    githubBranches = githubConnection.owner && githubConnection.repository ? await invoke('github_branches') : [];
     renderProgrammingGithubBranches();
   } catch (error) {
     githubBranches = [];
+    githubRepositories = [];
     renderProgrammingGithubBranches();
     byId('programming-github-status').textContent = error?.message || 'GitHub unavailable';
   }
@@ -2000,16 +2246,27 @@ async function commitProgrammingGithubFile() {
   let content;
   try { content = currentProgrammingDdl(); }
   catch (error) { setProgrammingEditorStatus(error?.message || 'Complete the required fields first', 'error'); return; }
-  setProgrammingEditorStatus(`Committing ${path} to ${branch}…`);
+  pendingGithubCommit = { branch, path, content, message };
+  target.activeBranch = branch;
+  byId('programming-github-message').value = '';
+  setProgrammingEditorStatus(`Commit preparado localmente para ${branch}. Clique Push para enviar ao GitHub.`, 'success');
+  renderProgrammingGithubBranches();
+}
+
+async function pushProgrammingGithubFile() {
+  if (!pendingGithubCommit) {
+    setProgrammingEditorStatus('Faça o commit local antes do push.', 'error');
+    return;
+  }
+  const { branch, path, content, message } = pendingGithubCommit;
+  setProgrammingEditorStatus(`Enviando commit para ${branch}…`);
   try {
     const url = await invoke('github_commit_file', { branch, path, content, message });
-    target.originalDdl = content;
-    target.activeBranch = branch;
-    byId('programming-github-message').value = '';
-    setProgrammingEditorStatus(`Committed to ${branch}. ${url}`, 'success');
-  } catch (error) {
-    setProgrammingEditorStatus(error?.message || 'Could not commit the definition', 'error');
-  }
+    if (programmingEditorTarget) programmingEditorTarget.originalDdl = content;
+    pendingGithubCommit = null;
+    setProgrammingEditorStatus(`Push concluído em ${branch}. ${url}`, 'success');
+    renderProgrammingGithubBranches();
+  } catch (error) { setProgrammingEditorStatus(error?.message || 'Could not push the commit', 'error'); }
 }
 
 function openProgrammingPullRequestForm() {
@@ -2116,6 +2373,7 @@ async function loadProgrammingObjects(id, schema) {
   byId('programming-new-function').disabled = false;
   byId('programming-new-procedure').disabled = false;
   byId('programming-new-trigger').disabled = false;
+  byId('programming-new-view').disabled = false;
   content.replaceChildren(errorState('Loading programming objects…', 'Reading views, functions, procedures and triggers.'));
   status.textContent = `Loading ${schema}…`;
   try {
@@ -2154,6 +2412,7 @@ async function loadProgrammingSchemas(id) {
   byId('programming-new-function').disabled = true;
   byId('programming-new-procedure').disabled = true;
   byId('programming-new-trigger').disabled = true;
+  byId('programming-new-view').disabled = true;
   if (!id) {
     byId('programming-content').replaceChildren(errorState('Choose a connected connection', 'Schemas and programming objects will appear here.'));
     byId('programming-status').textContent = '';
@@ -3870,6 +4129,35 @@ byId('programming-editor').addEventListener('input', () => {
   notifyProgrammingFormChanged();
   void updateProgrammingAutocomplete();
 });
+byId('programming-save-file').addEventListener('click', () => void saveProgrammingFile());
+byId('programming-choose-workspace').addEventListener('click', () => void chooseProgrammingWorkspace());
+byId('programming-clear-workspace').addEventListener('click', () => void clearProgrammingWorkspace());
+byId('programming-clear-workspace-local').addEventListener('click', () => void clearProgrammingWorkspace());
+byId('choose-programming-workspace-preference').addEventListener('click', () => void chooseProgrammingWorkspace());
+byId('clear-programming-workspace-preference').addEventListener('click', () => void clearProgrammingWorkspace());
+byId('programming-run').addEventListener('click', openProgrammingRunDialog);
+byId('programming-run-confirm').addEventListener('click', () => void runProgrammingDefinition());
+byId('programming-run-cancel').addEventListener('click', closeProgrammingRunDialog);
+for (const element of document.querySelectorAll('[data-close-programming-run]')) element.addEventListener('click', closeProgrammingRunDialog);
+byId('programming-clear-output').addEventListener('click', () => { byId('programming-execution-output').hidden = true; byId('programming-execution-result').textContent = ''; });
+byId('programming-refresh-source').addEventListener('click', () => { void loadProgrammingGithub(); void loadProgrammingLocalFiles(); });
+byId('programming-repository').addEventListener('change', async (event) => {
+  const [owner, repository] = event.target.value.split('/');
+  if (!owner || !repository) return;
+  try {
+    githubConnection = await invoke('select_github_repository', { owner, repository });
+    githubBranches = await invoke('github_branches');
+    renderProgrammingGithubBranches();
+    setProgrammingEditorStatus(`Repository ${owner}/${repository} selected.`, 'success');
+  } catch (error) {
+    setProgrammingEditorStatus(error?.message || 'Could not select the repository', 'error');
+    renderProgrammingRepositoryWorkspace();
+  }
+});
+byId('programming-workspace-branch').addEventListener('change', (event) => {
+  const branch = event.target.value;
+  if (programmingEditorTarget) { programmingEditorTarget.activeBranch = branch; byId('programming-github-branch').value = branch; }
+});
 byId('programming-editor').addEventListener('click', hideAutocomplete);
 byId('programming-editor').addEventListener('scroll', () => {
   const overlay = byId('programming-editor-highlight');
@@ -3880,7 +4168,7 @@ byId('programming-editor').addEventListener('scroll', () => {
 byId('programming-editor').addEventListener('keydown', (event) => {
   if (handleAutocompleteKeydown(event)) return;
   if (!(event.ctrlKey || event.metaKey)) return;
-  if (event.key.toLowerCase() === 's') { event.preventDefault(); void saveProgrammingDefinition(); }
+  if (event.key.toLowerCase() === 's') { event.preventDefault(); void saveProgrammingFile(); }
   if (event.key === 'Enter') { event.preventDefault(); void validateProgrammingDefinition(); }
 });
 byId('query-connection').addEventListener('change', () => { void completionIndexFor(byId('query-connection').value); });
@@ -3907,6 +4195,7 @@ byId('programming-schema').addEventListener('change', () => void loadProgramming
 byId('programming-new-function').addEventListener('click', () => void newProgrammingDefinition('function'));
 byId('programming-new-procedure').addEventListener('click', () => void newProgrammingDefinition('procedure'));
 byId('programming-new-trigger').addEventListener('click', () => void newProgrammingDefinition('trigger'));
+byId('programming-new-view').addEventListener('click', () => void newProgrammingDefinition('view'));
 byId('programming-back').addEventListener('click', () => void returnToProgrammingBrowser());
 byId('programming-reload').addEventListener('click', () => void reloadProgrammingDefinition());
 byId('programming-validate').addEventListener('click', () => void validateProgrammingDefinition());
@@ -3917,6 +4206,15 @@ byId('pf-language').addEventListener('change', () => {
   const custom = byId('pf-language').value === '__custom__';
   byId('pf-language-custom').hidden = !custom;
   if (custom) byId('pf-language-custom').focus();
+  const editor = byId('programming-editor');
+  const body = editor.value.trim();
+  if (byId('pf-language').value === 'sql' && /^BEGIN\b/i.test(body)) {
+    setProgrammingEditorValue(SQL_FUNCTION_TEMPLATE_BODY);
+    setProgrammingEditorStatus('SQL functions use a direct SELECT body; the PL/pgSQL block was replaced.', 'success');
+  } else if (byId('pf-language').value === 'plpgsql' && /^SELECT\s+CURRENT_DATE\s*;?$/i.test(body)) {
+    setProgrammingEditorValue(FUNCTION_TEMPLATE_BODY);
+  }
+  notifyProgrammingFormChanged();
 });
 byId('pf-returns-kind').addEventListener('change', () => {
   const kind = byId('pf-returns-kind').value;
@@ -3932,6 +4230,7 @@ byId('programming-github-load').addEventListener('click', () => void loadProgram
 byId('programming-github-diff-deployed').addEventListener('click', () => void diffProgrammingDeployed());
 byId('programming-github-diff-branches').addEventListener('click', () => void diffProgrammingBranches());
 byId('programming-github-commit').addEventListener('click', () => void commitProgrammingGithubFile());
+byId('programming-github-push').addEventListener('click', () => void pushProgrammingGithubFile());
 byId('programming-github-pr').addEventListener('click', openProgrammingPullRequestForm);
 byId('programming-github-pr-cancel').addEventListener('click', () => { byId('programming-github-pr-form').hidden = true; });
 byId('programming-github-pr-form').addEventListener('submit', (event) => void createProgrammingPullRequest(event));
