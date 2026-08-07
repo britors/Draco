@@ -14,7 +14,7 @@ use draco_core::assistant;
 use draco_core::connection::{validate_connection, DbConnection, DbConnectionDraft};
 use draco_core::error::CoreError;
 use draco_core::github;
-pub use draco_core::github::{GithubBranch, GithubConnection, GithubPullRequest};
+pub use draco_core::github::{GithubBranch, GithubConnection, GithubPullRequest, GithubRepository};
 use draco_core::manager::{ConnectionManager, ConnectionStatus};
 use draco_core::postgres::backup::{
     DumpFormat, DumpOptions, RestoreOptions, ToolConnection, ToolEvent,
@@ -545,6 +545,7 @@ pub struct PreferencesView {
     pub theme: AppTheme,
     pub accent: AccentColor,
     pub check_updates_on_startup: bool,
+    pub programming_workspace: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -592,6 +593,7 @@ impl Application {
             theme: settings.theme,
             accent: settings.accent,
             check_updates_on_startup: settings.check_updates_on_startup,
+            programming_workspace: settings.programming_workspace,
         }
     }
 
@@ -600,12 +602,14 @@ impl Application {
             settings.theme = preferences.theme;
             settings.accent = preferences.accent;
             settings.check_updates_on_startup = preferences.check_updates_on_startup;
+            settings.programming_workspace = preferences.programming_workspace.clone();
         })?;
         Ok(PreferencesView {
             version: env!("CARGO_PKG_VERSION").to_string(),
             theme: saved.theme,
             accent: saved.accent,
             check_updates_on_startup: saved.check_updates_on_startup,
+            programming_workspace: saved.programming_workspace,
         })
     }
 
@@ -1899,6 +1903,12 @@ impl Application {
             .map_err(|error| ApplicationError::Github(error.to_string()))
     }
 
+    pub async fn connect_github_token(&self, token: &str) -> Result<GithubConnection> {
+        github::connect_token(token)
+            .await
+            .map_err(|error| ApplicationError::Github(error.to_string()))
+    }
+
     pub async fn disconnect_github(&self) -> Result<()> {
         github::clear_token()
             .await
@@ -1908,6 +1918,17 @@ impl Application {
     pub async fn github_branches(&self) -> Result<Vec<GithubBranch>> {
         github::branches()
             .await
+            .map_err(|error| ApplicationError::Github(error.to_string()))
+    }
+
+    pub async fn github_repositories(&self) -> Result<Vec<GithubRepository>> {
+        github::repositories()
+            .await
+            .map_err(|error| ApplicationError::Github(error.to_string()))
+    }
+
+    pub fn select_github_repository(&self, owner: &str, repository: &str) -> Result<GithubConnection> {
+        github::select_repository(owner, repository)
             .map_err(|error| ApplicationError::Github(error.to_string()))
     }
 

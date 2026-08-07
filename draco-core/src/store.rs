@@ -199,6 +199,7 @@ pub struct AppSettings {
     pub theme: AppTheme,
     pub accent: AccentColor,
     pub check_updates_on_startup: bool,
+    pub programming_workspace: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -210,6 +211,7 @@ impl Default for AppSettings {
             theme: AppTheme::Dark,
             accent: AccentColor::Coral,
             check_updates_on_startup: true,
+            programming_workspace: None,
         }
     }
 }

@@ -46,6 +46,14 @@ pub struct GithubBranch {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GithubRepository {
+    pub owner: String,
+    pub name: String,
+    pub private: bool,
+    pub default_branch: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GithubPullRequest {
     pub number: u64,
     pub html_url: String,
@@ -54,6 +62,14 @@ pub struct GithubPullRequest {
 #[derive(Debug, Deserialize)]
 struct GithubUser {
     login: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RepositoryResponse {
+    name: String,
+    private: bool,
+    default_branch: String,
+    owner: GithubUser,
 }
 
 #[derive(Debug, Deserialize)]
@@ -226,17 +242,69 @@ pub async fn connect(settings: &GithubSettings, token: &str) -> Result<GithubCon
     Ok(connection_view(settings.clone(), true, Some(login)))
 }
 
+/// Authenticates the account without requiring a repository. Repository selection happens in
+/// the Programming workspace and is persisted only after the user chooses one there.
+pub async fn connect_token(token: &str) -> Result<GithubConnection> {
+    let client = client()?;
+    let login = authenticated_user(&client, token).await?;
+    save_token(token).await?;
+    Ok(connection_view(crate::store::get_github_settings(), true, Some(login)))
+}
+
 pub async fn status() -> Result<GithubConnection> {
     let settings = crate::store::get_github_settings();
-    if settings.owner.is_empty() || settings.repository.is_empty() {
-        return Ok(connection_view(settings, false, None));
-    }
     let token = match load_token().await {
         Ok(token) => token,
         Err(_) => return Ok(connection_view(settings, false, None)),
     };
     let login = authenticated_user(&client()?, &token).await?;
     Ok(connection_view(settings, true, Some(login)))
+}
+
+pub async fn repositories() -> Result<Vec<GithubRepository>> {
+    let token = load_token().await?;
+    let client = client()?;
+    let mut url = api_url(&["user", "repos"])?;
+    url.query_pairs_mut()
+        .append_pair("per_page", "100")
+        .append_pair("sort", "updated")
+        .append_pair("affiliation", "owner,collaborator,organization_member");
+    let response = request(&client, reqwest::Method::GET, url, &token)
+        .send()
+        .await
+        .map_err(|_| GithubError::Message("Could not reach GitHub.".into()))?;
+    let response = checked(response, false).await?.expect("checked response");
+    let mut repositories = response
+        .json::<Vec<RepositoryResponse>>()
+        .await
+        .map_err(|_| GithubError::Message("GitHub returned an invalid repository list.".into()))?
+        .into_iter()
+        .map(|repo| GithubRepository {
+            owner: repo.owner.login,
+            name: repo.name,
+            private: repo.private,
+            default_branch: repo.default_branch,
+        })
+        .collect::<Vec<_>>();
+    repositories.sort_by_key(|repo| (repo.owner.to_lowercase(), repo.name.to_lowercase()));
+    Ok(repositories)
+}
+
+pub fn select_repository(owner: &str, repository: &str) -> Result<GithubConnection> {
+    let mut settings = crate::store::get_github_settings();
+    let valid = |value: &str| {
+        !value.trim().is_empty()
+            && value
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || "-_".contains(character))
+    };
+    if !valid(owner) || !valid(repository) {
+        return Err(GithubError::Message("Choose a valid GitHub repository.".into()));
+    }
+    settings.owner = owner.trim().to_owned();
+    settings.repository = repository.trim().to_owned();
+    crate::store::save_github_settings(&settings)?;
+    Ok(connection_view(settings, true, None))
 }
 
 fn connection_view(

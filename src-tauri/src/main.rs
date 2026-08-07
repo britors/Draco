@@ -1,12 +1,15 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+use std::path::{Component, Path, PathBuf};
+use std::{fs, io};
+
 use draco_app::{
     AdminView, AlterTableInput, AlterTablePreviewView, Application, ApplicationError,
     AssistantReplyView, BackupFormat, BackupOptionsInput, BrowseTableView, CompletionDataView,
     ConnectionInput, ConnectionView, CreateRoleInput, CreateTableInput, CronJobInput,
     CronJobRunView, CronJobsView, DashboardView, DeleteTableRowInput, ErdView, ExtensionsView,
     FileAuthorizationPurpose, FunctionDefinitionView, GithubBranch, GithubConnection,
-    GithubPullRequest, GithubSettings, Health, HistoryView, InsertTableRowInput, PreferencesView,
+    GithubPullRequest, GithubRepository, GithubSettings, Health, HistoryView, InsertTableRowInput, PreferencesView,
     QueryResult, QueryStatsView, RestoreOptionsInput, RoleView, SchemaObjectView, SchemaView,
     SearchResultView, SnippetInput, SnippetView, TableDetailView, TableMaintenanceOperation,
     TableView, ToolResultView, TriggerInput, UpdateRoleInput, UpdateStatusView,
@@ -57,11 +60,12 @@ impl From<ApplicationError> for CommandError {
                 code: "github_error",
                 message,
             },
-            // Keep driver, filesystem and Secret Service details out of IPC responses. Detailed
-            // diagnostics belong in a bounded, redacted backend diagnostic event later (#111).
-            ApplicationError::Core(_) => Self {
+            // PostgreSQL's Display implementation is intentionally terse (often just "db error");
+            // expose the bounded, user-facing source-chain message so the editor can show the
+            // actual SQL diagnostic in its alert.
+            ApplicationError::Core(error) => Self {
                 code: "backend_error",
-                message: "The requested operation could not be completed".to_string(),
+                message: error.detailed_message(),
             },
         }
     }
@@ -942,13 +946,125 @@ async fn connect_github(
 }
 
 #[tauri::command]
+async fn connect_github_token(
+    state: State<'_, Application>,
+    token: String,
+) -> Result<GithubConnection, CommandError> {
+    state
+        .connect_github_token(&token)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
 async fn disconnect_github(state: State<'_, Application>) -> Result<(), CommandError> {
     state.disconnect_github().await.map_err(Into::into)
 }
 
 #[tauri::command]
+async fn choose_programming_workspace() -> Option<String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("Choose Programming workspace")
+            .pick_folder()
+            .map(|path| path.to_string_lossy().into_owned())
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+#[tauri::command]
+fn save_programming_file(
+    workspace: String,
+    relative_path: String,
+    content: String,
+) -> Result<(), CommandError> {
+    let relative = Path::new(&relative_path);
+    if relative.is_absolute()
+        || relative.components().any(|component| {
+            matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_))
+        })
+        || relative.extension().and_then(|extension| extension.to_str()) != Some("sql")
+    {
+        return Err(CommandError {
+            code: "invalid_input",
+            message: "Programming files must be relative .sql paths inside the selected workspace.".into(),
+        });
+    }
+    let workspace = PathBuf::from(workspace);
+    if !workspace.is_absolute() {
+        return Err(CommandError { code: "invalid_input", message: "Choose a valid local workspace folder.".into() });
+    }
+    let destination = workspace.join(relative);
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).map_err(|error| CommandError { code: "filesystem_error", message: error.to_string() })?;
+    }
+    fs::write(destination, content).map_err(|error| CommandError { code: "filesystem_error", message: error.to_string() })
+}
+
+#[tauri::command]
+async fn list_programming_files(workspace: String) -> Result<Vec<String>, CommandError> {
+    tauri::async_runtime::spawn_blocking(move || list_programming_files_sync(&workspace))
+        .await
+        .map_err(|error| CommandError { code: "filesystem_error", message: error.to_string() })?
+}
+
+fn list_programming_files_sync(workspace: &str) -> Result<Vec<String>, CommandError> {
+    fn walk(root: &Path, current: &Path, files: &mut Vec<String>) -> io::Result<()> {
+        for entry in fs::read_dir(current)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                walk(root, &path, files)?;
+            } else if path.extension().and_then(|extension| extension.to_str()) == Some("sql") {
+                if let Ok(relative) = path.strip_prefix(root) {
+                    files.push(relative.to_string_lossy().replace('\\', "/"));
+                }
+            }
+        }
+        Ok(())
+    }
+    let root = PathBuf::from(workspace);
+    if !root.is_absolute() || !root.is_dir() {
+        return Err(CommandError { code: "invalid_input", message: "Choose a valid local workspace folder.".into() });
+    }
+    let mut files = Vec::new();
+    walk(&root, &root, &mut files).map_err(|error| CommandError { code: "filesystem_error", message: error.to_string() })?;
+    files.sort();
+    Ok(files)
+}
+
+#[tauri::command]
+fn read_programming_file(workspace: String, relative_path: String) -> Result<String, CommandError> {
+    let relative = Path::new(&relative_path);
+    if relative.is_absolute() || relative.components().any(|component| matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_))) {
+        return Err(CommandError { code: "invalid_input", message: "Invalid programming file path.".into() });
+    }
+    fs::read_to_string(PathBuf::from(workspace).join(relative)).map_err(|error| CommandError { code: "filesystem_error", message: error.to_string() })
+}
+
+#[tauri::command]
 async fn github_branches(state: State<'_, Application>) -> Result<Vec<GithubBranch>, CommandError> {
     state.github_branches().await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn github_repositories(
+    state: State<'_, Application>,
+) -> Result<Vec<GithubRepository>, CommandError> {
+    state.github_repositories().await.map_err(Into::into)
+}
+
+#[tauri::command]
+fn select_github_repository(
+    state: State<'_, Application>,
+    owner: String,
+    repository: String,
+) -> Result<GithubConnection, CommandError> {
+    state
+        .select_github_repository(&owner, &repository)
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -1147,7 +1263,14 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             cancel_operation,
             github_status,
             connect_github,
+            connect_github_token,
             disconnect_github,
+            choose_programming_workspace,
+            save_programming_file,
+            list_programming_files,
+            read_programming_file,
+            github_repositories,
+            select_github_repository,
             github_branches,
             github_file,
             github_commit_file,
