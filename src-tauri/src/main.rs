@@ -9,11 +9,11 @@ use draco_app::{
     ConnectionInput, ConnectionView, CreateRoleInput, CreateTableInput, CronJobInput,
     CronJobRunView, CronJobsView, DashboardView, DeleteTableRowInput, ErdView, ExtensionsView,
     FileAuthorizationPurpose, FunctionDefinitionView, GithubBranch, GithubConnection,
-    GithubPullRequest, GithubRepository, GithubSettings, Health, HistoryView, InsertTableRowInput, PreferencesView,
-    QueryResult, QueryStatsView, RestoreOptionsInput, RoleView, SchemaObjectView, SchemaView,
-    SearchResultView, SnippetInput, SnippetView, TableDetailView, TableMaintenanceOperation,
-    TableView, ToolResultView, TriggerInput, UpdateRoleInput, UpdateStatusView,
-    UpdateTableCellInput,
+    GithubPullRequest, GithubRepository, GithubSettings, Health, HistoryView, InsertTableRowInput,
+    PreferencesView, QueryResult, QueryStatsView, RestoreOptionsInput, RoleView, SchemaObjectView,
+    SchemaView, SearchResultView, SnippetInput, SnippetView, TableDetailView,
+    TableMaintenanceOperation, TableView, ToolResultView, TriggerInput, UpdateRoleInput,
+    UpdateStatusView, UpdateTableCellInput,
 };
 use draco_core::assistant::{AiMessage, Provider, Settings};
 use serde::{Deserialize, Serialize};
@@ -60,12 +60,15 @@ impl From<ApplicationError> for CommandError {
                 code: "github_error",
                 message,
             },
-            // PostgreSQL's Display implementation is intentionally terse (often just "db error");
-            // expose the bounded, user-facing source-chain message so the editor can show the
-            // actual SQL diagnostic in its alert.
+            // PostgreSQL's Display implementation is intentionally terse (often just "db error"),
+            // so expose its source-chain diagnostic to the editor. Keep filesystem, Secret
+            // Service and arbitrary backend details out of IPC responses.
             ApplicationError::Core(error) => Self {
                 code: "backend_error",
-                message: error.detailed_message(),
+                message: match &error {
+                    draco_core::error::CoreError::Postgres(_) => error.detailed_message(),
+                    _ => "The requested operation could not be completed".to_string(),
+                },
             },
         }
     }
@@ -950,10 +953,7 @@ async fn connect_github_token(
     state: State<'_, Application>,
     token: String,
 ) -> Result<GithubConnection, CommandError> {
-    state
-        .connect_github_token(&token)
-        .await
-        .map_err(Into::into)
+    state.connect_github_token(&token).await.map_err(Into::into)
 }
 
 #[tauri::command]
@@ -983,31 +983,50 @@ fn save_programming_file(
     let relative = Path::new(&relative_path);
     if relative.is_absolute()
         || relative.components().any(|component| {
-            matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_))
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
         })
-        || relative.extension().and_then(|extension| extension.to_str()) != Some("sql")
+        || relative
+            .extension()
+            .and_then(|extension| extension.to_str())
+            != Some("sql")
     {
         return Err(CommandError {
             code: "invalid_input",
-            message: "Programming files must be relative .sql paths inside the selected workspace.".into(),
+            message: "Programming files must be relative .sql paths inside the selected workspace."
+                .into(),
         });
     }
     let workspace = PathBuf::from(workspace);
     if !workspace.is_absolute() {
-        return Err(CommandError { code: "invalid_input", message: "Choose a valid local workspace folder.".into() });
+        return Err(CommandError {
+            code: "invalid_input",
+            message: "Choose a valid local workspace folder.".into(),
+        });
     }
     let destination = workspace.join(relative);
     if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent).map_err(|error| CommandError { code: "filesystem_error", message: error.to_string() })?;
+        fs::create_dir_all(parent).map_err(|error| CommandError {
+            code: "filesystem_error",
+            message: error.to_string(),
+        })?;
     }
-    fs::write(destination, content).map_err(|error| CommandError { code: "filesystem_error", message: error.to_string() })
+    fs::write(destination, content).map_err(|error| CommandError {
+        code: "filesystem_error",
+        message: error.to_string(),
+    })
 }
 
 #[tauri::command]
 async fn list_programming_files(workspace: String) -> Result<Vec<String>, CommandError> {
     tauri::async_runtime::spawn_blocking(move || list_programming_files_sync(&workspace))
         .await
-        .map_err(|error| CommandError { code: "filesystem_error", message: error.to_string() })?
+        .map_err(|error| CommandError {
+            code: "filesystem_error",
+            message: error.to_string(),
+        })?
 }
 
 fn list_programming_files_sync(workspace: &str) -> Result<Vec<String>, CommandError> {
@@ -1027,10 +1046,16 @@ fn list_programming_files_sync(workspace: &str) -> Result<Vec<String>, CommandEr
     }
     let root = PathBuf::from(workspace);
     if !root.is_absolute() || !root.is_dir() {
-        return Err(CommandError { code: "invalid_input", message: "Choose a valid local workspace folder.".into() });
+        return Err(CommandError {
+            code: "invalid_input",
+            message: "Choose a valid local workspace folder.".into(),
+        });
     }
     let mut files = Vec::new();
-    walk(&root, &root, &mut files).map_err(|error| CommandError { code: "filesystem_error", message: error.to_string() })?;
+    walk(&root, &root, &mut files).map_err(|error| CommandError {
+        code: "filesystem_error",
+        message: error.to_string(),
+    })?;
     files.sort();
     Ok(files)
 }
@@ -1038,10 +1063,23 @@ fn list_programming_files_sync(workspace: &str) -> Result<Vec<String>, CommandEr
 #[tauri::command]
 fn read_programming_file(workspace: String, relative_path: String) -> Result<String, CommandError> {
     let relative = Path::new(&relative_path);
-    if relative.is_absolute() || relative.components().any(|component| matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_))) {
-        return Err(CommandError { code: "invalid_input", message: "Invalid programming file path.".into() });
+    if relative.is_absolute()
+        || relative.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+    {
+        return Err(CommandError {
+            code: "invalid_input",
+            message: "Invalid programming file path.".into(),
+        });
     }
-    fs::read_to_string(PathBuf::from(workspace).join(relative)).map_err(|error| CommandError { code: "filesystem_error", message: error.to_string() })
+    fs::read_to_string(PathBuf::from(workspace).join(relative)).map_err(|error| CommandError {
+        code: "filesystem_error",
+        message: error.to_string(),
+    })
 }
 
 #[tauri::command]

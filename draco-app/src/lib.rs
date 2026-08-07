@@ -1927,7 +1927,11 @@ impl Application {
             .map_err(|error| ApplicationError::Github(error.to_string()))
     }
 
-    pub fn select_github_repository(&self, owner: &str, repository: &str) -> Result<GithubConnection> {
+    pub fn select_github_repository(
+        &self,
+        owner: &str,
+        repository: &str,
+    ) -> Result<GithubConnection> {
         github::select_repository(owner, repository)
             .map_err(|error| ApplicationError::Github(error.to_string()))
     }
