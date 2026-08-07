@@ -43,6 +43,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="2.1.3" date="2026-08-07">
+      <description>
+        <p>Workspace Programming com arquivos SQL locais, seleção de repositórios e branches, fluxo Git separado, criação de views e execução de código.</p>
+      </description>
+    </release>
     <release version="2.1.2" date="2026-08-06">
       <description>
         <p>Gerenciamento completo de functions, procedures e triggers na bancada Programming, com editor estruturado, autocomplete, exclusão protegida e retorno contextual do Assistente de IA.</p>

@@ -5,7 +5,7 @@ artefato oficial é o app **Tauri 2**.
 
 - Repositório: <https://github.com/britors/Draco>
 - Identificador desktop: `org.lyraos.Draco`
-- Versão do workspace: `2.1.2`
+- Versão do workspace: `2.1.3`
 - Licença: GPL-3.0-or-later
 - Binário oficial: `target/release/draco`
 
@@ -169,7 +169,7 @@ colocar a senha no ambiente. A última execução documentada passou contra
 PostgreSQL 18.4, mas ainda não cobre webview instalada, SSH/jump host real nem
 as três APIs de IA.
 
-O workspace, o RPM/OBS e o AppStream estão em `2.1.2`. Releases devem usar uma
+O workspace, o RPM/OBS e o AppStream estão em `2.1.3`. Releases devem usar uma
 tag imutável; nunca reutilizar uma tag nem gerar o tarball de um branch mutável.
 
 ## Documentação que acompanha mudanças
