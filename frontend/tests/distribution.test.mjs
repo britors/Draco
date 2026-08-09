@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { test } from 'node:test';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
-const [workspace, frontend, tauri, tauriMain, desktop, metainfo, spec, releaseWorkflow] = await Promise.all([
+const [workspace, frontend, tauri, tauriMain, desktop, metainfo, spec, releaseSpec, releaseWorkflow] = await Promise.all([
   read('../../Cargo.toml'),
   read('../package.json'),
   read('../../src-tauri/tauri.conf.json'),
@@ -11,6 +11,7 @@ const [workspace, frontend, tauri, tauriMain, desktop, metainfo, spec, releaseWo
   read('../../data/org.lyraos.Draco.desktop'),
   read('../../data/org.lyraos.Draco.metainfo.xml'),
   read('../../packaging/obs/postgres-draco.spec'),
+  read('../../packaging/draco-release.spec'),
   read('../../.github/workflows/release.yml'),
 ]);
 
@@ -33,17 +34,27 @@ test('published OBS metadata describes one immutable release', () => {
   assert.match(spec, /^Source1:\s+vendor\.tar\.zst$/m);
 });
 
-test('installed identity is consistent across Tauri, desktop and AppStream', () => {
+test('installed identity is consistent across Tauri, desktop and AppStream', async () => {
   const appId = tauriConfig.identifier;
   assert.equal(appId, 'org.lyraos.Draco');
+  assert.equal(tauriConfig.app.enableGTKAppId, true);
+  assert.deepEqual(
+    (await readdir(new URL('../../data/', import.meta.url))).filter((name) => name.endsWith('.desktop')),
+    [`${appId}.desktop`],
+  );
   assert.match(desktop, /^Exec=draco$/m);
   assert.match(desktop, new RegExp(`^Icon=${appId}$`, 'm'));
+  assert.match(desktop, new RegExp(`^StartupWMClass=${appId}$`, 'm'));
   assert.match(desktop, /^Terminal=false$/m);
   assert.match(metainfo, new RegExp(`<id>${appId}</id>`));
   assert.match(metainfo, new RegExp(`<launchable type="desktop-id">${appId}\\.desktop</launchable>`));
   assert.match(metainfo, /<binary>draco<\/binary>/);
-  assert.match(spec, /install -Dm0644 src-tauri\/icons\/512x512\.png/);
-  assert.match(spec, /icons\/hicolor\/512x512\/apps\/org\.lyraos\.Draco\.png/);
+  assert.equal(tauriConfig.bundle.linux.deb.desktopTemplate, `../data/${appId}.desktop`);
+  assert.equal(tauriConfig.bundle.linux.rpm.desktopTemplate, `../data/${appId}.desktop`);
+  assert.match(spec, /icons\/hicolor\/\$\{size\}x\$\{size\}\/apps\/org\.lyraos\.Draco\.png/);
+  assert.match(spec, /icons\/hicolor\/256x256\/apps\/org\.lyraos\.Draco\.png/);
+  assert.match(releaseSpec, /applications\/org\.lyraos\.Draco\.desktop/);
+  assert.match(releaseSpec, /icons\/hicolor\/\$\{size\}x\$\{size\}\/apps\/org\.lyraos\.Draco\.png/);
   assert.doesNotMatch(
     spec,
     new RegExp(`${appId.replaceAll('.', '\\.')}-symbolic`),
@@ -65,7 +76,9 @@ test('tag releases publish native Windows, Debian, Fedora and openSUSE packages'
   assert.match(releaseWorkflow, /cargo tauri build --bundles deb/);
   assert.match(releaseWorkflow, /container: fedora:43/);
   assert.match(releaseWorkflow, /container: opensuse\/leap:16\.0/);
-  assert.equal((releaseWorkflow.match(/cargo tauri build --bundles rpm/g) ?? []).length, 2);
+  assert.equal((releaseWorkflow.match(/bash scripts\/package-release-rpm\.sh/g) ?? []).length, 2);
+  assert.match(releaseWorkflow, /bash scripts\/normalize-tauri-deb\.sh/);
+  assert.doesNotMatch(releaseWorkflow, /applications\/Draco\.desktop/);
   assert.match(releaseWorkflow, /gh release upload/);
   assert.match(releaseWorkflow, /SHA256SUMS/);
   assert.equal(tauriConfig.bundle.windows.nsis.installMode, 'currentUser');

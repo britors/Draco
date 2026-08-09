@@ -10,7 +10,7 @@
 #
 
 Name:           postgres-draco
-Version:        2.1.3
+Version:        2.1.4
 Release:        1
 Summary:        Cliente de banco de dados do ecossistema Lyra OS
 License:        GPL-3.0-or-later
@@ -57,8 +57,12 @@ install -Dm0644 data/org.lyraos.Draco.desktop \
     %{buildroot}%{_datadir}/applications/org.lyraos.Draco.desktop
 install -Dm0644 data/org.lyraos.Draco.metainfo.xml \
     %{buildroot}%{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
-install -Dm0644 src-tauri/icons/512x512.png \
-    %{buildroot}%{_datadir}/icons/hicolor/512x512/apps/org.lyraos.Draco.png
+for size in 32 128 512; do
+    install -Dm0644 src-tauri/icons/${size}x${size}.png \
+        %{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/org.lyraos.Draco.png
+done
+install -Dm0644 src-tauri/icons/128x128@2x.png \
+    %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/org.lyraos.Draco.png
 
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.lyraos.Draco.desktop
 appstream-util validate-relax --nonet \
@@ -75,6 +79,6 @@ cargo test --locked --offline --workspace
 %{_bindir}/draco
 %{_datadir}/applications/org.lyraos.Draco.desktop
 %{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
-%{_datadir}/icons/hicolor/512x512/apps/org.lyraos.Draco.png
+%{_datadir}/icons/hicolor/*/apps/org.lyraos.Draco.png
 
 %changelog
