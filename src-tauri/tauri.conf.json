@@ -1,12 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Draco",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "identifier": "org.lyraos.Draco",
   "build": {
     "frontendDist": "../frontend/dist"
   },
   "app": {
+    "enableGTKAppId": true,
     "withGlobalTauri": true,
     "windows": [
       {
@@ -41,10 +42,12 @@
     ],
     "linux": {
       "deb": {
-        "depends": ["xdg-desktop-portal"]
+        "depends": ["xdg-desktop-portal"],
+        "desktopTemplate": "../data/org.lyraos.Draco.desktop"
       },
       "rpm": {
-        "depends": ["xdg-desktop-portal"]
+        "depends": ["xdg-desktop-portal"],
+        "desktopTemplate": "../data/org.lyraos.Draco.desktop"
       }
     },
     "windows": {

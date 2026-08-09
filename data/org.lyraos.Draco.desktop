@@ -9,6 +9,7 @@ Comment[pt_BR]=Explore, consulte e administre bancos de dados PostgreSQL
 Exec=draco
 Icon=org.lyraos.Draco
 Terminal=false
+StartupWMClass=org.lyraos.Draco
 Categories=Development;Database;
 Keywords=postgres;postgresql;sql;database;db;query;lyra;
 StartupNotify=true
