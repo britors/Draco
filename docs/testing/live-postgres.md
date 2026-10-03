@@ -74,8 +74,58 @@ test result: ok. 1 passed; 0 failed
 O cenário da aplicação inclui o comando de `EXPLAIN` puro, rejeição de autenticação inválida,
 desconexão/reconexão e o ciclo administrativo de role consumidos pelo frontend Tauri. Essa
 execução valida o backend e a fronteira `draco-app`; a webview Tauri é coberta pelos contratos
-locais e pelo smoke manual. Cenários que exigem endpoints SSH e chaves reais de IA permanecem
+locais e pelo smoke do app instalado descrito abaixo. Cenários que exigem endpoints SSH e chaves reais de IA permanecem
 condicionados à disponibilidade desses serviços externos.
+
+## App instalado via WebDriver
+
+`scripts/test-installed-app.sh` abre o pacote instalado (`/usr/bin/draco` por padrão, ou
+`DRACO_E2E_APP`) pelo `tauri-driver` e percorre o fluxo principal na webview real:
+
+1. a conexão de teste aparece na lista;
+2. o botão Connect conecta usando a senha do credential store;
+3. o Explorer carrega os schemas da conexão;
+4. o Editor SQL executa `SELECT 42 AS answer, 'draco' AS name` e o grid mostra o resultado.
+
+O script cria um `XDG_CONFIG_HOME` temporário com uma única conexão cujo ID é
+`DRACO_TEST_CONN_ID`; as conexões, o histórico e as preferências reais do usuário não são
+tocados. A senha continua no credential store, na mesma entrada usada pelos testes acima, e não
+passa pelo ambiente nem pelo arquivo temporário.
+
+```sh
+DRACO_TEST_CONN_ID=torven-local \
+DRACO_TEST_HOST=localhost \
+DRACO_TEST_DB=torven \
+DRACO_TEST_USER=torven \
+./scripts/test-installed-app.sh
+```
+
+Dependências: o pacote a testar, `tauri-driver` (`cargo install tauri-driver --locked`),
+`WebKitWebDriver` (Ubuntu: `webkit2gtk-driver`; openSUSE: `webkit2gtk4-minibrowser`), Node.js 22+
+e `pg_isready`. O teste fica em `frontend/tests/e2e/` e não é executado por `npm test`, porque
+precisa de display, do app instalado e de um PostgreSQL real.
+
+Cliques e digitação são disparados por eventos do DOM, porque o `WebKitWebDriver` recusa entrada
+nativa de ponteiro e teclado em sessões Wayland ("unsupported operation"). Os listeners do próprio
+app tratam cada ação; o que o teste não exercita é o roteamento de entrada do compositor.
+
+Resultado mais recente em 03/10/2026: pacote `postgres-draco` 2.1.4 do OBS no openSUSE Leap
+16.1 (Wayland), PostgreSQL 18.6 local, `tauri-driver` 2.1.0 e `WebKitWebDriver` 2.52.5 do pacote
+`webkit2gtk4-minibrowser`:
+
+```text
+✔ lists the stored connection
+✔ connects using the password from the credential store
+✔ loads schemas in the Explorer
+✔ runs a query and renders the result grid
+ℹ pass 5
+ℹ fail 0
+```
+
+Com um `DRACO_TEST_CONN_ID` sem senha no credential store, o teste falha na etapa de conexão
+(estado `error`), como esperado.
+
+Ainda fora da cobertura: SSH/jump host real, as APIs de IA e a execução na CI.
 
 ## Checklist transversal
 
@@ -85,6 +135,6 @@ condicionados à disponibilidade desses serviços externos.
 | Conexão ausente/perdida | fronteira Tauri recusa operação desconectada e volta a executar após reconexão; recuperação após erro SQL também coberta |
 | SSH/jump host | suporte permanece coberto pelo `PostgresDriver`; não executado porque o ambiente E2E não possui endpoint SSH configurado |
 | Loading, vazio e erro | estados cobertos pelos contratos frontend; vazio de `pg_cron`, activity e locks observado no teste real |
-| Operação longa fora da thread GTK | chamadas GTK usam `runtime.spawn` + `MainContext::spawn_local` |
+| Operação longa sem bloquear a UI | comandos Tauri são `async`; queries, scripts, `EXPLAIN`, backup e restore registram `operationId` cancelável |
 | Mutação perigosa | teste usa schema isolado; UI mantém confirmações para operações destrutivas |
 | Segredos e queries em logs | teste usa Secret Service e não registra senha nem conteúdo de credencial |
