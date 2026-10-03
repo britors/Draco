@@ -24,7 +24,7 @@ let aiReviewFocus = 'general';
 // stat) so the Assistant page can offer a way back to wherever the user actually came from.
 // Cleared whenever the user navigates to Assistant directly via the sidebar/topbar nav instead.
 let assistantReturnView = null;
-const ASSISTANT_BACK_LABELS = { query: '← Back to SQL Editor', programming: '← Back to Programming', admin: '← Back to Administration' };
+const ASSISTANT_BACK_LABELS = { query: t('assistant.backToSqlEditor'), programming: t('assistant.backToProgramming'), admin: t('assistant.backToAdministration') };
 
 const PIX_KEY = 'britors@live.com';
 const PIX_COPY_AND_PASTE = '00020126380014BR.GOV.BCB.PIX0116britors@live.com5204000053039865802BR5906BRITOR6009SAO PAULO62070503***63044B68';
@@ -59,7 +59,7 @@ function syncPreferenceControls() {
   for (const button of document.querySelectorAll('[data-accent-choice]')) button.setAttribute('aria-pressed', String(button.dataset.accentChoice === state.preferences.accent));
   byId('check-updates-startup').checked = state.preferences.check_updates_on_startup;
   byId('about-version').textContent = state.preferences.version;
-  byId('update-detail').textContent = `Current version: ${state.preferences.version}`;
+  byId('update-detail').textContent = t('updates.currentVersion', { version: state.preferences.version });
   const workspacePreference = byId('programming-workspace-preference');
   if (workspacePreference) workspacePreference.value = state.preferences.programming_workspace || '';
 }
@@ -73,7 +73,7 @@ async function loadPreferences() {
     return state.preferences;
   } catch {
     applyAppearance(state.preferences);
-    byId('preferences-status').textContent = 'Could not load preferences';
+    byId('preferences-status').textContent = t('prefs.couldNotLoadPreferences');
     return state.preferences;
   }
 }
@@ -81,13 +81,13 @@ async function loadPreferences() {
 async function savePreferences(patch) {
   state.preferences = { ...state.preferences, ...patch };
   syncPreferenceControls();
-  byId('preferences-status').textContent = 'Saving…';
+  byId('preferences-status').textContent = t('prefs.saving');
   try {
     state.preferences = await invoke('save_preferences', { preferences: state.preferences });
     syncPreferenceControls();
-    byId('preferences-status').textContent = 'Saved locally';
+    byId('preferences-status').textContent = t('prefs.savedLocally');
   } catch {
-    byId('preferences-status').textContent = 'Could not save';
+    byId('preferences-status').textContent = t('prefs.couldNotSave');
   }
 }
 
@@ -110,7 +110,7 @@ function renderAssistantSettings(settings) {
   byId('ai-model').value = settings[assistantModelField(settings.provider)] || '';
   byId('ai-daily-limit').value = String(settings.max_messages_per_day);
   byId('ai-round-limit').value = String(settings.max_rounds_per_message);
-  byId('ai-key-title').textContent = `${assistantProviderLabel(settings.provider)} credential`;
+  byId('ai-key-title').textContent = t('aiSettings.credentialTitle', { provider: assistantProviderLabel(settings.provider) });
 }
 
 async function loadAssistantModels(provider = byId('ai-provider').value) {
@@ -118,7 +118,7 @@ async function loadAssistantModels(provider = byId('ai-provider').value) {
   const status = byId('ai-settings-status');
   const refresh = byId('refresh-ai-models');
   refresh.disabled = true;
-  status.textContent = `Loading ${assistantProviderLabel(provider)} models…`;
+  status.textContent = t('aiSettings.loadingModels', { provider: assistantProviderLabel(provider) });
   status.className = 'form-status';
   try {
     const models = await invoke('assistant_models', { provider });
@@ -130,12 +130,12 @@ async function loadAssistantModels(provider = byId('ai-provider').value) {
       option.value = model;
       list.append(option);
     }
-    status.textContent = `${models.length} ${assistantProviderLabel(provider)} models available. Start typing to filter the list.`;
+    status.textContent = t('aiSettings.modelsAvailable', { count: models.length, provider: assistantProviderLabel(provider) });
     status.className = 'form-status success';
   } catch (error) {
     if (request !== assistantModelsRequest || byId('ai-provider').value !== provider) return;
     byId('ai-model-list').replaceChildren();
-    status.textContent = error?.message || `Could not load ${assistantProviderLabel(provider)} models. Save a valid API key and try again.`;
+    status.textContent = (error?.key ? errorMessage(error, t) : error?.message || t('aiSettings.modelsFailed', { provider: assistantProviderLabel(provider) }));
     status.className = 'form-status error';
   } finally {
     if (request === assistantModelsRequest) refresh.disabled = false;
@@ -144,14 +144,14 @@ async function loadAssistantModels(provider = byId('ai-provider').value) {
 
 async function loadAssistantSettings() {
   const status = byId('ai-settings-status');
-  status.textContent = 'Loading AI settings…';
+  status.textContent = t('aiSettings.loadingAiSettings');
   status.className = 'form-status';
   try {
     renderAssistantSettings(await invoke('assistant_settings'));
-    status.textContent = 'API keys remain protected by the system Secret Service.';
+    status.textContent = t('aiSettings.apiKeysRemainProtectedBy');
     void loadAssistantModels(activeAssistantProvider);
   } catch (error) {
-    status.textContent = error?.message || 'Could not load AI settings';
+    status.textContent = errorMessage(error, t, 'aiSettings.couldNotLoadAiSettings');
     status.className = 'form-status error';
   }
 }
@@ -163,8 +163,8 @@ function changeAssistantProvider(provider) {
   assistantSettingsDraft.provider = provider;
   byId('ai-model').value = assistantSettingsDraft[assistantModelField(provider)] || '';
   byId('ai-api-key').value = '';
-  byId('ai-key-title').textContent = `${assistantProviderLabel(provider)} credential`;
-  byId('ai-settings-status').textContent = `Configure ${assistantProviderLabel(provider)} and save when ready.`;
+  byId('ai-key-title').textContent = t('aiSettings.credentialTitle', { provider: assistantProviderLabel(provider) });
+  byId('ai-settings-status').textContent = t('aiSettings.configure', { provider: assistantProviderLabel(provider) });
   byId('ai-settings-status').className = 'form-status';
   void loadAssistantModels(provider);
 }
@@ -177,7 +177,7 @@ async function saveAssistantSettings(event) {
   const roundLimit = Number(value('ai-round-limit'));
   const status = byId('ai-settings-status');
   if (!model || !Number.isInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > 10000 || !Number.isInteger(roundLimit) || roundLimit < 1 || roundLimit > 32) {
-    status.textContent = 'Enter a model, a daily limit from 1 to 10000, and tool rounds from 1 to 32.';
+    status.textContent = t('aiSettings.enterAModelADaily');
     status.className = 'form-status error';
     return;
   }
@@ -186,14 +186,14 @@ async function saveAssistantSettings(event) {
   assistantSettingsDraft.max_messages_per_day = dailyLimit;
   assistantSettingsDraft.max_rounds_per_message = roundLimit;
   byId('save-ai-settings').disabled = true;
-  status.textContent = 'Saving AI settings…';
+  status.textContent = t('aiSettings.savingAiSettings');
   status.className = 'form-status';
   try {
     renderAssistantSettings(await invoke('save_assistant_settings', { settings: assistantSettingsDraft }));
-    status.textContent = 'AI settings saved locally.';
+    status.textContent = t('aiSettings.aiSettingsSavedLocally');
     status.className = 'form-status success';
   } catch (error) {
-    status.textContent = error?.message || 'Could not save AI settings';
+    status.textContent = errorMessage(error, t, 'aiSettings.couldNotSaveAiSettings');
     status.className = 'form-status error';
   } finally {
     byId('save-ai-settings').disabled = false;
@@ -204,18 +204,18 @@ async function saveAssistantKey() {
   const provider = byId('ai-provider').value;
   const key = value('ai-api-key');
   const status = byId('ai-settings-status');
-  if (!key) { status.textContent = 'Paste an API key before saving.'; status.className = 'form-status error'; return; }
+  if (!key) { status.textContent = t('aiSettings.pasteAnApiKeyBefore'); status.className = 'form-status error'; return; }
   byId('save-ai-key').disabled = true;
-  status.textContent = `Saving ${assistantProviderLabel(provider)} key securely…`;
+  status.textContent = t('aiSettings.savingKey', { provider: assistantProviderLabel(provider) });
   status.className = 'form-status';
   try {
     await invoke('save_assistant_key', { provider, key });
     byId('ai-api-key').value = '';
-    status.textContent = `${assistantProviderLabel(provider)} key saved in Secret Service.`;
+    status.textContent = t('aiSettings.keySaved', { provider: assistantProviderLabel(provider) });
     status.className = 'form-status success';
     void loadAssistantModels(provider);
   } catch (error) {
-    status.textContent = error?.message || 'Could not save the API key';
+    status.textContent = errorMessage(error, t, 'aiSettings.couldNotSaveTheApi');
     status.className = 'form-status error';
   } finally {
     byId('save-ai-key').disabled = false;
@@ -224,7 +224,7 @@ async function saveAssistantKey() {
 
 async function clearAssistantKey() {
   const provider = byId('ai-provider').value;
-  if (!await showConfirm(`Remove the saved ${assistantProviderLabel(provider)} API key from Secret Service?`, 'Remove AI credential', true, 'Remove key')) return;
+  if (!await showConfirm(t('aiSettings.removeKeyConfirm', { provider: assistantProviderLabel(provider) }), t('aiSettings.removeAiCredential'), true, t('aiSettings.removeKey'))) return;
   const status = byId('ai-settings-status');
   byId('clear-ai-key').disabled = true;
   try {
@@ -232,10 +232,10 @@ async function clearAssistantKey() {
     byId('ai-api-key').value = '';
     ++assistantModelsRequest;
     byId('ai-model-list').replaceChildren();
-    status.textContent = `${assistantProviderLabel(provider)} key removed.`;
+    status.textContent = t('aiSettings.keyRemoved', { provider: assistantProviderLabel(provider) });
     status.className = 'form-status success';
   } catch (error) {
-    status.textContent = error?.message || 'Could not remove the API key';
+    status.textContent = errorMessage(error, t, 'aiSettings.couldNotRemoveTheApi');
     status.className = 'form-status error';
   } finally {
     byId('clear-ai-key').disabled = false;
@@ -258,19 +258,19 @@ function renderGithubConnection(connection) {
   byId('github-disconnect').disabled = !connection.connected;
   const status = byId('github-settings-status');
   status.textContent = connection.connected
-    ? `Connected as ${connection.account_login}${connection.owner && connection.repository ? ` · ${connection.owner}/${connection.repository}` : ''}`
-    : 'GitHub is not connected.';
+    ? `${t('githubSettings.connectedAs', { login: connection.account_login })}${connection.owner && connection.repository ? ` · ${connection.owner}/${connection.repository}` : ''}`
+    : t('githubSettings.githubIsNotConnected');
   status.className = `form-status ${connection.connected ? 'success' : ''}`.trim();
 }
 
 async function loadGithubSettings() {
   const status = byId('github-settings-status');
-  status.textContent = 'Checking GitHub connection…';
+  status.textContent = t('githubSettings.checkingGithubConnection');
   status.className = 'form-status';
   try {
     renderGithubConnection(await invoke('github_status'));
   } catch (error) {
-    status.textContent = error?.message || 'Could not check the GitHub connection';
+    status.textContent = errorMessage(error, t, 'githubSettings.couldNotCheckTheGithub');
     status.className = 'form-status error';
   }
 }
@@ -280,12 +280,12 @@ async function connectGithub(event) {
   const token = value('github-token');
   const status = byId('github-settings-status');
   if (!token) {
-    status.textContent = 'Paste a GitHub token before connecting.';
+    status.textContent = t('githubSettings.pasteAGithubTokenBefore');
     status.className = 'form-status error';
     return;
   }
   byId('github-connect').disabled = true;
-  status.textContent = 'Validating credential with GitHub…';
+  status.textContent = t('githubSettings.validatingCredentialWithGithub');
   status.className = 'form-status';
   try {
     let connection;
@@ -300,7 +300,7 @@ async function connectGithub(event) {
     byId('github-token').value = '';
     await loadProgrammingGithub();
   } catch (error) {
-    status.textContent = error?.message || 'Could not connect GitHub';
+    status.textContent = errorMessage(error, t, 'githubSettings.couldNotConnectGithub');
     status.className = 'form-status error';
   } finally {
     byId('github-connect').disabled = false;
@@ -308,7 +308,7 @@ async function connectGithub(event) {
 }
 
 async function disconnectGithub() {
-  if (!await showConfirm('Remove the GitHub token from the system Secret Service?', 'Disconnect GitHub', true, 'Disconnect')) return;
+  if (!await showConfirm(t('githubSettings.removeTheGithubTokenFrom'), t('githubSettings.disconnectGithub'), true, t('connections.disconnect'))) return;
   const status = byId('github-settings-status');
   byId('github-disconnect').disabled = true;
   try {
@@ -318,7 +318,7 @@ async function disconnectGithub() {
     githubRepositories = [];
     renderProgrammingGithubBranches();
   } catch (error) {
-    status.textContent = error?.message || 'Could not disconnect GitHub';
+    status.textContent = errorMessage(error, t, 'githubSettings.couldNotDisconnectGithub');
     status.className = 'form-status error';
   }
 }
@@ -326,16 +326,16 @@ async function disconnectGithub() {
 async function checkForUpdates(manual = true) {
   const button = byId('check-updates');
   button.disabled = true;
-  byId('update-title').textContent = 'Checking for updates…';
+  byId('update-title').textContent = t('updates.checkingForUpdates');
   try {
     const update = await invoke('check_for_updates');
     state.releaseUrl = update.release_url;
     byId('copy-release-link').hidden = !update.update_available;
-    byId('update-title').textContent = update.update_available ? `Draco ${update.latest_version} is available` : 'Draco is up to date';
-    byId('update-detail').textContent = update.update_available ? `Installed: ${update.current_version} · Latest: ${update.latest_version}` : `Current version: ${update.current_version}`;
+    byId('update-title').textContent = update.update_available ? t('updates.available', { version: update.latest_version }) : t('updates.dracoIsUpToDate');
+    byId('update-detail').textContent = update.update_available ? t('updates.installedLatest', { current: update.current_version, latest: update.latest_version }) : t('updates.currentVersion', { version: update.current_version });
   } catch {
-    byId('update-title').textContent = manual ? 'Could not check for updates' : 'Automatic update check unavailable';
-    byId('update-detail').textContent = 'Check your network connection and try again.';
+    byId('update-title').textContent = manual ? t('updates.couldNotCheckForUpdates') : t('updates.automaticUpdateCheckUnavailable');
+    byId('update-detail').textContent = t('updates.checkYourNetworkConnectionAnd');
   } finally {
     button.disabled = false;
   }
@@ -816,7 +816,7 @@ async function connect(id) {
     switchView('dashboard');
   } catch (error) {
     connection.state = 'error';
-    connection.error = 'Connection failed';
+    connection.error = t('connections.connectionFailed');
     renderConnections();
   }
 }
@@ -914,7 +914,7 @@ function renderAdvancedConnections() {
     const select = byId(id);
     const selected = select.value;
     select.replaceChildren();
-    const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = 'Select a connected connection'; select.append(placeholder);
+    const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = t('common.selectConnected'); select.append(placeholder);
     for (const connection of state.connections.filter((item) => item.state === 'connected')) {
       const option = document.createElement('option'); option.value = connection.id; option.textContent = connection.label; select.append(option);
     }
@@ -931,10 +931,10 @@ function scrollAssistantToBottom() {
 
 function renderAssistantHistory(history) {
   const transcript = byId('assistant-history'); transcript.replaceChildren();
-  if (!history.length) { transcript.append(errorState('Ask about a query, schema, or execution plan', 'The assistant can inspect the connected database but never changes it.')); scrollAssistantToBottom(); return; }
+  if (!history.length) { transcript.append(errorState(t('assistant.askAboutAQuerySchema'), t('assistant.theAssistantCanInspectThe'))); scrollAssistantToBottom(); return; }
   for (const message of history) {
     const bubble = document.createElement('article'); bubble.className = `assistant-message ${message.role === 'user' ? 'user' : ''}`;
-    const label = document.createElement('small'); label.textContent = message.tool_label ? `Tool · ${message.tool_label}` : message.role === 'user' ? 'You' : 'Assistant';
+    const label = document.createElement('small'); label.textContent = message.tool_label ? t('assistant.tool', { tool: message.tool_label }) : message.role === 'user' ? t('assistant.you') : t('nav.assistant');
     const content = document.createElement('div'); content.textContent = message.content; bubble.append(label, content); transcript.append(bubble);
   }
   scrollAssistantToBottom();
@@ -951,20 +951,20 @@ async function loadAssistant(id) {
     const history = await invoke('assistant_history', { id });
     if (requestEpoch === assistantRequestEpoch) renderAssistantHistory(history);
   } catch (error) {
-    if (requestEpoch === assistantRequestEpoch) { renderAssistantHistory([]); byId('assistant-status').textContent = 'Could not load assistant history.'; }
+    if (requestEpoch === assistantRequestEpoch) { renderAssistantHistory([]); byId('assistant-status').textContent = t('assistant.couldNotLoadAssistantHistory'); }
   }
 }
 
 async function sendAssistant() {
   const id = byId('assistant-connection').value; const message = byId('assistant-message').value;
-  if (!id) { byId('assistant-status').textContent = 'Select a connected connection'; return; }
+  if (!id) { byId('assistant-status').textContent = t('common.selectConnected'); return; }
   if (!message.trim()) return;
   const requestEpoch = ++assistantRequestEpoch;
-  byId('send-assistant').disabled = true; byId('assistant-status').textContent = 'Thinking…';
+  byId('send-assistant').disabled = true; byId('assistant-status').textContent = t('assistant.thinking');
   try {
     const reply = await invoke('assistant_send', { id, message });
-    if (requestEpoch === assistantRequestEpoch) { renderAssistantHistory(reply.history); byId('assistant-message').value = ''; byId('assistant-status').textContent = `${reply.input_tokens} input · ${reply.output_tokens} output tokens`; }
-  } catch (error) { if (requestEpoch === assistantRequestEpoch) byId('assistant-status').textContent = 'Assistant request failed. Configure a provider key and reconnect.'; }
+    if (requestEpoch === assistantRequestEpoch) { renderAssistantHistory(reply.history); byId('assistant-message').value = ''; byId('assistant-status').textContent = t('assistant.tokens', { input: reply.input_tokens, output: reply.output_tokens }); }
+  } catch (error) { if (requestEpoch === assistantRequestEpoch) byId('assistant-status').textContent = t('assistant.assistantRequestFailedConfigureA'); }
   finally { if (requestEpoch === assistantRequestEpoch) byId('send-assistant').disabled = false; }
 }
 
@@ -1001,27 +1001,27 @@ function openAiReviewDialogFor(connectionId, sql, title, returnView) {
 function openAiReviewDialog() {
   const connectionId = byId('query-connection').value;
   const sql = selectedQueryText().trim();
-  if (!connectionId) { byId('query-status').textContent = 'Select a connected connection'; return; }
-  if (!sql) { byId('query-status').textContent = 'Write a query before reviewing it with AI'; return; }
+  if (!connectionId) { byId('query-status').textContent = t('common.selectConnected'); return; }
+  if (!sql) { byId('query-status').textContent = t('assistant.writeAQueryBeforeReviewing'); return; }
   saveCurrentQueryTab();
-  openAiReviewDialogFor(connectionId, sql, 'Review query with AI', 'query');
+  openAiReviewDialogFor(connectionId, sql, t('assistant.reviewQueryWithAi'), 'query');
 }
 
 function openProgrammingAiReviewDialog() {
   const target = programmingEditorTarget;
-  if (!target?.id) { setProgrammingEditorStatus('Select a connected connection', 'error'); return; }
+  if (!target?.id) { setProgrammingEditorStatus(t('common.selectConnected'), 'error'); return; }
   let ddl;
   try { ddl = currentProgrammingDdl().trim(); }
-  catch (error) { setProgrammingEditorStatus(error?.message || 'Complete the required fields before reviewing it with AI', 'error'); return; }
-  if (!ddl) { setProgrammingEditorStatus('Write a definition before reviewing it with AI', 'error'); return; }
-  openAiReviewDialogFor(target.id, ddl, `Review this ${target.kind} with AI`, 'programming');
+  catch (error) { setProgrammingEditorStatus(errorMessage(error, t, 'assistant.completeTheRequiredFieldsBefore'), 'error'); return; }
+  if (!ddl) { setProgrammingEditorStatus(t('assistant.writeADefinitionBeforeReviewing'), 'error'); return; }
+  openAiReviewDialogFor(target.id, ddl, t('assistant.reviewObject', { kind: t(`kind.${target.kind}`) }), 'programming');
 }
 
 function goToAssistant(returnView) {
   assistantReturnView = returnView;
   const back = byId('assistant-back');
   back.hidden = !returnView;
-  back.textContent = ASSISTANT_BACK_LABELS[returnView] || '← Back';
+  back.textContent = ASSISTANT_BACK_LABELS[returnView] || t('assistant.back');
   switchView('assistant');
 }
 
@@ -1038,7 +1038,7 @@ async function submitAiReview() {
 
 async function askAssistantAboutQueryStat(id, queryStat) {
   byId('assistant-connection').value = id;
-  byId('assistant-message').value = `Analyze this query for performance. pg_stat_statements recorded ${queryStat.calls} calls, ${queryStat.mean_exec_ms.toFixed(1)} ms mean execution time, ${queryStat.total_exec_ms.toFixed(1)} ms total execution time, and ${queryStat.rows} rows returned in total.\n\n\`\`\`sql\n${queryStat.query}\n\`\`\``;
+  byId('assistant-message').value = `${t('assistant.analyzeQueryStat', { calls: queryStat.calls, mean: queryStat.mean_exec_ms.toFixed(1), total: queryStat.total_exec_ms.toFixed(1), rows: queryStat.rows })}\n\n\`\`\`sql\n${queryStat.query}\n\`\`\``;
   goToAssistant('admin');
   await sendAssistant();
 }
@@ -1046,15 +1046,15 @@ async function askAssistantAboutQueryStat(id, queryStat) {
 function operationId() { return `ui-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
 async function runBackup(restore = false) {
-  const id = byId('backup-connection').value; if (!id) { byId('backup-status').textContent = 'Select a connected connection'; return; }
-  if (restore && !await showConfirm('Restore will write data into the selected database. Continue only if the input and target are correct.', 'Confirm restore', true, 'Restore')) return;
-  const operation = operationId(); state.currentOperationId = operation; byId('cancel-operation').hidden = false; byId('backup-status').textContent = restore ? 'Restoring…' : 'Creating backup…'; byId('backup-log').textContent = '';
+  const id = byId('backup-connection').value; if (!id) { byId('backup-status').textContent = t('common.selectConnected'); return; }
+  if (restore && !await showConfirm(t('backup.restoreWillWriteDataInto'), t('backup.confirmRestore'), true, t('window.restore'))) return;
+  const operation = operationId(); state.currentOperationId = operation; byId('cancel-operation').hidden = false; byId('backup-status').textContent = restore ? t('backup.restoring') : t('backup.creatingBackup'); byId('backup-log').textContent = '';
   for (const control of ['run-backup', 'run-restore', 'choose-backup-output', 'choose-restore-input', 'backup-connection', 'backup-output', 'backup-format', 'restore-input', 'restore-database']) byId(control).disabled = true;
   const options = restore ? { input: value('restore-input'), target_database: value('restore-database'), clean: false, single_transaction: true } : { output: value('backup-output'), format: byId('backup-format').value, compression: null, schemas: [], tables: [] };
   try {
     const result = await invoke(restore ? 'run_restore' : 'run_backup', { id, operationId: operation, options });
-    byId('backup-log').textContent = result.logs.join('\n'); byId('backup-status').textContent = result.cancelled ? 'Cancelled' : result.succeeded ? 'Completed' : `Failed (exit ${result.exit_code ?? 'unknown'})`;
-  } catch (error) { byId('backup-status').textContent = 'Backup operation failed. Check the path and connection.'; }
+    byId('backup-log').textContent = result.logs.join('\n'); byId('backup-status').textContent = result.cancelled ? t('query.cancelled') : result.succeeded ? t('query.completed') : t('backup.failedExit', { code: result.exit_code ?? '?' });
+  } catch (error) { byId('backup-status').textContent = t('backup.backupOperationFailedCheckThe'); }
   finally {
     state.currentOperationId = null; byId('cancel-operation').hidden = true;
     for (const control of ['run-backup', 'run-restore', 'choose-backup-output', 'choose-restore-input', 'backup-connection', 'backup-output', 'backup-format', 'restore-input', 'restore-database']) byId(control).disabled = false;
@@ -1071,7 +1071,7 @@ async function chooseRestoreInput() {
   catch (error) { byId('backup-status').textContent = errorMessage(error, t, 'error.file_picker_unavailable'); }
 }
 
-async function cancelOperation() { if (!state.currentOperationId) return; byId('backup-status').textContent = 'Cancelling…'; try { await invoke('cancel_operation', { operationId: state.currentOperationId }); } catch (error) {} }
+async function cancelOperation() { if (!state.currentOperationId) return; byId('backup-status').textContent = t('query.cancelling'); try { await invoke('cancel_operation', { operationId: state.currentOperationId }); } catch (error) {} }
 
 function metric(label, value) {
   const card = document.createElement('div'); card.className = 'metric-card';
@@ -1082,21 +1082,21 @@ function metric(label, value) {
 
 async function loadDashboard(id) {
   const content = byId('dashboard-content'); content.replaceChildren();
-  if (!id) { const empty = document.createElement('div'); empty.className = 'empty-state'; empty.textContent = 'Choose a connected connection'; content.append(empty); return; }
-  const loading = document.createElement('div'); loading.className = 'empty-state'; loading.textContent = 'Loading dashboard…'; content.append(loading);
+  if (!id) { const empty = document.createElement('div'); empty.className = 'empty-state'; empty.textContent = t('admin.chooseAConnectedConnection'); content.append(empty); return; }
+  const loading = document.createElement('div'); loading.className = 'empty-state'; loading.textContent = t('dashboard.loadingDashboard'); content.append(loading);
   try {
     const payload = await invoke('dashboard', { id });
     const data = payload.dashboard; const stats = payload.stats;
     content.replaceChildren();
     const metrics = document.createElement('div'); metrics.className = 'metric-grid';
-    for (const [label, key] of [['PostgreSQL', 'pg_version'], ['Database size', 'db_size'], ['Cache hit', 'cache_hit'], ['Active connections', 'active_conn'], ['Transactions', 'commits'], ['Rollbacks', 'rollbacks']]) metrics.append(metric(label, data[key]));
+    for (const [label, key] of [['PostgreSQL', 'pg_version'], [t('dashboard.databaseSize'), 'db_size'], [t('dashboard.cacheHit'), 'cache_hit'], [t('dashboard.activeConnections'), 'active_conn'], [t('dashboard.transactions'), 'commits'], [t('dashboard.rollbacks'), 'rollbacks']]) metrics.append(metric(label, data[key]));
     content.append(metrics);
     const info = document.createElement('div'); info.className = 'advanced-grid';
-    info.append(dataPanel('Database', [['Name', data.db_name], ['Encoding', data.encoding], ['Collation', data.collation], ['Uptime', data.uptime]]));
-    info.append(dataPanel('Largest tables', (data.top_tables || []).map((row) => [`${row.schema}.${row.table}`, row.total_size])));
-    info.append(dataPanel('Statistics', [['Size', stats.db?.size], ['Cache hit', stats.db?.cache_hit_pct], ['Deadlocks', data.deadlocks], ['Temp files', data.temp_files]]));
+    info.append(dataPanel(t('connectionForm.database'), [[t('tableEditor.name'), data.db_name], [t('dashboard.encoding'), data.encoding], [t('dashboard.collation'), data.collation], [t('dashboard.uptime'), data.uptime]]));
+    info.append(dataPanel(t('dashboard.largestTables'), (data.top_tables || []).map((row) => [`${row.schema}.${row.table}`, row.total_size])));
+    info.append(dataPanel(t('dashboard.statistics'), [[t('dashboard.size'), stats.db?.size], [t('dashboard.cacheHit'), stats.db?.cache_hit_pct], [t('dashboard.deadlocks'), data.deadlocks], [t('dashboard.tempFiles'), data.temp_files]]));
     content.append(info);
-  } catch (error) { content.replaceChildren(errorState('Dashboard unavailable', 'Check permissions and reconnect.')); }
+  } catch (error) { content.replaceChildren(errorState(t('dashboard.dashboardUnavailable'), t('dashboard.checkPermissionsAndReconnect'))); }
 }
 
 function dataPanel(title, rows) {
@@ -1107,20 +1107,20 @@ function dataPanel(title, rows) {
 
 function indexPanel(id, schema, table, indexes) {
   const panel = document.createElement('section'); panel.className = 'data-panel';
-  const heading = document.createElement('h3'); heading.textContent = 'Indexes'; panel.append(heading);
+  const heading = document.createElement('h3'); heading.textContent = t('table.indexes'); panel.append(heading);
   if (!indexes.length) {
-    const empty = document.createElement('div'); empty.className = 'empty-state compact'; empty.textContent = 'No indexes'; panel.append(empty); return panel;
+    const empty = document.createElement('div'); empty.className = 'empty-state compact'; empty.textContent = t('table.noIndexes'); panel.append(empty); return panel;
   }
   for (const index of indexes.slice(0, 12)) {
     const row = document.createElement('div'); row.className = 'data-row object-definition-row';
     const name = document.createElement('span'); name.textContent = index.name;
     const definition = document.createElement('strong'); definition.textContent = index.definition || '—'; definition.title = index.definition || '';
-    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = 'Edit';
+    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = t('common.edit');
     if (index.constraint_name) {
       edit.disabled = true;
-      edit.title = `Managed by constraint ${index.constraint_name}`;
+      edit.title = t('table.managedByConstraint', { name: index.constraint_name });
     } else {
-      edit.title = `Edit ${index.name}`;
+      edit.title = t('table.editNamed', { name: index.name });
       edit.addEventListener('click', () => void editIndexDefinition(id, schema, table, index.name));
     }
     row.append(name, definition, edit); panel.append(row);
@@ -1157,7 +1157,7 @@ function objectDialog(title) {
   const panel = document.createElement('div'); panel.className = 'object-dialog-panel';
   const heading = document.createElement('div'); heading.className = 'object-dialog-heading';
   const name = document.createElement('h2'); name.textContent = title;
-  const closeButton = document.createElement('button'); closeButton.className = 'button small'; closeButton.type = 'button'; closeButton.textContent = 'Close';
+  const closeButton = document.createElement('button'); closeButton.className = 'button small'; closeButton.type = 'button'; closeButton.textContent = t('window.close');
   const body = document.createElement('div'); body.className = 'object-dialog-body';
   const actions = document.createElement('div'); actions.className = 'object-dialog-actions';
   const status = document.createElement('div'); status.className = 'form-status'; status.setAttribute('role', 'status');
@@ -1183,22 +1183,22 @@ function columnEditorRow(initial = {}, mode = 'create') {
   const name = textInput(initial.name || '', 'column_name');
   const type = selectInput(TABLE_COLUMN_TYPES, TABLE_COLUMN_TYPES.includes(initial.data_type || initial.full_type) ? (initial.data_type || initial.full_type) : 'text');
   if (initial.full_type && !TABLE_COLUMN_TYPES.includes(initial.full_type)) { const option = document.createElement('option'); option.value = initial.full_type; option.textContent = initial.full_type; type.prepend(option); type.value = initial.full_type; }
-  const nullable = checkboxControl('Null', initial.nullable ?? initial.is_nullable ?? true);
+  const nullable = checkboxControl(t('tableEditor.null'), initial.nullable ?? initial.is_nullable ?? true);
   const primary = checkboxControl('PK', initial.primary_key ?? initial.is_primary_key ?? false);
-  const unique = checkboxControl('Unique', initial.unique ?? false);
+  const unique = checkboxControl(t('tableEditor.unique'), initial.unique ?? false);
   const defaultValue = textInput(initial.default ?? initial.column_default ?? '', 'default expression');
   const reference = textInput('', 'schema.table.column');
   const onDelete = selectInput(['', 'NO ACTION', 'RESTRICT', 'CASCADE', 'SET NULL', 'SET DEFAULT'], '');
-  const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = mode === 'alter' ? 'Remove' : 'Delete';
+  const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = mode === 'alter' ? t('tableEditor.remove') : t('common.delete');
   if (mode === 'alter') { unique.label.hidden = true; reference.parentElement?.remove(); }
-  row.append(labeledControl('Name', name), labeledControl('Type', type), nullable.label, primary.label);
+  row.append(labeledControl(t('tableEditor.name'), name), labeledControl(t('tableEditor.type'), type), nullable.label, primary.label);
   if (mode === 'create') row.append(unique.label);
-  row.append(labeledControl('Default', defaultValue));
-  if (mode === 'create') row.append(labeledControl('References', reference), labeledControl('On delete', onDelete));
+  row.append(labeledControl(t('tableEditor.default'), defaultValue));
+  if (mode === 'create') row.append(labeledControl(t('tableEditor.references'), reference), labeledControl(t('tableEditor.onDelete'), onDelete));
   row.append(remove);
   remove.addEventListener('click', () => {
     if (mode === 'create' || !row.dataset.originalName) { row.remove(); return; }
-    const removed = row.dataset.removed !== 'true'; row.dataset.removed = String(removed); row.classList.toggle('removed', removed); remove.textContent = removed ? 'Undo' : 'Remove';
+    const removed = row.dataset.removed !== 'true'; row.dataset.removed = String(removed); row.classList.toggle('removed', removed); remove.textContent = removed ? t('tableEditor.undo') : t('tableEditor.remove');
     for (const control of row.querySelectorAll('input, select')) control.disabled = removed;
     remove.disabled = false;
   });
@@ -1210,7 +1210,7 @@ function readCreateColumn(editor) {
   let references = null;
   if (referenceText) {
     const parts = referenceText.split('.');
-    if (parts.length !== 3 || parts.some((part) => !part.trim())) throw new Error('References must use schema.table.column');
+    if (parts.length !== 3 || parts.some((part) => !part.trim())) throw new Error(t('tableEditor.referencesMustUseSchemaTable'));
     references = { schema: parts[0].trim(), table: parts[1].trim(), column: parts[2].trim(), on_delete: editor.onDelete.value || null };
   }
   return { name: editor.name.value.trim(), data_type: editor.type.value, nullable: editor.nullable.checked, primary_key: editor.primary.checked, unique: editor.unique.checked, default: editor.defaultValue.value.trim() || null, references };
@@ -1233,30 +1233,30 @@ function createTablePreview(input) {
 }
 
 function openCreateTableDialog(id, schema) {
-  const dialog = objectDialog('New table');
+  const dialog = objectDialog(t('explorer.newTable'));
   const basics = document.createElement('div'); basics.className = 'object-form-grid';
   const schemaInput = textInput(schema || 'public', 'schema'); const tableInput = textInput('', 'table_name');
-  basics.append(labeledControl('Schema', schemaInput), labeledControl('Table', tableInput));
+  basics.append(labeledControl(t('tableEditor.schema'), schemaInput), labeledControl(t('trigger.table'), tableInput));
   const columns = document.createElement('div'); columns.className = 'column-editor-list';
   const editors = [];
   const addColumn = (initial = {}) => { const editor = columnEditorRow(initial, 'create'); editors.push(editor); columns.append(editor.row); return editor; };
   addColumn({ name: 'id', data_type: 'bigint', nullable: false, primary_key: true }); addColumn({ name: 'name', data_type: 'text', nullable: true });
-  const add = document.createElement('button'); add.className = 'button small'; add.type = 'button'; add.textContent = 'Add column'; add.addEventListener('click', () => addColumn());
+  const add = document.createElement('button'); add.className = 'button small'; add.type = 'button'; add.textContent = t('tableEditor.addColumn'); add.addEventListener('click', () => addColumn());
   const preview = document.createElement('pre'); preview.className = 'object-sql-preview';
   const readInput = () => {
     const activeEditors = editors.filter((editor) => editor.row.isConnected);
     const input = { schema: schemaInput.value.trim(), table: tableInput.value.trim(), columns: activeEditors.map(readCreateColumn) };
-    if (!input.schema || !input.table || !input.columns.length || input.columns.some((column) => !column.name)) throw new Error('Schema, table, and every column name are required');
+    if (!input.schema || !input.table || !input.columns.length || input.columns.some((column) => !column.name)) throw new Error(t('tableEditor.schemaTableAndEveryColumn'));
     return input;
   };
-  const refreshPreview = () => { try { preview.textContent = createTablePreview(readInput()); dialog.status.textContent = ''; } catch (error) { preview.textContent = '-- Complete the form to preview CREATE TABLE'; dialog.status.textContent = error.message; } };
+  const refreshPreview = () => { try { preview.textContent = createTablePreview(readInput()); dialog.status.textContent = ''; } catch (error) { preview.textContent = `-- ${t('tableEditor.previewCreateHint')}`; dialog.status.textContent = error.message; } };
   dialog.body.append(basics, columns, add, preview); dialog.body.addEventListener('input', refreshPreview); dialog.body.addEventListener('change', refreshPreview); refreshPreview();
-  const create = document.createElement('button'); create.className = 'button primary'; create.type = 'button'; create.textContent = 'Create table';
+  const create = document.createElement('button'); create.className = 'button primary'; create.type = 'button'; create.textContent = t('tableEditor.createTable');
   create.addEventListener('click', async () => {
     let input; try { input = readInput(); } catch (error) { dialog.status.textContent = error.message; dialog.status.className = 'form-status error'; return; }
-    create.disabled = true; dialog.status.textContent = 'Creating table…'; dialog.status.className = 'form-status';
+    create.disabled = true; dialog.status.textContent = t('tableEditor.creatingTable'); dialog.status.className = 'form-status';
     try { await invoke('create_table', { id, input }); dialog.close(); await openExplorer(id); openTable(id, input.schema, input.table); }
-    catch (error) { dialog.status.textContent = error?.message || 'Could not create table'; dialog.status.className = 'form-status error'; create.disabled = false; }
+    catch (error) { dialog.status.textContent = errorMessage(error, t, 'tableEditor.couldNotCreateTable'); dialog.status.className = 'form-status error'; create.disabled = false; }
   });
   dialog.actions.append(create);
 }
@@ -1267,33 +1267,33 @@ function alterTableInput(table, editors) {
     name: editor.name.value.trim(), data_type: editor.type.value, nullable: editor.nullable.checked, primary_key: editor.primary.checked,
     default: editor.defaultValue.value.trim() || null, removed: editor.row.dataset.removed === 'true',
   }));
-  if (!table.trim() || columns.some((column) => !column.removed && !column.name)) throw new Error('Table and active column names are required');
+  if (!table.trim() || columns.some((column) => !column.removed && !column.name)) throw new Error(t('tableEditor.tableAndActiveColumnNames'));
   return { new_table_name: table.trim(), columns };
 }
 
 function openAlterTableDialog(id, schema, table, detail, options = {}) {
-  const dialog = objectDialog(`Edit table · ${schema}.${table}`);
-  const tableName = textInput(table); dialog.body.append(labeledControl('Table name', tableName));
+  const dialog = objectDialog(t('tableEditor.editTitle', { schema, table }));
+  const tableName = textInput(table); dialog.body.append(labeledControl(t('tableEditor.tableName'), tableName));
   const list = document.createElement('div'); list.className = 'column-editor-list'; const editors = [];
   const addColumn = (initial = {}) => { const editor = columnEditorRow(initial, 'alter'); editors.push(editor); list.append(editor.row); return editor; };
   for (const column of detail.columns || []) addColumn({ ...column, original_name: column.name });
-  const add = document.createElement('button'); add.className = 'button small'; add.type = 'button'; add.textContent = 'Add column'; add.addEventListener('click', () => addColumn());
-  const preview = document.createElement('pre'); preview.className = 'object-sql-preview'; preview.textContent = '-- Refresh preview after editing the structure';
+  const add = document.createElement('button'); add.className = 'button small'; add.type = 'button'; add.textContent = t('tableEditor.addColumn'); add.addEventListener('click', () => addColumn());
+  const preview = document.createElement('pre'); preview.className = 'object-sql-preview'; preview.textContent = `-- ${t('tableEditor.previewAlterHint')}`;
   dialog.body.append(list, add, preview);
-  const previewButton = document.createElement('button'); previewButton.className = 'button'; previewButton.type = 'button'; previewButton.textContent = 'Refresh preview';
+  const previewButton = document.createElement('button'); previewButton.className = 'button'; previewButton.type = 'button'; previewButton.textContent = t('tableEditor.refreshPreview');
   const loadPreview = async () => {
     const input = alterTableInput(tableName.value, editors); const result = await invoke('preview_alter_table', { id, schema, table, input }); preview.textContent = result.sql; return { input, result };
   };
-  previewButton.addEventListener('click', async () => { previewButton.disabled = true; dialog.status.textContent = 'Building preview…'; try { await loadPreview(); dialog.status.textContent = 'Preview updated'; dialog.status.className = 'form-status success'; } catch (error) { dialog.status.textContent = error?.message || error.message || 'Could not build preview'; dialog.status.className = 'form-status error'; } finally { previewButton.disabled = false; } });
-  const apply = document.createElement('button'); apply.className = 'button primary'; apply.type = 'button'; apply.textContent = 'Apply changes';
+  previewButton.addEventListener('click', async () => { previewButton.disabled = true; dialog.status.textContent = t('tableEditor.buildingPreview'); try { await loadPreview(); dialog.status.textContent = t('tableEditor.previewUpdated'); dialog.status.className = 'form-status success'; } catch (error) { dialog.status.textContent = errorMessage(error, t, 'tableEditor.couldNotBuildPreview'); dialog.status.className = 'form-status error'; } finally { previewButton.disabled = false; } });
+  const apply = document.createElement('button'); apply.className = 'button primary'; apply.type = 'button'; apply.textContent = t('tableEditor.applyChanges');
   apply.addEventListener('click', async () => {
     apply.disabled = true;
     try {
       const { input, result } = await loadPreview();
-      if (!result.statements.length) { await showAlert('There are no structural changes to apply.', 'Table unchanged'); return; }
-      const confirmed = await showConfirm(`${result.destructive ? 'These changes can remove data or replace the primary key.' : 'Apply this structural change atomically?'}\n\n${result.sql}`, 'Apply table changes', result.destructive, 'Apply');
+      if (!result.statements.length) { await showAlert('There are no structural changes to apply.', t('tableEditor.tableUnchanged')); return; }
+      const confirmed = await showConfirm(`${result.destructive ? t('tableEditor.theseChangesCanRemoveData') : t('tableEditor.applyThisStructuralChangeAtomically')}\n\n${result.sql}`, t('tableEditor.applyTableChanges'), result.destructive, t('tableEditor.apply'));
       if (!confirmed) return;
-      dialog.status.textContent = 'Applying table changes…'; dialog.status.className = 'form-status';
+      dialog.status.textContent = t('tableEditor.applyingTableChanges'); dialog.status.className = 'form-status';
       await invoke('alter_table', { id, schema, table, input });
       dialog.close();
       if (options.preserveExplorer) {
@@ -1302,7 +1302,7 @@ function openAlterTableDialog(id, schema, table, detail, options = {}) {
       } else {
         await openTable(id, schema, input.new_table_name);
       }
-    } catch (error) { dialog.status.textContent = error?.message || error.message || 'Could not alter table'; dialog.status.className = 'form-status error'; }
+    } catch (error) { dialog.status.textContent = errorMessage(error, t, 'tableEditor.couldNotAlterTable'); dialog.status.className = 'form-status error'; }
     finally { apply.disabled = false; }
   });
   dialog.actions.append(previewButton, apply);
@@ -1341,30 +1341,30 @@ function viewTemplate(schema) {
 
 function definitionEditorDialog(id, title, ddl, kind, context = {}) {
   const definitions = {
-    function: ['save_function_definition', 'Save definition'],
-    trigger: ['save_trigger_definition', 'Save trigger'],
-    view: ['save_view_definition', 'Save view'],
-    sequence: ['save_sequence_definition', 'Save sequence'],
-    index: ['save_index_definition', 'Recreate index'],
+    function: ['save_function_definition', t('definition.saveDefinition')],
+    trigger: ['save_trigger_definition', t('definition.saveTrigger')],
+    view: ['save_view_definition', t('definition.saveView')],
+    sequence: ['save_sequence_definition', t('definition.saveSequence')],
+    index: ['save_index_definition', t('definition.recreateIndex')],
   };
   const [saveCommand, saveLabel] = definitions[kind];
   const { onSaved, ...commandContext } = context;
   const dialog = objectDialog(title); const editor = document.createElement('textarea'); editor.className = 'definition-editor'; editor.value = ddl; editor.spellcheck = false; dialog.body.append(editor);
   if (kind === 'function') {
-    const validate = document.createElement('button'); validate.className = 'button'; validate.type = 'button'; validate.textContent = 'Validate';
-    validate.addEventListener('click', async () => { validate.disabled = true; dialog.status.textContent = 'Validating in a rolled-back transaction…'; try { const error = await invoke('validate_function_definition', { id, ddl: editor.value }); dialog.status.textContent = error || 'Definition is valid'; dialog.status.className = `form-status ${error ? 'error' : 'success'}`; } catch (error) { dialog.status.textContent = error?.message || 'Validation failed'; dialog.status.className = 'form-status error'; } finally { validate.disabled = false; } });
+    const validate = document.createElement('button'); validate.className = 'button'; validate.type = 'button'; validate.textContent = t('definition.validate');
+    validate.addEventListener('click', async () => { validate.disabled = true; dialog.status.textContent = t('definition.validatingInARolledBack'); try { const error = await invoke('validate_function_definition', { id, ddl: editor.value }); dialog.status.textContent = error || t('definition.definitionIsValid'); dialog.status.className = `form-status ${error ? 'error' : 'success'}`; } catch (error) { dialog.status.textContent = errorMessage(error, t, 'definition.validationFailed'); dialog.status.className = 'form-status error'; } finally { validate.disabled = false; } });
     dialog.actions.append(validate);
   }
   const save = document.createElement('button'); save.className = 'button primary'; save.type = 'button'; save.textContent = saveLabel;
   save.addEventListener('click', async () => {
-    if (kind === 'index' && !await showConfirm('Draco will drop and recreate this index inside one transaction. Writes may wait while the index is rebuilt.', 'Recreate index', true, 'Recreate')) return;
-    save.disabled = true; dialog.status.textContent = 'Saving definition…';
+    if (kind === 'index' && !await showConfirm(t('definition.dracoWillDropAndRecreate'), t('definition.recreateIndex'), true, t('definition.recreate'))) return;
+    save.disabled = true; dialog.status.textContent = t('definition.savingDefinition');
     try {
       await invoke(saveCommand, { id, ...commandContext, ddl: editor.value });
       dialog.close();
       if (onSaved) await onSaved(); else await openExplorer(id);
     } catch (error) {
-      dialog.status.textContent = error?.message || 'Could not save definition'; dialog.status.className = 'form-status error'; save.disabled = false;
+      dialog.status.textContent = errorMessage(error, t, 'definition.couldNotSaveDefinition'); dialog.status.className = 'form-status error'; save.disabled = false;
     }
   });
   dialog.actions.append(save);
@@ -1401,27 +1401,27 @@ async function newProgrammingFromExplorer(kind) {
 async function editViewDefinition(id, schema, name, onSaved = null) {
   try {
     const payload = await invoke('table_detail', { id, schema, table: name });
-    definitionEditorDialog(id, `View · ${schema}.${name}`, payload.ddl, 'view', { schema, name, ...(onSaved ? { onSaved } : {}) });
+    definitionEditorDialog(id, t('definition.viewTitle', { schema, name }), payload.ddl, 'view', { schema, name, ...(onSaved ? { onSaved } : {}) });
   } catch (error) {
-    await showAlert(error?.message || 'Could not load the view definition', 'View unavailable');
+    await showAlert(errorMessage(error, t, 'definition.couldNotLoadTheView'), t('definition.viewUnavailable'));
   }
 }
 
 function editSequenceDefinition(id, schema, object) {
-  definitionEditorDialog(id, `Sequence · ${schema}.${object.name}`, object.definition || '', 'sequence', { schema, name: object.name });
+  definitionEditorDialog(id, t('sequence.title', { schema, name: object.name }), object.definition || '', 'sequence', { schema, name: object.name });
 }
 
 async function editIndexDefinition(id, schema, table, name) {
   try {
     const ddl = await invoke('index_definition', { id, schema, table, name });
-    definitionEditorDialog(id, `Index · ${schema}.${name}`, ddl, 'index', {
+    definitionEditorDialog(id, t('definition.indexTitle', { schema, name }), ddl, 'index', {
       schema,
       table,
       name,
       onSaved: () => openTable(id, schema, table),
     });
   } catch (error) {
-    await showAlert(error?.message || 'Could not load the index definition', 'Index unavailable');
+    await showAlert(errorMessage(error, t, 'definition.couldNotLoadTheIndex'), t('definition.indexUnavailable'));
   }
 }
 
@@ -1455,11 +1455,11 @@ function refreshProgrammingDdlPreview() {
   if (!target?.structured) { wrap.hidden = true; byId('programming-ddl-preview').textContent = ''; return; }
   wrap.hidden = false;
   try { byId('programming-ddl-preview').textContent = currentProgrammingDdl(); }
-  catch (error) { byId('programming-ddl-preview').textContent = `-- ${error?.message || 'Complete the required fields to preview the assembled SQL'}`; }
+  catch (error) { byId('programming-ddl-preview').textContent = `-- ${errorMessage(error, t, 'programming.completeTheRequiredFieldsTo')}`; }
 }
 
 function notifyProgrammingFormChanged() {
-  if (programmingEditorIsDirty()) setProgrammingEditorStatus('Unsaved changes.');
+  if (programmingEditorIsDirty()) setProgrammingEditorStatus(t('programming.unsavedChanges'));
   refreshProgrammingDdlPreview();
   syncProgrammingSourceState();
 }
@@ -1470,9 +1470,9 @@ function functionParamRow(initial = {}) {
   const name = textInput(initial.name || '', 'param_name'); name.className = 'pf-param-name';
   const type = textInput(initial.type || '', 'integer'); type.className = 'pf-param-type';
   const defaultValue = textInput(initial.default || '', 'default expression'); defaultValue.className = 'pf-param-default';
-  const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = 'Remove';
+  const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = t('tableEditor.remove');
   remove.addEventListener('click', () => { row.remove(); notifyProgrammingFormChanged(); });
-  row.append(labeledControl('Mode', mode), labeledControl('Name', name), labeledControl('Type', type), labeledControl('Default', defaultValue), remove);
+  row.append(labeledControl(t('programming.mode'), mode), labeledControl(t('tableEditor.name'), name), labeledControl(t('tableEditor.type'), type), labeledControl(t('tableEditor.default'), defaultValue), remove);
   return row;
 }
 
@@ -1505,7 +1505,7 @@ function syncPfReturnsDetailButton() {
   const kind = byId('pf-returns-kind').value;
   const button = byId('pf-returns-detail');
   button.hidden = !['scalar', 'setof', 'table'].includes(kind);
-  button.textContent = kind === 'table' ? 'Columns…' : '…';
+  button.textContent = kind === 'table' ? t('programming.columns') : '…';
 }
 
 function setPfReturnsFromKind(kind, detail) {
@@ -1531,13 +1531,13 @@ function typeTextControl(initial, placeholder = 'integer') {
 }
 
 function openReturnTypeDialog(initial, onApply) {
-  const dialog = objectDialog('Return type');
+  const dialog = objectDialog(t('programming.returnType'));
   const type = typeTextControl(initial);
-  dialog.body.append(labeledControl('Type', type.input));
-  const apply = document.createElement('button'); apply.className = 'button primary'; apply.type = 'button'; apply.textContent = 'Apply';
+  dialog.body.append(labeledControl(t('tableEditor.type'), type.input));
+  const apply = document.createElement('button'); apply.className = 'button primary'; apply.type = 'button'; apply.textContent = t('tableEditor.apply');
   apply.addEventListener('click', () => {
     const value = type.value();
-    if (!value) { dialog.status.textContent = 'Enter a type'; return; }
+    if (!value) { dialog.status.textContent = t('programming.enterAType'); return; }
     onApply(value);
     dialog.close();
   });
@@ -1548,9 +1548,9 @@ function returnColumnRow(initial = {}) {
   const row = document.createElement('div'); row.className = 'function-param-row return-column-row';
   const name = textInput(initial.name || '', 'column_name'); name.className = 'rc-name';
   const type = typeTextControl(initial.type || ''); type.input.classList.add('rc-type');
-  const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = 'Remove';
+  const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = t('tableEditor.remove');
   remove.addEventListener('click', () => row.remove());
-  row.append(labeledControl('Column', name), labeledControl('Type', type.input), remove);
+  row.append(labeledControl(t('programming.column'), name), labeledControl(t('tableEditor.type'), type.input), remove);
   return row;
 }
 
@@ -1564,17 +1564,17 @@ function readReturnColumnRow(row) {
 }
 
 function openReturnTableDialog(initialRaw, onApply) {
-  const dialog = objectDialog('Return table columns');
+  const dialog = objectDialog(t('programming.returnTableColumns'));
   const list = document.createElement('div'); list.className = 'function-param-list';
   const initialColumns = initialRaw ? parseFunctionParameters(initialRaw) : [];
   list.append(...(initialColumns.length ? initialColumns : [{ name: '', type: '' }]).map((column) => returnColumnRow(column)));
-  const add = document.createElement('button'); add.className = 'button small'; add.type = 'button'; add.textContent = 'Add column';
+  const add = document.createElement('button'); add.className = 'button small'; add.type = 'button'; add.textContent = t('tableEditor.addColumn');
   add.addEventListener('click', () => list.append(returnColumnRow()));
   dialog.body.append(list, add);
-  const apply = document.createElement('button'); apply.className = 'button primary'; apply.type = 'button'; apply.textContent = 'Apply';
+  const apply = document.createElement('button'); apply.className = 'button primary'; apply.type = 'button'; apply.textContent = t('tableEditor.apply');
   apply.addEventListener('click', () => {
     const columns = [...list.children].map(readReturnColumnRow);
-    if (!columns.length || columns.some((column) => !column.name || !column.type)) { dialog.status.textContent = 'Every column needs a name and a type'; return; }
+    if (!columns.length || columns.some((column) => !column.name || !column.type)) { dialog.status.textContent = t('programming.everyColumnNeedsAName'); return; }
     onApply(formatFunctionParameters(columns));
     dialog.close();
   });
@@ -1630,14 +1630,14 @@ function functionFormLanguageValue() {
 function readFunctionFormHeader() {
   const schema = value('pf-schema');
   const name = value('pf-name');
-  if (!schema || !name) throw new Error('Schema and name are required');
+  if (!schema || !name) throw new Error(t('programming.schemaAndNameAreRequired'));
   const params = [...byId('pf-params').children].map((row) => ({
     mode: row.querySelector('.pf-param-mode').value || null,
     name: row.querySelector('.pf-param-name').value.trim() || null,
     type: row.querySelector('.pf-param-type').value.trim(),
     default: row.querySelector('.pf-param-default').value.trim() || null,
   })).filter((param) => param.mode || param.name || param.type || param.default);
-  if (params.some((param) => !param.type)) throw new Error('Every parameter needs a type');
+  if (params.some((param) => !param.type)) throw new Error(t('programming.everyParameterNeedsAType'));
   const kind = programmingEditorTarget?.kind === 'procedure' ? 'procedure' : 'function';
   return {
     kind,
@@ -1705,19 +1705,19 @@ function setProgrammingEditorStatus(message, tone = '', options = {}) {
     programmingLastAlert = message;
     if (programmingAlertReset) window.clearTimeout(programmingAlertReset);
     programmingAlertReset = window.setTimeout(() => { programmingLastAlert = ''; }, 1200);
-    window.setTimeout(() => { void showAlert(message, tone === 'error' ? 'Programming error' : 'Programming success'); }, 0);
+    window.setTimeout(() => { void showAlert(message, tone === 'error' ? t('programming.programmingError') : t('programming.programmingSuccess')); }, 0);
   }
 }
 
-function clearProgrammingEditor(message = 'Select an object to start editing.') {
+function clearProgrammingEditor(message = t('programming.selectAnObjectToStart')) {
   programmingEditorTarget = null;
   const editor = byId('programming-editor');
   editor.disabled = true;
   setProgrammingEditorValue('');
   renderProgrammingFunctionForm(null);
   refreshProgrammingDdlPreview();
-  byId('programming-editor-kind').textContent = 'CODE EDITOR';
-  byId('programming-editor-title').textContent = 'Select an object';
+  byId('programming-editor-kind').textContent = t('programming.codeEditor');
+  byId('programming-editor-title').textContent = t('programming.selectAnObject');
   byId('programming-reload').disabled = true;
   byId('programming-validate').disabled = true;
   byId('programming-review-ai').disabled = true;
@@ -1746,15 +1746,15 @@ function setProgrammingEditorTarget(target, ddl) {
   byId('programming-run').disabled = !['function', 'procedure'].includes(target.kind);
   const structured = programmingEditorTarget.structured;
   const statusMessage = target.isNew
-    ? (structured ? 'New definition — fill in the fields and body, then save.' : 'New definition — edit and save when ready.')
-    : (structured ? 'Definition loaded — schema, name, parameters, returns and language are editable above; only the body is in the code editor.' : 'Definition loaded.');
+    ? (structured ? t('programming.newDefinitionFillInThe') : t('programming.newDefinitionEditAndSave'))
+    : (structured ? t('programming.definitionLoadedSchemaNameParameters') : t('programming.definitionLoaded'));
   setProgrammingEditorStatus(statusMessage, 'success', { alert: Boolean(target.isNew) });
   byId('programming-browser-screen').hidden = true;
   byId('programming-editor-screen').hidden = false;
   document.querySelector('.programming-panel').classList.add('editor-open');
   byId('programming-github-diff').hidden = true;
   refreshProgrammingDdlPreview();
-  syncProgrammingSourceState(target.isNew ? 'New file · not saved' : undefined);
+  syncProgrammingSourceState(target.isNew ? t('programming.newFileNotSaved') : undefined);
   void loadProgrammingGithub();
   editor.focus();
 }
@@ -1769,12 +1769,12 @@ async function returnToProgrammingBrowser() {
 
 async function confirmProgrammingEditorReplacement() {
   if (!programmingEditorIsDirty()) return true;
-  return showConfirm('This definition has unsaved changes. Discard them and continue?', 'Discard changes?', false, 'Discard');
+  return showConfirm(t('programming.thisDefinitionHasUnsavedChanges'), t('programming.discardChanges'), false, t('programming.discard'));
 }
 
 async function selectRoutineDefinition(id, schema, object, preferredArgs = null) {
   const definitions = await invoke('function_definitions', { id, schema, name: object.name });
-  if (!definitions.length) throw new Error('Definition not found');
+  if (!definitions.length) throw new Error(t('programming.definitionNotFound'));
   if (preferredArgs !== null) {
     const preferred = definitions.find((item) => item.args === preferredArgs);
     if (preferred) return preferred;
@@ -1784,7 +1784,7 @@ async function selectRoutineDefinition(id, schema, object, preferredArgs = null)
 
 async function openProgrammingObject(id, schema, object, options = {}) {
   if (!options.skipDiscardCheck && !await confirmProgrammingEditorReplacement()) return;
-  setProgrammingEditorStatus(`Loading ${object.name}…`);
+  setProgrammingEditorStatus(t('programming.loadingNamed', { name: object.name }));
   try {
     let ddl = object.definition || '';
     let args = options.preferredArgs ?? object.identity_arguments ?? null;
@@ -1793,13 +1793,13 @@ async function openProgrammingObject(id, schema, object, options = {}) {
       ddl = payload.ddl;
     } else if (['function', 'procedure'].includes(object.kind)) {
       const selected = await selectRoutineDefinition(id, schema, object, args);
-      if (!selected) { setProgrammingEditorStatus('Object selection cancelled.'); return; }
+      if (!selected) { setProgrammingEditorStatus(t('programming.objectSelectionCancelled')); return; }
       ddl = selected.ddl;
       args = selected.args;
     } else if (object.kind === 'trigger') {
       ddl = ddl.replace(/^CREATE\s+TRIGGER/i, 'CREATE OR REPLACE TRIGGER');
     }
-    if (!ddl.trim()) throw new Error('Definition not found');
+    if (!ddl.trim()) throw new Error(t('programming.definitionNotFound'));
     const targetPath = programmingGithubPath({ schema, name: object.name, kind: object.kind, args });
     ddl = programmingFileStore.get(`draco-programming-file:${targetPath}`) || ddl;
     const signature = args === null ? '' : `(${args})`;
@@ -1814,7 +1814,7 @@ async function openProgrammingObject(id, schema, object, options = {}) {
       isNew: false,
     }, ddl);
   } catch (error) {
-    setProgrammingEditorStatus(error?.message || 'Could not load the definition', 'error');
+    setProgrammingEditorStatus(errorMessage(error, t, 'programming.couldNotLoadTheDefinition'), 'error');
   }
 }
 
@@ -1826,7 +1826,7 @@ async function reloadProgrammingDefinition() {
     target.originalDdl = canonical;
     target.deployedDdl = canonical;
     refreshProgrammingDdlPreview();
-    setProgrammingEditorStatus('Template restored.', 'success');
+    setProgrammingEditorStatus(t('programming.templateRestored'), 'success');
     return;
   }
   await openProgrammingObject(target.id, target.schema, target.source, { skipDiscardCheck: true, preferredArgs: target.args });
@@ -1838,14 +1838,14 @@ async function validateProgrammingDefinition() {
   const button = byId('programming-validate');
   let ddl;
   try { ddl = currentProgrammingDdl(); }
-  catch (error) { setProgrammingEditorStatus(error?.message || 'Complete the required fields first', 'error'); return; }
+  catch (error) { setProgrammingEditorStatus(errorMessage(error, t, 'programmingGit.completeTheRequiredFieldsFirst'), 'error'); return; }
   button.disabled = true;
-  setProgrammingEditorStatus('Validating in a rolled-back transaction…');
+  setProgrammingEditorStatus(t('definition.validatingInARolledBack'));
   try {
     const error = await invoke('validate_function_definition', { id: target.id, ddl });
-    setProgrammingEditorStatus(error || 'Definition is valid.', error ? 'error' : 'success');
+    setProgrammingEditorStatus(error || t('programming.definitionIsValid'), error ? 'error' : 'success');
   } catch (error) {
-    setProgrammingEditorStatus(error?.message || 'Validation failed', 'error');
+    setProgrammingEditorStatus(errorMessage(error, t, 'definition.validationFailed'), 'error');
   } finally {
     button.disabled = false;
   }
@@ -1857,9 +1857,9 @@ async function saveProgrammingDefinition() {
   const button = byId('programming-save');
   let ddl;
   try { ddl = currentProgrammingDdl(); }
-  catch (error) { setProgrammingEditorStatus(error?.message || 'Complete the required fields before saving', 'error'); return; }
+  catch (error) { setProgrammingEditorStatus(errorMessage(error, t, 'programming.completeTheRequiredFieldsBefore'), 'error'); return; }
   button.disabled = true;
-  setProgrammingEditorStatus('Saving definition…');
+  setProgrammingEditorStatus(t('definition.savingDefinition'));
   try {
     if (target.kind === 'file') {
       await saveProgrammingFile();
@@ -1889,13 +1889,13 @@ async function saveProgrammingDefinition() {
         schemaSelect.value = target.schema;
       }
     }
-    setProgrammingEditorStatus('Definition saved.', 'success');
-    syncProgrammingSourceState('Compiled · saved to PostgreSQL');
+    setProgrammingEditorStatus(t('programming.definitionSaved'), 'success');
+    syncProgrammingSourceState(t('programming.compiledSavedToPostgresql'));
     await loadProgrammingObjects(target.id, target.schema);
-    const kindLabel = { view: 'View', trigger: 'Trigger', function: 'Function', procedure: 'Procedure' }[target.kind] || 'Definition';
-    await showAlert(`${kindLabel} saved successfully.`, 'Saved');
+    const kindLabel = { view: t('programming.view'), trigger: t('programming.trigger'), function: t('trigger.function'), procedure: t('programming.procedure') }[target.kind] || t('programming.definition');
+    await showAlert(t('programming.savedKind', { kind: kindLabel }), t('programming.saved'));
   } catch (error) {
-    setProgrammingEditorStatus(error?.message || 'Could not save the definition', 'error');
+    setProgrammingEditorStatus(errorMessage(error, t, 'programming.couldNotSaveTheDefinition'), 'error');
   } finally {
     button.disabled = false;
   }
@@ -1912,21 +1912,21 @@ async function chooseProgrammingWorkspace() {
     if (folder) {
       programmingWorkspacePath = folder;
       void savePreferences({ programming_workspace: folder });
-      byId('programming-source-state').textContent = `Workspace · ${folder}`;
-      setProgrammingEditorStatus('Programming workspace selected.', 'success');
+      byId('programming-source-state').textContent = t('programming.workspaceFolder', { folder });
+      setProgrammingEditorStatus(t('programming.programmingWorkspaceSelected'), 'success');
       await loadProgrammingLocalFiles();
     }
-  } catch (error) { setProgrammingEditorStatus(error?.message || 'Could not choose the workspace folder', 'error'); }
+  } catch (error) { setProgrammingEditorStatus(errorMessage(error, t, 'programming.couldNotChooseTheWorkspace'), 'error'); }
 }
 
 async function clearProgrammingWorkspace() {
-  if (!programmingWorkspacePath || !await showConfirm('Remove the Programming workspace from Draco preferences? No files will be deleted.', 'Clear workspace', false, 'Clear')) return;
+  if (!programmingWorkspacePath || !await showConfirm(t('programming.removeTheProgrammingWorkspaceFrom'), t('programming.clearWorkspace'), false, t('history.clearAction'))) return;
   programmingWorkspacePath = null;
   await savePreferences({ programming_workspace: null });
   byId('programming-local-files-count').textContent = '0';
-  byId('programming-local-files-list').replaceChildren(errorState('No workspace selected', 'Choose a folder to browse local SQL files.'));
-  byId('programming-source-state').textContent = 'No workspace selected';
-  setProgrammingEditorStatus('Programming workspace cleared.', 'success');
+  byId('programming-local-files-list').replaceChildren(errorState(t('programming.noWorkspaceSelected'), t('programming.chooseAFolderToBrowse')));
+  byId('programming-source-state').textContent = t('programming.noWorkspaceSelected');
+  setProgrammingEditorStatus(t('programming.programmingWorkspaceCleared'), 'success');
 }
 
 async function loadProgrammingLocalFiles() {
@@ -1937,7 +1937,7 @@ async function loadProgrammingLocalFiles() {
     const files = await invoke('list_programming_files', { workspace: programmingWorkspacePath });
     count.textContent = String(files.length);
     list.replaceChildren();
-    if (!files.length) { list.append(errorState('No SQL files found', 'Save a definition to this workspace to see it here.')); return; }
+    if (!files.length) { list.append(errorState(t('programming.noSqlFilesFound'), t('programming.saveADefinitionToThis'))); return; }
     for (const file of files) {
       const row = document.createElement('div'); row.className = 'programming-local-file';
       const label = document.createElement('span'); label.textContent = file;
@@ -1945,7 +1945,7 @@ async function loadProgrammingLocalFiles() {
       open.addEventListener('click', () => void openProgrammingLocalFile(file));
       row.append(label, open); list.append(row);
     }
-  } catch (error) { count.textContent = '—'; list.replaceChildren(errorState('Workspace unavailable', error?.message || 'Could not read SQL files.')); }
+  } catch (error) { count.textContent = '—'; list.replaceChildren(errorState(t('programming.workspaceUnavailable'), errorMessage(error, t, 'programming.couldNotReadSqlFiles'))); }
 }
 
 async function openProgrammingLocalFile(relativePath) {
@@ -1960,8 +1960,8 @@ async function openProgrammingLocalFile(relativePath) {
     programmingEditorTarget.deployedDdl = content;
     byId('programming-validate').disabled = true;
     byId('programming-run').disabled = true;
-    setProgrammingEditorStatus(`Opened ${relativePath} from disk.`, 'success');
-  } catch (error) { setProgrammingEditorStatus(error?.message || 'Could not open the local file', 'error'); }
+    setProgrammingEditorStatus(t('programming.openedFromDisk', { path: relativePath }), 'success');
+  } catch (error) { setProgrammingEditorStatus(errorMessage(error, t, 'programming.couldNotOpenTheLocal'), 'error'); }
 }
 
 async function saveProgrammingFile() {
@@ -1978,23 +1978,23 @@ async function saveProgrammingFile() {
       byId('programming-editor-title').textContent = target.title;
     }
     ddl = currentProgrammingDdl();
-  } catch (error) { setProgrammingEditorStatus(error?.message || 'Complete the required fields before saving', 'error'); return; }
+  } catch (error) { setProgrammingEditorStatus(errorMessage(error, t, 'programming.completeTheRequiredFieldsBefore'), 'error'); return; }
   const key = programmingLocalFileKey(target);
-  if (!key) { setProgrammingEditorStatus('Save the definition with a schema and name first.', 'error'); return; }
+  if (!key) { setProgrammingEditorStatus(t('programming.saveTheDefinitionWithA'), 'error'); return; }
   try {
     if (!programmingWorkspacePath) await chooseProgrammingWorkspace();
     if (programmingWorkspacePath) {
       const savedPath = await invoke('save_programming_file', { workspace: programmingWorkspacePath, relativePath: programmingGithubPath(target), content: ddl });
       programmingFileStore.set(key, ddl);
       target.fileSavedDdl = ddl;
-      setProgrammingEditorStatus(`File saved on disk: ${savedPath || programmingGithubPath(target)}`, 'success');
+      setProgrammingEditorStatus(t('programming.fileSavedOnDisk', { path: savedPath || programmingGithubPath(target) }), 'success');
     } else {
       programmingFileStore.set(key, ddl);
-      setProgrammingEditorStatus('File draft saved for this session. Choose a workspace folder to persist it on disk.', 'success');
+      setProgrammingEditorStatus(t('programming.fileDraftSavedForThis'), 'success');
     }
-    syncProgrammingSourceState('Saved file · not compiled');
+    syncProgrammingSourceState(t('programming.savedFileNotCompiled'));
   } catch (error) {
-    setProgrammingEditorStatus(error?.message || 'Could not save the local file', 'error');
+    setProgrammingEditorStatus(errorMessage(error, t, 'programming.couldNotSaveTheLocal'), 'error');
   }
 }
 
@@ -2002,7 +2002,7 @@ function openProgrammingRunDialog() {
   const target = programmingEditorTarget;
   if (!target || !['function', 'procedure'].includes(target.kind)) return;
   if (programmingEditorIsDirty()) {
-    setProgrammingEditorStatus('Save or compile the current changes before running.', 'error');
+    setProgrammingEditorStatus(t('programming.saveOrCompileTheCurrent'), 'error');
     return;
   }
   const params = byId('programming-run-params');
@@ -2011,15 +2011,15 @@ function openProgrammingRunDialog() {
   for (const [index, param] of (header.params || []).entries()) {
     if (param.mode === 'OUT') continue;
     const label = document.createElement('label');
-    label.innerHTML = `<span>${param.name || `Parameter ${index + 1}`} · ${param.type}</span>`;
+    const labelText = document.createElement('span'); labelText.textContent = `${param.name || t('programming.parameterNumber', { number: index + 1 })} · ${param.type}`; label.replaceChildren(labelText);
     const input = document.createElement('input');
     input.dataset.paramIndex = String(index);
-    input.placeholder = param.default ? `Default: ${param.default}` : 'NULL';
+    input.placeholder = param.default ? t('programming.paramDefault', { value: param.default }) : 'NULL';
     input.autocomplete = 'off';
     label.append(input); params.append(label);
   }
-  if (!params.children.length) params.append(Object.assign(document.createElement('p'), { className: 'form-status', textContent: 'This routine has no input parameters.' }));
-  byId('programming-run-title').textContent = `Run ${target.kind} ${target.schema}.${target.name}`;
+  if (!params.children.length) params.append(Object.assign(document.createElement('p'), { className: 'form-status', textContent: t('programming.thisRoutineHasNoInput') }));
+  byId('programming-run-title').textContent = t('programming.runTitle', { kind: t(`kind.${target.kind}`), schema: target.schema, name: target.name });
   byId('programming-run-status').textContent = '';
   byId('programming-run-dialog').hidden = false;
   params.querySelector('input')?.focus();
@@ -2046,11 +2046,11 @@ async function runProgrammingDefinition() {
   const resultView = byId('programming-execution-result');
   const summary = byId('programming-execution-summary');
   byId('programming-run-confirm').disabled = true;
-  byId('programming-run-status').textContent = 'Executing…';
+  byId('programming-run-status').textContent = t('programming.executing');
   try {
     const result = await invoke('execute_query', { id: target.id, sql, operationId: operationId() });
     output.hidden = false;
-    summary.textContent = `${result.rows?.length || 0} rows · ${result.duration_ms ?? 0} ms`;
+    summary.textContent = t('results.summary', { count: result.rows?.length || 0, ms: result.duration_ms ?? 0 });
     const displayCell = (cell) => {
       if (cell == null) return 'NULL';
       if (typeof cell === 'object') return JSON.stringify(cell);
@@ -2058,11 +2058,11 @@ async function runProgrammingDefinition() {
     };
     resultView.textContent = result.columns?.length
       ? [result.columns.join(' | '), ...(result.rows || []).map((row) => result.columns.map((column) => displayCell(row[column])).join(' | '))].join('\n')
-      : 'Execution completed without a result set.';
-    byId('programming-run-status').textContent = 'Completed.';
+      : t('programming.executionCompletedWithoutAResult');
+    byId('programming-run-status').textContent = t('programming.completed');
     closeProgrammingRunDialog();
   } catch (error) {
-    byId('programming-run-status').textContent = error?.message || 'Execution failed.';
+    byId('programming-run-status').textContent = errorMessage(error, t, 'programming.executionFailed');
   } finally { byId('programming-run-confirm').disabled = false; }
 }
 
@@ -2076,7 +2076,7 @@ async function newProgrammingDefinition(kind) {
     schema,
     name: null,
     kind,
-    title: `New ${kind} in ${schema}`,
+    title: t('programming.newIn', { kind: t(`kind.${kind}`), schema }),
     source: null,
     args: null,
     isNew: true,
@@ -2097,10 +2097,10 @@ function renderProgrammingGithubBranches() {
   const base = byId('programming-github-base');
   const previousBranch = branch.value;
   const previousBase = base.value;
-  branch.replaceChildren(new Option(githubConnection?.connected ? 'Choose branch' : 'Connect GitHub in Preferences', ''));
-  base.replaceChildren(new Option('Base branch', ''));
+  branch.replaceChildren(new Option(githubConnection?.connected ? t('programmingGit.chooseBranch') : t('programmingGit.connectGithubInPreferences'), ''));
+  base.replaceChildren(new Option(t('programmingGit.baseBranch'), ''));
   for (const item of githubBranches) {
-    branch.append(new Option(`${item.name}${item.protected ? ' · protected' : ''}`, item.name));
+    branch.append(new Option(`${item.name}${item.protected ? t('programmingGit.protected') : ''}`, item.name));
     base.append(new Option(item.name, item.name));
   }
   const fallback = githubConnection?.default_branch || githubBranches[0]?.name || '';
@@ -2115,7 +2115,7 @@ function renderProgrammingGithubBranches() {
   byId('programming-github-push').disabled = !ready || !pendingForTarget;
   byId('programming-github-status').textContent = githubConnection?.connected
     ? `${githubConnection.owner}/${githubConnection.repository}`
-    : 'GitHub not connected';
+    : t('programmingGit.githubNotConnected');
   renderProgrammingRepositoryWorkspace();
 }
 
@@ -2127,23 +2127,23 @@ function renderProgrammingRepositoryWorkspace() {
   const branch = byId('programming-workspace-branch');
   if (!repository || !branch) return;
   const repoValue = githubConnection?.connected ? `${githubConnection.owner}/${githubConnection.repository}` : '';
-  repository.replaceChildren(new Option(repoValue ? 'Choose repository' : 'Connect GitHub in Preferences', ''));
+  repository.replaceChildren(new Option(repoValue ? t('programmingGit.chooseRepository') : t('programmingGit.connectGithubInPreferences'), ''));
   for (const item of githubRepositories) {
-    const option = new Option(`${item.owner}/${item.name}${item.private ? ' · private' : ''}`, `${item.owner}/${item.name}`);
+    const option = new Option(`${item.owner}/${item.name}${item.private ? t('programmingGit.private') : ''}`, `${item.owner}/${item.name}`);
     repository.append(option);
   }
   repository.value = repoValue;
-  branch.replaceChildren(new Option(githubConnection?.connected ? 'Choose a branch' : 'Connect GitHub in Preferences', ''));
+  branch.replaceChildren(new Option(githubConnection?.connected ? t('programmingGit.chooseABranch') : t('programmingGit.connectGithubInPreferences'), ''));
   for (const item of githubBranches) branch.append(new Option(item.name, item.name));
   branch.value = programmingEditorTarget?.activeBranch || githubConnection?.default_branch || '';
-  byId('programming-repository-label').textContent = repoValue || 'Select a repository';
+  byId('programming-repository-label').textContent = repoValue || t('programmingGit.selectARepository');
 }
 
 function syncProgrammingSourceState(message) {
   const stateLabel = byId('programming-source-state');
   if (!stateLabel) return;
   const dirty = programmingEditorIsDirty();
-  stateLabel.textContent = message || (dirty ? 'Modified · not compiled' : programmingEditorTarget ? 'Saved file · compiled' : 'No file selected');
+  stateLabel.textContent = message || (dirty ? t('programming.modifiedNotCompiled') : programmingEditorTarget ? t('programming.savedFileCompiled') : t('programming.noFileSelected'));
   stateLabel.className = `source-state ${dirty ? 'dirty' : programmingEditorTarget ? 'compiled' : ''}`.trim();
 }
 
@@ -2162,7 +2162,7 @@ async function loadProgrammingGithub() {
     githubBranches = [];
     githubRepositories = [];
     renderProgrammingGithubBranches();
-    byId('programming-github-status').textContent = error?.message || 'GitHub unavailable';
+    byId('programming-github-status').textContent = errorMessage(error, t, 'programmingGit.githubUnavailable');
   }
 }
 
@@ -2181,13 +2181,13 @@ function lineDiff(before, after, beforeLabel, afterLabel) {
   for (let index = prefix; index < left.length - suffix; index += 1) output.push(`-${left[index]}`);
   for (let index = prefix; index < right.length - suffix; index += 1) output.push(`+${right[index]}`);
   for (let index = Math.max(prefix, right.length - suffix); index < rightEnd; index += 1) output.push(` ${right[index]}`);
-  if (before === after) output.push(' No differences.');
+  if (before === after) output.push(t('programmingGit.noDifferences'));
   return output.join('\n');
 }
 
 function showProgrammingGithubDiff(diff) {
   const panel = byId('programming-github-diff');
-  panel.textContent = diff || 'No differences.';
+  panel.textContent = diff || t('programmingGit.noDifferences2');
   panel.hidden = false;
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -2197,17 +2197,17 @@ async function loadProgrammingGithubFile() {
   const branch = byId('programming-github-branch').value;
   const path = programmingGithubPath(target);
   if (!target || !branch || !path || !await confirmProgrammingEditorReplacement()) return;
-  setProgrammingEditorStatus(`Loading ${path} from ${branch}…`);
+  setProgrammingEditorStatus(t('programmingGit.loadingFrom', { path, branch }));
   try {
     const content = await invoke('github_file', { branch, path });
-    if (content === null) throw new Error(`The definition does not exist on branch ${branch}.`);
+    if (content === null) throw new Error(t('programmingGit.notOnBranch', { branch }));
     const canonical = applyProgrammingDdl(target, content, { isNew: false });
     target.originalDdl = canonical;
     target.activeBranch = branch;
     refreshProgrammingDdlPreview();
-    setProgrammingEditorStatus(`Loaded from GitHub branch ${branch}.`, 'success');
+    setProgrammingEditorStatus(t('programmingGit.loadedFrom', { branch }), 'success');
   } catch (error) {
-    setProgrammingEditorStatus(error?.message || 'Could not load the GitHub definition', 'error');
+    setProgrammingEditorStatus(errorMessage(error, t, 'programmingGit.couldNotLoadTheGithub'), 'error');
   }
 }
 
@@ -2216,13 +2216,13 @@ async function diffProgrammingDeployed() {
   const branch = byId('programming-github-branch').value;
   const path = programmingGithubPath(target);
   if (!target || !branch || !path) return;
-  setProgrammingEditorStatus(`Comparing deployed definition with ${branch}…`);
+  setProgrammingEditorStatus(t('programmingGit.comparingDeployed', { branch }));
   try {
     const content = await invoke('github_file', { branch, path });
     showProgrammingGithubDiff(lineDiff(target.deployedDdl, content || '', 'deployed database', `github/${branch}/${path}`));
-    setProgrammingEditorStatus(`Deployed definition compared with ${branch}.`, 'success');
+    setProgrammingEditorStatus(t('programmingGit.comparedDeployed', { branch }), 'success');
   } catch (error) {
-    setProgrammingEditorStatus(error?.message || 'Could not compare the deployed definition', 'error');
+    setProgrammingEditorStatus(errorMessage(error, t, 'programmingGit.couldNotCompareTheDeployed'), 'error');
   }
 }
 
@@ -2230,12 +2230,12 @@ async function diffProgrammingBranches() {
   const head = byId('programming-github-branch').value;
   const base = byId('programming-github-base').value;
   if (!head || !base) return;
-  setProgrammingEditorStatus(`Comparing ${base} with ${head}…`);
+  setProgrammingEditorStatus(t('programmingGit.comparingBranches', { base, head }));
   try {
     showProgrammingGithubDiff(await invoke('github_compare', { base, head }));
-    setProgrammingEditorStatus(`Branches ${base} and ${head} compared.`, 'success');
+    setProgrammingEditorStatus(t('programmingGit.comparedBranches', { base, head }), 'success');
   } catch (error) {
-    setProgrammingEditorStatus(error?.message || 'Could not compare branches', 'error');
+    setProgrammingEditorStatus(errorMessage(error, t, 'programmingGit.couldNotCompareBranches'), 'error');
   }
 }
 
@@ -2246,34 +2246,34 @@ async function commitProgrammingGithubFile() {
   const message = value('programming-github-message');
   if (!target || !branch || !path) return;
   if (!message) {
-    setProgrammingEditorStatus('Enter a commit message first.', 'error');
+    setProgrammingEditorStatus(t('programmingGit.enterACommitMessageFirst'), 'error');
     byId('programming-github-message').focus();
     return;
   }
   let content;
   try { content = currentProgrammingDdl(); }
-  catch (error) { setProgrammingEditorStatus(error?.message || 'Complete the required fields first', 'error'); return; }
+  catch (error) { setProgrammingEditorStatus(errorMessage(error, t, 'programmingGit.completeTheRequiredFieldsFirst'), 'error'); return; }
   pendingGithubCommit = { branch, path, content, message };
   target.activeBranch = branch;
   byId('programming-github-message').value = '';
-  setProgrammingEditorStatus(`Commit preparado localmente para ${branch}. Clique Push para enviar ao GitHub.`, 'success');
+  setProgrammingEditorStatus(t('programmingGit.commitPrepared', { branch }), 'success');
   renderProgrammingGithubBranches();
 }
 
 async function pushProgrammingGithubFile() {
   if (!pendingGithubCommit) {
-    setProgrammingEditorStatus('Faça o commit local antes do push.', 'error');
+    setProgrammingEditorStatus(t('programmingGit.faAOCommitLocal'), 'error');
     return;
   }
   const { branch, path, content, message } = pendingGithubCommit;
-  setProgrammingEditorStatus(`Enviando commit para ${branch}…`);
+  setProgrammingEditorStatus(t('programmingGit.pushing', { branch }));
   try {
     const url = await invoke('github_commit_file', { branch, path, content, message });
     if (programmingEditorTarget) programmingEditorTarget.originalDdl = content;
     pendingGithubCommit = null;
-    setProgrammingEditorStatus(`Push concluído em ${branch}. ${url}`, 'success');
+    setProgrammingEditorStatus(t('programmingGit.pushed', { branch, url }), 'success');
     renderProgrammingGithubBranches();
-  } catch (error) { setProgrammingEditorStatus(error?.message || 'Could not push the commit', 'error'); }
+  } catch (error) { setProgrammingEditorStatus(errorMessage(error, t, 'programmingGit.couldNotPushTheCommit'), 'error'); }
 }
 
 function openProgrammingPullRequestForm() {
@@ -2290,19 +2290,19 @@ async function createProgrammingPullRequest(event) {
   const base = byId('programming-github-base').value;
   const title = value('programming-github-pr-title');
   const body = value('programming-github-pr-body');
-  setProgrammingEditorStatus(`Creating pull request from ${head} to ${base}…`);
+  setProgrammingEditorStatus(t('programmingGit.creatingPr', { head, base }));
   try {
     const pull = await invoke('github_create_pull_request', { title, body, head, base });
     byId('programming-github-pr-form').hidden = true;
     await navigator.clipboard.writeText(pull.html_url);
-    setProgrammingEditorStatus(`Pull request #${pull.number} created. Link copied to clipboard.`, 'success');
+    setProgrammingEditorStatus(t('programmingGit.prCreated', { number: pull.number }), 'success');
   } catch (error) {
-    setProgrammingEditorStatus(error?.message || 'Could not create the pull request', 'error');
+    setProgrammingEditorStatus(errorMessage(error, t, 'programmingGit.couldNotCreateThePull'), 'error');
   }
 }
 
 function programmingObjectKindLabel(kind) {
-  return kind === 'procedure' ? 'procedure' : kind === 'trigger' ? 'trigger' : 'function';
+  return t(`kind.${kind === 'procedure' || kind === 'trigger' ? kind : 'function'}`);
 }
 
 /**
@@ -2315,12 +2315,12 @@ function programmingObjectKindLabel(kind) {
 async function deleteSchemaProgrammingObject(id, schema, object, onDeleted) {
   const kindLabel = programmingObjectKindLabel(object.kind);
   if (object.is_extension) {
-    await showAlert(`“${object.name}” was installed by a PostgreSQL extension and can't be deleted here. Drop or alter the extension instead.`, `Cannot delete ${kindLabel}`);
+    await showAlert(t('programming.extensionOwned', { name: object.name }), t('programming.cannotDelete', { kind: kindLabel }));
     return;
   }
   const signature = object.kind === 'trigger' ? `on ${schema}.${object.parent_table}` : `(${object.identity_arguments || ''})`;
-  const confirmation = await showDangerPrompt(`Type ${object.name} to permanently drop this ${kindLabel} ${signature}. This cannot be undone.`, `Drop ${kindLabel}`, `${kindLabel[0].toUpperCase()}${kindLabel.slice(1)} name`, object.name);
-  if (confirmation !== object.name) { if (confirmation !== null) await showAlert(`The ${kindLabel} name did not match. Nothing was dropped.`, `${kindLabel[0].toUpperCase()}${kindLabel.slice(1)} not dropped`); return; }
+  const confirmation = await showDangerPrompt(t('programming.dropConfirm', { name: object.name, kind: kindLabel, signature }), t('programming.dropTitle', { kind: kindLabel }), t('programming.dropNameLabel', { kind: kindLabel }), object.name);
+  if (confirmation !== object.name) { if (confirmation !== null) await showAlert(t('programming.dropNameMismatch', { kind: kindLabel }), t('programming.notDropped', { kind: kindLabel })); return; }
   try {
     if (object.kind === 'trigger') {
       await invoke('delete_trigger', { id, schema, table: object.parent_table, name: object.name });
@@ -2329,7 +2329,7 @@ async function deleteSchemaProgrammingObject(id, schema, object, onDeleted) {
     }
     await onDeleted?.();
   } catch (error) {
-    await showAlert(error?.message || `Could not drop the ${kindLabel}`, `${kindLabel[0].toUpperCase()}${kindLabel.slice(1)} not dropped`);
+    await showAlert(errorMessage(error, t, 'programming.dropFailed'), t('programming.notDropped', { kind: kindLabel }));
   }
 }
 
@@ -2340,7 +2340,7 @@ function programmingGroup(title, objects, id, schema, onChanged) {
   const count = document.createElement('span'); count.className = 'badge'; count.textContent = String(objects.length);
   heading.append(label, count); panel.append(heading);
   if (!objects.length) {
-    const empty = document.createElement('div'); empty.className = 'empty-state compact'; empty.textContent = `No ${title.toLowerCase()} in this schema`; panel.append(empty); return panel;
+    const empty = document.createElement('div'); empty.className = 'empty-state compact'; empty.textContent = t('programming.noneInSchema', { title: title.toLowerCase() }); panel.append(empty); return panel;
   }
   for (const object of objects) {
     const row = document.createElement('article'); row.className = 'programming-object';
@@ -2349,13 +2349,13 @@ function programmingGroup(title, objects, id, schema, onChanged) {
     const signature = document.createElement('small'); signature.textContent = object.detail || object.kind;
     detail.append(name, signature);
     const actions = document.createElement('div'); actions.className = 'programming-object-actions';
-    const open = document.createElement('button'); open.className = 'button small'; open.type = 'button'; open.textContent = object.kind === 'trigger' ? 'Table' : 'Open';
+    const open = document.createElement('button'); open.className = 'button small'; open.type = 'button'; open.textContent = object.kind === 'trigger' ? t('trigger.table') : t('programming.open');
     open.addEventListener('click', () => object.kind === 'view' ? openTable(id, schema, object.name, 'view') : openSchemaObject(id, schema, object));
-    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = 'Edit';
+    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = t('common.edit');
     edit.addEventListener('click', () => void openProgrammingObject(id, schema, object));
     actions.append(open, edit);
     if (['function', 'procedure', 'trigger'].includes(object.kind)) {
-      const del = document.createElement('button'); del.className = 'button small danger'; del.type = 'button'; del.textContent = 'Delete';
+      const del = document.createElement('button'); del.className = 'button small danger'; del.type = 'button'; del.textContent = t('common.delete');
       del.disabled = Boolean(object.is_extension);
       del.title = object.is_extension ? t('explorer.extensionObject') : t(`explorer.deleteKind.${object.kind}`);
       del.addEventListener('click', () => void deleteSchemaProgrammingObject(id, schema, object, onChanged));
@@ -2371,7 +2371,7 @@ async function loadProgrammingObjects(id, schema) {
   const content = byId('programming-content');
   const status = byId('programming-status');
   if (!id || !schema) {
-    content.replaceChildren(errorState('Choose a connection and schema', 'Views, functions, procedures and triggers will appear here.'));
+    content.replaceChildren(errorState(t('programming.chooseAConnectionAndSchema'), t('programming.viewsFunctionsProceduresAndTriggers')));
     status.textContent = '';
     return;
   }
@@ -2381,8 +2381,8 @@ async function loadProgrammingObjects(id, schema) {
   byId('programming-new-procedure').disabled = false;
   byId('programming-new-trigger').disabled = false;
   byId('programming-new-view').disabled = false;
-  content.replaceChildren(errorState('Loading programming objects…', 'Reading views, functions, procedures and triggers.'));
-  status.textContent = `Loading ${schema}…`;
+  content.replaceChildren(errorState(t('programming.loadingProgrammingObjects'), t('programming.readingViewsFunctionsProceduresAnd')));
+  status.textContent = t('programming.loadingNamed', { name: schema });
   try {
     const [objects, tables] = await Promise.all([
       invoke('list_schema_objects', { id, schema }),
@@ -2396,17 +2396,17 @@ async function loadProgrammingObjects(id, schema) {
     const views = tables.filter((object) => object.kind === 'view').map((object) => ({ ...object, detail: formatEstimatedRows(object.estimated_rows) }));
     const refresh = () => loadProgrammingObjects(id, schema);
     content.replaceChildren(
-      programmingGroup('Views', views, id, schema, refresh),
-      programmingGroup('Functions', functions, id, schema, refresh),
-      programmingGroup('Procedures', procedures, id, schema, refresh),
-      programmingGroup('Triggers', triggers, id, schema, refresh),
+      programmingGroup(t('programming.views'), views, id, schema, refresh),
+      programmingGroup(t('programming.functions'), functions, id, schema, refresh),
+      programmingGroup(t('programming.procedures'), procedures, id, schema, refresh),
+      programmingGroup(t('programming.triggers'), triggers, id, schema, refresh),
     );
     const total = programming.length + views.length;
-    status.textContent = `${total} programming object${total === 1 ? '' : 's'} in ${schema}`;
+    status.textContent = t('programming.objectCount', { count: total, schema });
   } catch (error) {
     if (request !== programmingRequest) return;
-    content.replaceChildren(errorState('Programming objects unavailable', 'Check schema permissions and try again.'));
-    status.textContent = error?.message || 'Could not load programming objects';
+    content.replaceChildren(errorState(t('programming.programmingObjectsUnavailable'), t('programming.checkSchemaPermissionsAndTry')));
+    status.textContent = errorMessage(error, t, 'programming.couldNotLoadProgrammingObjects');
   }
 }
 
@@ -2414,18 +2414,18 @@ async function loadProgrammingSchemas(id) {
   const request = ++programmingRequest;
   const schemaSelect = byId('programming-schema');
   const previous = schemaSelect.value;
-  schemaSelect.replaceChildren(new Option('Select a schema', ''));
+  schemaSelect.replaceChildren(new Option(t('programming.selectASchema'), ''));
   schemaSelect.disabled = true;
   byId('programming-new-function').disabled = true;
   byId('programming-new-procedure').disabled = true;
   byId('programming-new-trigger').disabled = true;
   byId('programming-new-view').disabled = true;
   if (!id) {
-    byId('programming-content').replaceChildren(errorState('Choose a connected connection', 'Schemas and programming objects will appear here.'));
+    byId('programming-content').replaceChildren(errorState(t('admin.chooseAConnectedConnection'), t('programming.schemasAndProgrammingObjectsWill')));
     byId('programming-status').textContent = '';
     return;
   }
-  byId('programming-content').replaceChildren(errorState('Loading schemas…', 'Reading the selected database.'));
+  byId('programming-content').replaceChildren(errorState(t('explorer.loadingSchemas'), t('programming.readingTheSelectedDatabase')));
   try {
     const schemas = await invoke('list_schemas', { id });
     if (request !== programmingRequest || byId('programming-connection').value !== id) return;
@@ -2436,8 +2436,8 @@ async function loadProgrammingSchemas(id) {
     await loadProgrammingObjects(id, preferred);
   } catch (error) {
     if (request !== programmingRequest) return;
-    byId('programming-content').replaceChildren(errorState('Schemas unavailable', 'Reconnect and try again.'));
-    byId('programming-status').textContent = error?.message || 'Could not load schemas';
+    byId('programming-content').replaceChildren(errorState(t('programming.schemasUnavailable'), t('palette.reconnectAndTryAgain')));
+    byId('programming-status').textContent = errorMessage(error, t, 'explorer.schemasFailed');
   }
 }
 
@@ -2450,11 +2450,11 @@ function openProgramming() {
 function tableMaintenancePanel(id, schema, table, detail) {
   const panel = document.createElement('section'); panel.className = 'data-panel maintenance-panel';
   const heading = document.createElement('div'); heading.className = 'maintenance-heading';
-  const title = document.createElement('h3'); title.textContent = 'Table maintenance';
+  const title = document.createElement('h3'); title.textContent = t('table.tableMaintenance');
   const actions = document.createElement('div'); actions.className = 'maintenance-actions';
   const status = document.createElement('div'); status.className = 'form-status maintenance-status'; status.setAttribute('role', 'status');
-  const operations = [['vacuum', 'Vacuum'], ['analyze', 'Analyze'], ['vacuum_analyze', 'Vacuum + Analyze'], ['vacuum_full', 'Vacuum Full']];
-  const editStructure = document.createElement('button'); editStructure.className = 'button small'; editStructure.type = 'button'; editStructure.textContent = 'Edit structure';
+  const operations = [['vacuum', t('table.vacuum')], ['analyze', t('table.analyze')], ['vacuum_analyze', t('table.vacuumAnalyze')], ['vacuum_full', t('table.vacuumFull')]];
+  const editStructure = document.createElement('button'); editStructure.className = 'button small'; editStructure.type = 'button'; editStructure.textContent = t('table.editStructure');
   editStructure.addEventListener('click', () => openAlterTableDialog(id, schema, table, detail));
   actions.append(editStructure);
   for (const [operation, label] of operations) {
@@ -2462,17 +2462,17 @@ function tableMaintenancePanel(id, schema, table, detail) {
     button.addEventListener('click', async () => {
       if (operation === 'vacuum_full') {
         const objectName = `${schema}.${table}`;
-        const confirmation = await showDangerPrompt(`VACUUM FULL rewrites ${objectName} and holds an ACCESS EXCLUSIVE lock. Type ${objectName} to continue.`, 'Run VACUUM FULL', 'Schema and table', objectName);
+        const confirmation = await showDangerPrompt(t('table.vacuumFullConfirm', { name: objectName }), t('table.runVacuumFull'), t('table.schemaAndTable'), objectName);
         if (confirmation !== objectName) { if (confirmation !== null) await showAlert('The table name did not match. Maintenance was not started.', 'VACUUM FULL cancelled'); return; }
       }
       for (const control of actions.querySelectorAll('button')) control.disabled = true;
-      status.textContent = `Running ${label}…`; status.className = 'form-status maintenance-status';
+      status.textContent = t('table.runningOperation', { operation: label }); status.className = 'form-status maintenance-status';
       try {
         await invoke('run_table_maintenance', { id, schema, table, operation });
-        status.textContent = `${label} completed`;
+        status.textContent = t('table.operationCompleted', { operation: label });
         status.className = 'form-status maintenance-status success';
       } catch (error) {
-        status.textContent = error?.message || `${label} failed`;
+        status.textContent = (error?.key ? errorMessage(error, t) : error?.message || t('table.operationFailed', { operation: label }));
         status.className = 'form-status maintenance-status error';
       } finally {
         for (const control of actions.querySelectorAll('button')) control.disabled = false;
@@ -2501,14 +2501,14 @@ function tableDataPanel(id, schema, table) {
   const panel = document.createElement('section'); panel.className = 'data-panel table-data-panel';
   const heading = document.createElement('div'); heading.className = 'table-data-heading';
   const headingCopy = document.createElement('div');
-  const title = document.createElement('h3'); title.textContent = 'Table data';
-  const summary = document.createElement('small'); summary.textContent = 'Loading rows…';
+  const title = document.createElement('h3'); title.textContent = t('table.tableData');
+  const summary = document.createElement('small'); summary.textContent = t('table.loadingRows');
   headingCopy.append(title, summary);
   const controls = document.createElement('div'); controls.className = 'table-data-controls';
-  const insert = document.createElement('button'); insert.className = 'button small'; insert.type = 'button'; insert.textContent = 'Insert row';
-  const refresh = document.createElement('button'); refresh.className = 'button small'; refresh.type = 'button'; refresh.textContent = 'Refresh';
-  const previous = document.createElement('button'); previous.className = 'button small'; previous.type = 'button'; previous.textContent = 'Previous';
-  const next = document.createElement('button'); next.className = 'button small'; next.type = 'button'; next.textContent = 'Next';
+  const insert = document.createElement('button'); insert.className = 'button small'; insert.type = 'button'; insert.textContent = t('table.insertRow');
+  const refresh = document.createElement('button'); refresh.className = 'button small'; refresh.type = 'button'; refresh.textContent = t('table.refresh');
+  const previous = document.createElement('button'); previous.className = 'button small'; previous.type = 'button'; previous.textContent = t('table.previous');
+  const next = document.createElement('button'); next.className = 'button small'; next.type = 'button'; next.textContent = t('explorer.sequenceNext');
   controls.append(insert, refresh, previous, next); heading.append(headingCopy, controls);
   const status = document.createElement('div'); status.className = 'form-status table-data-status'; status.setAttribute('role', 'status');
   const grid = document.createElement('div'); grid.className = 'table-data-grid';
@@ -2524,13 +2524,13 @@ function tableDataPanel(id, schema, table) {
   const rowKeys = (row, primaryKeys) => primaryKeys.map((column) => ({ column, value_json: row[column] }));
   const parseJsonInput = async (value, context) => {
     try { return JSON.parse(value); }
-    catch { await showAlert(`${context} must use valid JSON. Text values require double quotes and SQL NULL is written as null.`, 'Invalid JSON'); return undefined; }
+    catch { await showAlert(t('table.jsonRequired', { context }), t('table.invalidJson')); return undefined; }
   };
 
   const loadPage = async () => {
     if (loading) return;
     const request = ++requestSequence;
-    setLoading(true); status.textContent = 'Loading rows…'; status.className = 'form-status table-data-status';
+    setLoading(true); status.textContent = t('table.loadingRows'); status.className = 'form-status table-data-status';
     try {
       const result = await invoke('browse_table_data', { id, schema, table, offset, limit: pageSize });
       if (request !== requestSequence || !panel.isConnected) return;
@@ -2539,15 +2539,15 @@ function tableDataPanel(id, schema, table) {
       const primaryKeys = result.primary_key_columns || [];
       const first = result.total ? offset + 1 : 0;
       const last = Math.min(offset + rows.length, result.total);
-      summary.textContent = `${first}–${last} of ${result.total}${primaryKeys.length ? ` · key: ${primaryKeys.join(', ')}` : ' · read-only without a primary key'}`;
+      summary.textContent = `${t('table.pageRange', { first, last, total: result.total })}${primaryKeys.length ? ` · ${t('table.keyColumns', { columns: primaryKeys.join(', ') })}` : t('table.readOnlyWithoutAPrimary')}`;
       canPrevious = offset > 0;
       canNext = offset + rows.length < result.total;
       grid.replaceChildren();
-      if (!rows.length) { grid.append(errorState('No rows', 'Insert a row or refresh after data is added.')); return; }
+      if (!rows.length) { grid.append(errorState(t('table.noRows'), t('table.insertARowOrRefresh'))); return; }
       const tableElement = document.createElement('table');
       const head = document.createElement('thead'); const header = document.createElement('tr');
       for (const column of columns) { const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = column; header.append(cell); }
-      if (primaryKeys.length) { const actions = document.createElement('th'); actions.scope = 'col'; actions.textContent = 'Actions'; header.append(actions); }
+      if (primaryKeys.length) { const actions = document.createElement('th'); actions.scope = 'col'; actions.textContent = t('table.actions'); header.append(actions); }
       head.append(header); tableElement.append(head);
       const body = document.createElement('tbody');
       for (const row of rows) {
@@ -2556,18 +2556,18 @@ function tableDataPanel(id, schema, table) {
           const td = document.createElement('td');
           if (primaryKeys.length) {
             td.className = 'editable-table-cell';
-            const edit = document.createElement('button'); edit.className = 'table-cell-button'; edit.type = 'button'; edit.textContent = formatTableCell(row[column]); edit.title = `Edit ${column}`;
+            const edit = document.createElement('button'); edit.className = 'table-cell-button'; edit.type = 'button'; edit.textContent = formatTableCell(row[column]); edit.title = t('table.editNamed', { name: column });
             edit.addEventListener('click', async () => {
-              const valueJson = await showPrompt(`Enter the new value for “${column}” as JSON. Text requires double quotes; use null for SQL NULL.`, 'Edit table cell', column, '', row[column]);
+              const valueJson = await showPrompt(t('table.cellValuePrompt', { column }), t('table.editTableCell'), column, '', row[column]);
               if (valueJson === null) return;
-              if (await parseJsonInput(valueJson, 'The cell value') === undefined) return;
-              setLoading(true); status.textContent = `Updating ${column}…`;
+              if (await parseJsonInput(valueJson, t('table.theCellValue')) === undefined) return;
+              setLoading(true); status.textContent = t('table.updatingColumn', { column });
               try {
                 await invoke('update_table_cell', { id, schema, table, input: { keys: rowKeys(row, primaryKeys), column, value_json: valueJson } });
-                status.textContent = `${column} updated`; status.className = 'form-status table-data-status success';
+                status.textContent = t('table.columnUpdated', { column }); status.className = 'form-status table-data-status success';
                 setLoading(false); await loadPage();
               } catch (error) {
-                status.textContent = error?.message || 'Could not update the cell'; status.className = 'form-status table-data-status error'; setLoading(false);
+                status.textContent = errorMessage(error, t, 'table.couldNotUpdateTheCell'); status.className = 'form-status table-data-status error'; setLoading(false);
               }
             });
             td.append(edit);
@@ -2578,17 +2578,17 @@ function tableDataPanel(id, schema, table) {
         }
         if (primaryKeys.length) {
           const td = document.createElement('td'); td.className = 'table-row-actions';
-          const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = 'Delete';
+          const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = t('common.delete');
           remove.addEventListener('click', async () => {
             const identity = primaryKeys.map((column) => `${column}=${formatTableCell(row[column])}`).join(', ');
-            if (!await showConfirm(`Permanently delete the row identified by ${identity}?`, 'Delete table row', true)) return;
-            setLoading(true); status.textContent = 'Deleting row…';
+            if (!await showConfirm(t('table.deleteRowConfirm', { identity }), t('table.deleteTableRow'), true)) return;
+            setLoading(true); status.textContent = t('table.deletingRow');
             try {
               await invoke('delete_table_row', { id, schema, table, input: { keys: rowKeys(row, primaryKeys) } });
               if (rows.length === 1 && offset > 0) offset = Math.max(0, offset - pageSize);
-              status.textContent = 'Row deleted'; status.className = 'form-status table-data-status success'; setLoading(false); await loadPage();
+              status.textContent = t('table.rowDeleted'); status.className = 'form-status table-data-status success'; setLoading(false); await loadPage();
             } catch (error) {
-              status.textContent = error?.message || 'Could not delete the row'; status.className = 'form-status table-data-status error'; setLoading(false);
+              status.textContent = errorMessage(error, t, 'table.couldNotDeleteTheRow'); status.className = 'form-status table-data-status error'; setLoading(false);
             }
           });
           td.append(remove); tr.append(td);
@@ -2598,26 +2598,26 @@ function tableDataPanel(id, schema, table) {
       tableElement.append(body); grid.append(tableElement);
     } catch (error) {
       if (request !== requestSequence || !panel.isConnected) return;
-      summary.textContent = 'Rows unavailable';
-      grid.replaceChildren(errorState('Could not load table data', 'Check table permissions and refresh.'));
-      status.textContent = error?.message || 'Could not load table data'; status.className = 'form-status table-data-status error';
+      summary.textContent = t('table.rowsUnavailable');
+      grid.replaceChildren(errorState(t('table.couldNotLoadTableData'), t('table.checkTablePermissionsAndRefresh')));
+      status.textContent = errorMessage(error, t, 'table.couldNotLoadTableData'); status.className = 'form-status table-data-status error';
     } finally {
       if (request === requestSequence) setLoading(false);
     }
   };
 
   insert.addEventListener('click', async () => {
-    const valuesJson = await showPrompt('Enter a JSON object with the columns to insert. Omitted columns keep their PostgreSQL defaults. Use {} for DEFAULT VALUES.', 'Insert table row', 'JSON row', '{"column":"value"}', '{}');
+    const valuesJson = await showPrompt('Enter a JSON object with the columns to insert. Omitted columns keep their PostgreSQL defaults. Use {} for DEFAULT VALUES.', t('table.insertTableRow'), t('table.jsonRow'), '{"column":"value"}', '{}');
     if (valuesJson === null) return;
-    const value = await parseJsonInput(valuesJson, 'The table row');
+    const value = await parseJsonInput(valuesJson, t('table.theTableRow'));
     if (value === undefined) return;
-    if (value === null || Array.isArray(value) || typeof value !== 'object') { await showAlert('A new table row must be a JSON object.', 'Invalid table row'); return; }
-    setLoading(true); status.textContent = 'Inserting row…'; status.className = 'form-status table-data-status';
+    if (value === null || Array.isArray(value) || typeof value !== 'object') { await showAlert('A new table row must be a JSON object.', t('table.invalidTableRow')); return; }
+    setLoading(true); status.textContent = t('table.insertingRow'); status.className = 'form-status table-data-status';
     try {
       await invoke('insert_table_row', { id, schema, table, input: { values_json: valuesJson } });
-      status.textContent = 'Row inserted'; status.className = 'form-status table-data-status success'; setLoading(false); await loadPage();
+      status.textContent = t('table.rowInserted'); status.className = 'form-status table-data-status success'; setLoading(false); await loadPage();
     } catch (error) {
-      status.textContent = error?.message || 'Could not insert the row'; status.className = 'form-status table-data-status error'; setLoading(false);
+      status.textContent = errorMessage(error, t, 'table.couldNotInsertTheRow'); status.className = 'form-status table-data-status error'; setLoading(false);
     }
   });
   refresh.addEventListener('click', () => void loadPage());
@@ -2629,8 +2629,8 @@ function tableDataPanel(id, schema, table) {
 
 function foreignKeyMapPanel(id, rows) {
   const panel = document.createElement('section'); panel.className = 'data-panel fk-map-panel';
-  const heading = document.createElement('h3'); heading.textContent = 'Foreign keys'; panel.append(heading);
-  if (!rows.length) { panel.append(errorState('No foreign keys', 'No incoming or outgoing relationships were found.')); return panel; }
+  const heading = document.createElement('h3'); heading.textContent = t('table.foreignKeys'); panel.append(heading);
+  if (!rows.length) { panel.append(errorState(t('table.noForeignKeys'), t('table.noIncomingOrOutgoingRelationships'))); return panel; }
   for (const row of rows) {
     const button = document.createElement('button'); button.className = 'fk-map-row'; button.type = 'button';
     const copy = document.createElement('span');
@@ -2657,8 +2657,8 @@ function roleAttributes(role) {
   if (role.superuser) attributes.push('SUPERUSER');
   if (role.create_database) attributes.push('CREATEDB');
   if (role.create_role) attributes.push('CREATEROLE');
-  attributes.push(role.connection_limit === -1 ? 'unlimited connections' : `${role.connection_limit} connections`);
-  if (role.valid_until) attributes.push(`valid until ${role.valid_until}`);
+  attributes.push(role.connection_limit === -1 ? t('roles.unlimitedConnections') : t('connections.count', { count: role.connection_limit }));
+  if (role.valid_until) attributes.push(t('roles.validUntilValue', { date: role.valid_until }));
   return attributes.join(' · ');
 }
 
@@ -2672,31 +2672,31 @@ function roleCheckbox(id, label) {
 function renderRolesPanel(id, roles) {
   const panel = document.createElement('section'); panel.className = 'data-panel roles-panel';
   const heading = document.createElement('div'); heading.className = 'roles-heading';
-  const title = document.createElement('h3'); title.textContent = 'Roles';
-  const count = document.createElement('span'); count.className = 'badge'; count.textContent = `${roles.length} roles`;
+  const title = document.createElement('h3'); title.textContent = t('admin.roles');
+  const count = document.createElement('span'); count.className = 'badge'; count.textContent = t('roles.count', { count: roles.length });
   heading.append(title, count);
 
   const form = document.createElement('form'); form.className = 'role-form';
   let editingRole = null;
-  const nameLabel = document.createElement('label'); nameLabel.textContent = 'Role name';
+  const nameLabel = document.createElement('label'); nameLabel.textContent = t('roles.roleName');
   const name = document.createElement('input'); name.id = 'admin-role-name'; name.required = true; name.maxLength = 63; name.autocomplete = 'off'; name.placeholder = 'reporting_reader'; nameLabel.append(name);
-  const expirationLabel = document.createElement('label'); expirationLabel.textContent = 'Valid until';
+  const expirationLabel = document.createElement('label'); expirationLabel.textContent = t('roles.validUntil');
   const expiration = document.createElement('input'); expiration.id = 'admin-role-valid-until'; expiration.type = 'date'; expirationLabel.append(expiration);
-  const limitLabel = document.createElement('label'); limitLabel.textContent = 'Connection limit';
+  const limitLabel = document.createElement('label'); limitLabel.textContent = t('roles.connectionLimit');
   const limit = document.createElement('input'); limit.id = 'admin-role-limit'; limit.type = 'number'; limit.min = '-1'; limit.value = '-1'; limitLabel.append(limit);
   const options = document.createElement('div'); options.className = 'role-options';
-  const loginOption = roleCheckbox('admin-role-login', 'Can login');
-  const createDbOption = roleCheckbox('admin-role-createdb', 'Create databases');
-  const createRoleOption = roleCheckbox('admin-role-createrole', 'Create roles');
-  const superuserOption = roleCheckbox('admin-role-superuser', 'Superuser');
+  const loginOption = roleCheckbox('admin-role-login', t('roles.canLogin'));
+  const createDbOption = roleCheckbox('admin-role-createdb', t('roles.createDatabases'));
+  const createRoleOption = roleCheckbox('admin-role-createrole', t('roles.createRoles'));
+  const superuserOption = roleCheckbox('admin-role-superuser', t('roles.superuser'));
   options.append(loginOption, createDbOption, createRoleOption, superuserOption);
   const login = loginOption.querySelector('input');
   const createDatabase = createDbOption.querySelector('input');
   const createRole = createRoleOption.querySelector('input');
   const superuser = superuserOption.querySelector('input');
   const formActions = document.createElement('div'); formActions.className = 'form-actions role-form-actions';
-  const submit = document.createElement('button'); submit.className = 'button primary'; submit.type = 'submit'; submit.textContent = 'Create role';
-  const cancelEdit = document.createElement('button'); cancelEdit.className = 'button'; cancelEdit.type = 'button'; cancelEdit.textContent = 'Cancel edit'; cancelEdit.hidden = true;
+  const submit = document.createElement('button'); submit.className = 'button primary'; submit.type = 'submit'; submit.textContent = t('roles.createRole');
+  const cancelEdit = document.createElement('button'); cancelEdit.className = 'button'; cancelEdit.type = 'button'; cancelEdit.textContent = t('cron.cancelEdit'); cancelEdit.hidden = true;
   formActions.append(submit, cancelEdit);
   const status = document.createElement('div'); status.className = 'form-status role-status'; status.setAttribute('role', 'status');
   form.append(nameLabel, expirationLabel, limitLabel, options, formActions, status);
@@ -2705,7 +2705,7 @@ function renderRolesPanel(id, roles) {
     form.reset();
     limit.value = '-1';
     name.disabled = false;
-    submit.textContent = 'Create role';
+    submit.textContent = t('roles.createRole');
     cancelEdit.hidden = true;
     status.textContent = '';
     status.className = 'form-status role-status';
@@ -2714,14 +2714,14 @@ function renderRolesPanel(id, roles) {
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const input = { login: login.checked, create_database: createDatabase.checked, create_role: createRole.checked, superuser: superuser.checked, connection_limit: Number(limit.value), valid_until: expiration.value || null };
-    if (editingRole && !await showConfirm(`Apply the selected attributes to role “${editingRole}”?`, 'Update role', false, 'Update')) return;
-    submit.disabled = true; status.textContent = editingRole ? 'Updating role…' : 'Creating role…'; status.className = 'form-status role-status';
+    if (editingRole && !await showConfirm(t('roles.applyConfirm', { name: editingRole }), t('roles.updateRole'), false, t('cron.update'))) return;
+    submit.disabled = true; status.textContent = editingRole ? t('roles.updatingRole') : t('roles.creatingRole'); status.className = 'form-status role-status';
     try {
       if (editingRole) await invoke('update_role', { id, name: editingRole, input });
       else await invoke('create_role', { id, input: { name: name.value.trim(), ...input } });
       await loadAdmin(id);
     } catch (error) {
-      submit.disabled = false; status.textContent = error?.message || (editingRole ? 'Could not update role' : 'Could not create role'); status.className = 'form-status role-status error';
+      submit.disabled = false; status.textContent = (error?.key ? errorMessage(error, t) : error?.message || (editingRole ? t('roles.couldNotUpdateRole') : t('roles.couldNotCreateRole'))); status.className = 'form-status role-status error';
     }
   });
 
@@ -2733,11 +2733,11 @@ function renderRolesPanel(id, roles) {
     const attributes = document.createElement('small'); attributes.textContent = roleAttributes(role);
     detail.append(roleName, attributes);
     const actions = document.createElement('div'); actions.className = 'role-actions';
-    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = 'Edit';
-    const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = 'Delete';
+    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = t('common.edit');
+    const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = t('common.delete');
     const reserved = role.name.toLowerCase().startsWith('pg_');
-    edit.disabled = reserved; edit.title = reserved ? 'PostgreSQL system roles cannot be edited here' : `Edit ${role.name}`;
-    remove.disabled = reserved; remove.title = reserved ? 'PostgreSQL system roles cannot be deleted here' : `Delete ${role.name}`;
+    edit.disabled = reserved; edit.title = reserved ? t('roles.postgresqlSystemRolesCannotBe2') : t('table.editNamed', { name: role.name });
+    remove.disabled = reserved; remove.title = reserved ? t('roles.postgresqlSystemRolesCannotBe') : t('roles.deleteNamed', { name: role.name });
     edit.addEventListener('click', () => {
       editingRole = role.name;
       name.value = role.name;
@@ -2748,16 +2748,16 @@ function renderRolesPanel(id, roles) {
       createDatabase.checked = role.create_database;
       createRole.checked = role.create_role;
       superuser.checked = role.superuser;
-      submit.textContent = 'Save changes';
+      submit.textContent = t('cron.saveChanges');
       cancelEdit.hidden = false;
-      status.textContent = `Editing ${role.name}`;
+      status.textContent = t('roles.editing', { name: role.name });
       form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
     remove.addEventListener('click', async () => {
-      const confirmation = await showDangerPrompt(`Type ${role.name} to permanently delete this PostgreSQL role. Roles that own objects cannot be deleted.`, 'Delete role', 'Role name', role.name);
-      if (confirmation !== role.name) { if (confirmation !== null) await showAlert('The role name did not match. Nothing was deleted.', 'Role not deleted'); return; }
+      const confirmation = await showDangerPrompt(t('roles.deleteConfirm', { name: role.name }), t('roles.deleteRole'), t('roles.roleName'), role.name);
+      if (confirmation !== role.name) { if (confirmation !== null) await showAlert('The role name did not match. Nothing was deleted.', t('roles.roleNotDeleted')); return; }
       try { await invoke('delete_role', { id, name: role.name }); await loadAdmin(id); }
-      catch (error) { await showAlert(error?.message || 'Could not delete role', 'Role not deleted'); }
+      catch (error) { await showAlert(errorMessage(error, t, 'roles.couldNotDeleteRole'), t('roles.roleNotDeleted')); }
     });
     actions.append(edit, remove);
     row.append(detail, actions); list.append(row);
@@ -2768,20 +2768,20 @@ function renderRolesPanel(id, roles) {
 
 function renderActivityPanel(id, rows) {
   const panel = document.createElement('section'); panel.className = 'data-panel activity-panel';
-  const heading = document.createElement('h3'); heading.textContent = 'Activity'; panel.append(heading);
-  if (!rows.length) { panel.append(errorState('No other sessions', 'PostgreSQL reported no activity for this database.')); return panel; }
+  const heading = document.createElement('h3'); heading.textContent = t('admin.activity'); panel.append(heading);
+  if (!rows.length) { panel.append(errorState(t('activity.noOtherSessions'), t('activity.postgresqlReportedNoActivityFor'))); return panel; }
   for (const activity of rows.slice(0, 20)) {
     const row = document.createElement('div'); row.className = 'activity-item'; row.dataset.pid = String(activity.pid); row.tabIndex = -1;
     const detail = document.createElement('div');
-    const title = document.createElement('strong'); title.textContent = `PID ${activity.pid} · ${activity.usename || 'unknown user'} · ${activity.state || 'unknown'}`;
-    const query = document.createElement('small'); query.textContent = activity.query || 'No current query'; query.title = activity.query || '';
+    const title = document.createElement('strong'); title.textContent = `PID ${activity.pid} · ${activity.usename || t('activity.unknownUser')} · ${activity.state || t('activity.unknown')}`;
+    const query = document.createElement('small'); query.textContent = activity.query || t('activity.noCurrentQuery'); query.title = activity.query || '';
     detail.append(title, query);
-    const cancel = document.createElement('button'); cancel.className = 'button small danger'; cancel.type = 'button'; cancel.textContent = 'Cancel query';
-    const active = activity.state === 'active'; cancel.disabled = !active; cancel.title = active ? `Cancel query on PID ${activity.pid}` : 'Only active queries can be cancelled';
+    const cancel = document.createElement('button'); cancel.className = 'button small danger'; cancel.type = 'button'; cancel.textContent = t('activity.cancelQuery');
+    const active = activity.state === 'active'; cancel.disabled = !active; cancel.title = active ? t('activity.cancelOnPid', { pid: activity.pid }) : t('activity.onlyActiveQueriesCanBe');
     cancel.addEventListener('click', async () => {
-      if (!await showConfirm(`Cancel the active query on PID ${activity.pid}? The PostgreSQL session will remain connected.`, 'Cancel active query', true, 'Cancel query')) return;
+      if (!await showConfirm(t('activity.cancelConfirm', { pid: activity.pid }), t('activity.cancelActiveQuery'), true, t('activity.cancelQuery'))) return;
       try { await invoke('cancel_activity', { id, pid: activity.pid }); await loadAdmin(id); }
-      catch (error) { await showAlert(error?.message || 'Could not cancel the query', 'Query not cancelled'); }
+      catch (error) { await showAlert(errorMessage(error, t, 'activity.couldNotCancelTheQuery'), t('activity.queryNotCancelled')); }
     });
     row.append(detail, cancel); panel.append(row);
   }
@@ -2790,18 +2790,18 @@ function renderActivityPanel(id, rows) {
 
 function renderLocksPanel(rows) {
   const panel = document.createElement('section'); panel.className = 'data-panel locks-panel';
-  const heading = document.createElement('h3'); heading.textContent = 'Locks'; panel.append(heading);
-  if (!rows.length) { panel.append(errorState('No blocking locks', 'PostgreSQL reported no blocked sessions.')); return panel; }
+  const heading = document.createElement('h3'); heading.textContent = t('admin.locks'); panel.append(heading);
+  if (!rows.length) { panel.append(errorState(t('locks.noBlockingLocks'), t('locks.postgresqlReportedNoBlockedSessions'))); return panel; }
   for (const lock of rows.slice(0, 20)) {
     const row = document.createElement('div'); row.className = 'activity-item';
     const detail = document.createElement('div');
-    const title = document.createElement('strong'); title.textContent = `PID ${lock.blocked_pid} blocked by PID ${lock.blocking_pid}`;
-    const metadata = document.createElement('small'); metadata.textContent = `${lock.locktype || 'lock'} · ${lock.wait_sec ? `${lock.wait_sec}s` : 'waiting'} · ${lock.blocking_user || 'unknown user'}`;
+    const title = document.createElement('strong'); title.textContent = t('locks.blockedBy', { blocked: lock.blocked_pid, blocking: lock.blocking_pid });
+    const metadata = document.createElement('small'); metadata.textContent = `${lock.locktype || 'lock'} · ${lock.wait_sec ? `${lock.wait_sec}s` : t('locks.waiting')} · ${lock.blocking_user || t('activity.unknownUser')}`;
     detail.append(title, metadata);
-    const locate = document.createElement('button'); locate.className = 'button small'; locate.type = 'button'; locate.textContent = 'Show blocker';
+    const locate = document.createElement('button'); locate.className = 'button small'; locate.type = 'button'; locate.textContent = t('locks.showBlocker');
     locate.addEventListener('click', async () => {
       const activity = document.querySelector(`.activity-item[data-pid="${lock.blocking_pid}"]`);
-      if (!activity) { await showAlert(`Blocking PID ${lock.blocking_pid} is no longer visible. Refresh Administration to inspect its current state.`, 'Blocking session changed'); return; }
+      if (!activity) { await showAlert(t('locks.blockerGone', { pid: lock.blocking_pid }), t('locks.blockingSessionChanged')); return; }
       showAdminPanel('activity');
       activity.classList.add('located'); activity.focus(); activity.scrollIntoView({ behavior: 'smooth', block: 'center' });
       window.setTimeout(() => activity.classList.remove('located'), 2400);
@@ -2814,22 +2814,22 @@ function renderLocksPanel(rows) {
 function renderCronJobsPanel(id, cron) {
   const panel = document.createElement('section'); panel.className = 'data-panel cron-panel';
   const heading = document.createElement('div'); heading.className = 'roles-heading';
-  const title = document.createElement('h3'); title.textContent = 'Scheduled jobs · pg_cron';
-  const status = document.createElement('span'); status.className = 'badge'; status.textContent = cron.installed ? `${cron.jobs.length} jobs` : 'Not installed';
+  const title = document.createElement('h3'); title.textContent = t('cron.scheduledJobsPgCron');
+  const status = document.createElement('span'); status.className = 'badge'; status.textContent = cron.installed ? t('cron.count', { count: cron.jobs.length }) : t('cron.notInstalled');
   heading.append(title, status); panel.append(heading);
-  if (!cron.installed) { panel.append(errorState('pg_cron is not installed', 'Install and preload pg_cron in PostgreSQL to manage scheduled jobs.')); return panel; }
+  if (!cron.installed) { panel.append(errorState('pg_cron is not installed', t('cron.installAndPreloadPgCron'))); return panel; }
 
   const form = document.createElement('form'); form.className = 'cron-form';
   let editingJob = null;
-  const nameLabel = document.createElement('label'); nameLabel.textContent = 'Name (optional)';
+  const nameLabel = document.createElement('label'); nameLabel.textContent = t('cron.nameOptional');
   const jobName = document.createElement('input'); jobName.maxLength = 63; jobName.placeholder = 'nightly_cleanup'; nameLabel.append(jobName);
-  const scheduleLabel = document.createElement('label'); scheduleLabel.textContent = 'Schedule';
-  const schedule = document.createElement('input'); schedule.required = true; schedule.maxLength = 100; schedule.placeholder = '0 2 * * * or @daily'; scheduleLabel.append(schedule);
-  const commandLabel = document.createElement('label'); commandLabel.textContent = 'SQL command';
+  const scheduleLabel = document.createElement('label'); scheduleLabel.textContent = t('cron.schedule');
+  const schedule = document.createElement('input'); schedule.required = true; schedule.maxLength = 100; schedule.placeholder = t('cron.02OrDaily'); scheduleLabel.append(schedule);
+  const commandLabel = document.createElement('label'); commandLabel.textContent = t('cron.sqlCommand');
   const commandInput = document.createElement('textarea'); commandInput.required = true; commandInput.maxLength = 100000; commandInput.rows = 2; commandInput.placeholder = 'VACUUM ANALYZE public.events;'; commandLabel.append(commandInput);
   const formActions = document.createElement('div'); formActions.className = 'form-actions cron-form-actions';
-  const submit = document.createElement('button'); submit.className = 'button primary'; submit.type = 'submit'; submit.textContent = 'Create job';
-  const cancelEdit = document.createElement('button'); cancelEdit.className = 'button'; cancelEdit.type = 'button'; cancelEdit.textContent = 'Cancel edit'; cancelEdit.hidden = true;
+  const submit = document.createElement('button'); submit.className = 'button primary'; submit.type = 'submit'; submit.textContent = t('cron.createJob');
+  const cancelEdit = document.createElement('button'); cancelEdit.className = 'button'; cancelEdit.type = 'button'; cancelEdit.textContent = t('cron.cancelEdit'); cancelEdit.hidden = true;
   formActions.append(submit, cancelEdit);
   const formStatus = document.createElement('div'); formStatus.className = 'form-status cron-form-status'; formStatus.setAttribute('role', 'status');
   form.append(nameLabel, scheduleLabel, commandLabel, formActions, formStatus);
@@ -2837,7 +2837,7 @@ function renderCronJobsPanel(id, cron) {
     editingJob = null;
     form.reset();
     jobName.disabled = false;
-    submit.textContent = 'Create job';
+    submit.textContent = t('cron.createJob');
     cancelEdit.hidden = true;
     formStatus.textContent = '';
     formStatus.className = 'form-status cron-form-status';
@@ -2846,65 +2846,65 @@ function renderCronJobsPanel(id, cron) {
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const input = { name: jobName.value.trim() || null, schedule: schedule.value.trim(), command: commandInput.value.trim() };
-    if (editingJob && !await showConfirm(`Update the schedule and SQL command for “${editingJob.name || `Job ${editingJob.id}`}”?`, 'Update scheduled job', false, 'Update')) return;
+    if (editingJob && !await showConfirm(t('cron.updateConfirm', { name: editingJob.name || t('cron.jobNumber', { id: editingJob.id }) }), t('cron.updateScheduledJob'), false, t('cron.update'))) return;
     submit.disabled = true;
-    formStatus.textContent = editingJob ? 'Updating job…' : 'Creating job…';
+    formStatus.textContent = editingJob ? t('cron.updatingJob') : t('cron.creatingJob');
     try {
       if (editingJob) await invoke('update_cron_job', { id, jobId: editingJob.id, input });
       else await invoke('create_cron_job', { id, input });
       await loadAdmin(id);
     } catch (error) {
       submit.disabled = false;
-      formStatus.textContent = error?.message || (editingJob ? 'Could not update the job' : 'Could not create the job');
+      formStatus.textContent = (error?.key ? errorMessage(error, t) : error?.message || (editingJob ? t('cron.couldNotUpdateTheJob') : t('cron.couldNotCreateTheJob')));
       formStatus.className = 'form-status cron-form-status error';
     }
   });
   panel.append(form);
-  if (!cron.jobs.length) { panel.append(errorState('No scheduled jobs', 'pg_cron is available. Use the form above to create the first job.')); return panel; }
+  if (!cron.jobs.length) { panel.append(errorState(t('cron.noScheduledJobs'), 'pg_cron is available. Use the form above to create the first job.')); return panel; }
   for (const job of cron.jobs) {
     const row = document.createElement('div'); row.className = 'cron-item';
     const detail = document.createElement('div');
-    const name = document.createElement('strong'); name.textContent = job.name || `Job ${job.id}`;
-    const metadata = document.createElement('small'); metadata.textContent = `${job.schedule} · ${job.active ? 'active' : 'paused'} · last: ${job.last_status || 'never run'}${job.last_run ? ` at ${job.last_run} UTC` : ''}`;
+    const name = document.createElement('strong'); name.textContent = job.name || t('cron.jobNumber', { id: job.id });
+    const metadata = document.createElement('small'); metadata.textContent = `${job.schedule} · ${job.active ? t('cron.active') : t('cron.paused')} · ${t('cron.last', { status: job.last_status || t('cron.neverRun') })}${job.last_run ? ` · ${job.last_run} UTC` : ''}`;
     const command = document.createElement('code'); command.textContent = job.command; command.title = job.command;
     detail.append(name, metadata, command);
     const actions = document.createElement('div'); actions.className = 'cron-actions';
-    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = 'Edit';
+    const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = t('common.edit');
     edit.addEventListener('click', () => {
       editingJob = job;
       jobName.value = job.name || '';
       jobName.disabled = true;
       schedule.value = job.schedule;
       commandInput.value = job.command;
-      submit.textContent = 'Save changes';
+      submit.textContent = t('cron.saveChanges');
       cancelEdit.hidden = false;
-      formStatus.textContent = `Editing ${job.name || `Job ${job.id}`}`;
+      formStatus.textContent = t('roles.editing', { name: job.name || t('cron.jobNumber', { id: job.id }) });
       form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
-    const history = document.createElement('button'); history.className = 'button small'; history.type = 'button'; history.textContent = 'Runs';
+    const history = document.createElement('button'); history.className = 'button small'; history.type = 'button'; history.textContent = t('cron.runs');
     history.addEventListener('click', async () => {
       history.disabled = true;
       try {
         const runs = await invoke('cron_job_runs', { id, jobId: job.id });
-        const summary = runs.length ? runs.map((run) => `#${run.id} · ${run.status || 'unknown'} · ${run.start_time || 'no start time'} UTC${run.duration_seconds ? ` · ${run.duration_seconds}s` : ''}${run.return_message ? `\n${run.return_message}` : ''}`).join('\n\n') : 'No executions were recorded for this job.';
-        await showAlert(summary, `Runs · ${job.name || `Job ${job.id}`}`);
+        const summary = runs.length ? runs.map((run) => `#${run.id} · ${run.status || t('cron.unknownStatus')} · ${run.start_time || t('cron.noStartTime')} UTC${run.duration_seconds ? ` · ${run.duration_seconds}s` : ''}${run.return_message ? `\n${run.return_message}` : ''}`).join('\n\n') : t('cron.noExecutionsWereRecordedFor');
+        await showAlert(summary, t('cron.runsTitle', { name: job.name || t('cron.jobNumber', { id: job.id }) }));
       } catch (error) {
-        await showAlert(error?.message || 'Could not load job executions', 'Job history unavailable');
+        await showAlert(errorMessage(error, t, 'cron.couldNotLoadJobExecutions'), t('cron.jobHistoryUnavailable'));
       } finally {
         history.disabled = false;
       }
     });
-    const toggle = document.createElement('button'); toggle.className = 'button small'; toggle.type = 'button'; toggle.textContent = job.active ? 'Pause' : 'Resume';
+    const toggle = document.createElement('button'); toggle.className = 'button small'; toggle.type = 'button'; toggle.textContent = job.active ? t('cron.pause') : t('cron.resume');
     toggle.addEventListener('click', async () => {
       toggle.disabled = true;
       try { await invoke('set_cron_job_active', { id, jobId: job.id, active: !job.active }); await loadAdmin(id); }
-      catch (error) { toggle.disabled = false; await showAlert(error?.message || 'Could not change the job state', 'Job not changed'); }
+      catch (error) { toggle.disabled = false; await showAlert(errorMessage(error, t, 'cron.couldNotChangeTheJob'), t('cron.jobNotChanged')); }
     });
-    const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = 'Delete';
+    const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = t('common.delete');
     remove.addEventListener('click', async () => {
-      if (!await showConfirm(`Permanently delete the scheduled job “${job.name || job.id}”?`, 'Delete scheduled job', true)) return;
+      if (!await showConfirm(t('cron.deleteConfirm', { name: job.name || job.id }), t('cron.deleteScheduledJob'), true)) return;
       try { await invoke('delete_cron_job', { id, jobId: job.id }); await loadAdmin(id); }
-      catch (error) { await showAlert(error?.message || 'Could not delete the scheduled job', 'Job not deleted'); }
+      catch (error) { await showAlert(errorMessage(error, t, 'cron.couldNotDeleteTheScheduled'), t('cron.jobNotDeleted')); }
     });
     actions.append(edit, history, toggle, remove); row.append(detail, actions); panel.append(row);
   }
@@ -2914,8 +2914,8 @@ function renderCronJobsPanel(id, cron) {
 function renderExtensionsPanel(id, extensions) {
   const panel = document.createElement('section'); panel.className = 'data-panel extensions-panel';
   const heading = document.createElement('div'); heading.className = 'roles-heading';
-  const title = document.createElement('h3'); title.textContent = 'Extensions';
-  const count = document.createElement('span'); count.className = 'badge'; count.textContent = `${extensions.installed.length} installed`;
+  const title = document.createElement('h3'); title.textContent = t('admin.extensions');
+  const count = document.createElement('span'); count.className = 'badge'; count.textContent = t('extensions.installedCount', { count: extensions.installed.length });
   heading.append(title, count); panel.append(heading);
   const installedNames = new Set(extensions.installed.map((extension) => extension.name));
   const entries = [
@@ -2926,21 +2926,21 @@ function renderExtensionsPanel(id, extensions) {
     const row = document.createElement('div'); row.className = 'extension-item';
     const detail = document.createElement('div');
     const name = document.createElement('strong'); name.textContent = extension.name;
-    const metadata = document.createElement('small'); metadata.textContent = extension.installed ? `installed ${extension.installed_version || ''}` : `available ${extension.default_version || ''}`; metadata.title = extension.comment || '';
+    const metadata = document.createElement('small'); metadata.textContent = extension.installed ? t('extensions.installedVersion', { version: extension.installed_version || '' }) : t('extensions.availableVersion', { version: extension.default_version || '' }); metadata.title = extension.comment || '';
     detail.append(name, metadata);
-    const action = document.createElement('button'); action.className = `button small ${extension.installed ? 'danger' : ''}`; action.type = 'button'; action.textContent = extension.installed ? 'Drop' : 'Install';
+    const action = document.createElement('button'); action.className = `button small ${extension.installed ? 'danger' : ''}`; action.type = 'button'; action.textContent = extension.installed ? t('extensions.drop') : t('extensions.install');
     const protectedExtension = extension.name.toLowerCase() === 'plpgsql';
-    action.disabled = protectedExtension; action.title = protectedExtension ? 'The built-in plpgsql extension is protected' : `${action.textContent} ${extension.name}`;
+    action.disabled = protectedExtension; action.title = protectedExtension ? t('extensions.theBuiltInPlpgsqlExtension') : `${action.textContent} ${extension.name}`;
     action.addEventListener('click', async () => {
       if (extension.installed) {
-        const confirmation = await showDangerPrompt(`Type ${extension.name} to drop this extension. PostgreSQL will refuse the operation when dependent objects exist.`, 'Drop extension', 'Extension name', extension.name);
-        if (confirmation !== extension.name) { if (confirmation !== null) await showAlert('The extension name did not match. Nothing was removed.', 'Extension not dropped'); return; }
+        const confirmation = await showDangerPrompt(t('extensions.dropConfirm', { name: extension.name }), t('extensions.dropExtension'), t('extensions.extensionName'), extension.name);
+        if (confirmation !== extension.name) { if (confirmation !== null) await showAlert('The extension name did not match. Nothing was removed.', t('extensions.extensionNotDropped')); return; }
         try { await invoke('drop_extension', { id, name: extension.name }); await loadAdmin(id); }
-        catch (error) { await showAlert(error?.message || 'Could not drop the extension', 'Extension not dropped'); }
+        catch (error) { await showAlert(errorMessage(error, t, 'extensions.couldNotDropTheExtension'), t('extensions.extensionNotDropped')); }
       } else {
-        if (!await showConfirm(`Install the extension “${extension.name}” in this database? Extension installation executes SQL supplied by its PostgreSQL package.`, 'Install extension', false, 'Install')) return;
+        if (!await showConfirm(t('extensions.installConfirm', { name: extension.name }), t('extensions.installExtension'), false, t('extensions.install'))) return;
         try { await invoke('install_extension', { id, name: extension.name }); await loadAdmin(id); }
-        catch (error) { await showAlert(error?.message || 'Could not install the extension', 'Extension not installed'); }
+        catch (error) { await showAlert(errorMessage(error, t, 'extensions.couldNotInstallTheExtension'), t('extensions.extensionNotInstalled')); }
       }
     });
     row.append(detail, action); panel.append(row);
@@ -2951,31 +2951,31 @@ function renderExtensionsPanel(id, extensions) {
 function renderQueryStatsPanel(id, stats, sortBy = 'total') {
   const panel = document.createElement('section'); panel.className = 'data-panel query-stats-panel';
   const heading = document.createElement('div'); heading.className = 'query-stats-heading';
-  const title = document.createElement('h3'); title.textContent = 'Query stats · pg_stat_statements';
+  const title = document.createElement('h3'); title.textContent = t('stats.queryStatsPgStatStatements');
   const controls = document.createElement('div'); controls.className = 'query-stats-controls';
-  const sort = document.createElement('select'); sort.setAttribute('aria-label', 'Sort query statistics');
-  for (const [value, label] of [['total', 'Total time'], ['calls', 'Calls'], ['mean', 'Mean time']]) { const option = document.createElement('option'); option.value = value; option.textContent = label; sort.append(option); }
+  const sort = document.createElement('select'); sort.setAttribute('aria-label', t('stats.sortQueryStatistics'));
+  for (const [value, label] of [['total', t('stats.totalTime')], ['calls', t('stats.calls')], ['mean', t('stats.meanTime')]]) { const option = document.createElement('option'); option.value = value; option.textContent = label; sort.append(option); }
   sort.value = sortBy; sort.disabled = !stats.installed || !stats.queries.length;
-  const reset = document.createElement('button'); reset.className = 'button small danger'; reset.type = 'button'; reset.textContent = 'Reset stats'; reset.disabled = !stats.installed;
+  const reset = document.createElement('button'); reset.className = 'button small danger'; reset.type = 'button'; reset.textContent = t('stats.resetStats'); reset.disabled = !stats.installed;
   reset.addEventListener('click', async () => {
-    if (!await showConfirm('Reset all pg_stat_statements counters? This does not change database rows, but the collected performance history will be lost.', 'Reset query statistics', true, 'Reset')) return;
+    if (!await showConfirm(t('stats.resetAllPgStatStatements'), t('stats.resetQueryStatistics'), true, t('explorer.sequenceReset'))) return;
     try { await invoke('reset_query_stats', { id }); await loadAdmin(id); }
-    catch (error) { await showAlert(error?.message || 'Could not reset query statistics', 'Statistics not reset'); }
+    catch (error) { await showAlert(errorMessage(error, t, 'stats.couldNotResetQueryStatistics'), t('stats.statisticsNotReset')); }
   });
   controls.append(sort, reset); heading.append(title, controls); panel.append(heading);
-  if (!stats.installed) { panel.append(errorState('pg_stat_statements is not installed', 'Install it from Extensions; PostgreSQL may also require shared_preload_libraries and a restart.')); return panel; }
-  if (!stats.queries.length) { panel.append(errorState('No query statistics', 'The extension is active but has not collected entries for this database.')); return panel; }
+  if (!stats.installed) { panel.append(errorState('pg_stat_statements is not installed', t('stats.installItFromExtensionsPostgresql'))); return panel; }
+  if (!stats.queries.length) { panel.append(errorState(t('stats.noQueryStatistics'), t('stats.theExtensionIsActiveBut'))); return panel; }
   const sortKey = { total: 'total_exec_ms', calls: 'calls', mean: 'mean_exec_ms' }[sortBy] || 'total_exec_ms';
   const rows = [...stats.queries].sort((left, right) => Number(right[sortKey]) - Number(left[sortKey]));
   for (const queryStat of rows) {
     const row = document.createElement('div'); row.className = 'query-stat-item';
     const detail = document.createElement('div');
     const query = document.createElement('code'); query.textContent = queryStat.query; query.title = queryStat.query;
-    const metadata = document.createElement('small'); metadata.textContent = `${queryStat.calls} calls · ${queryStat.mean_exec_ms.toFixed(1)} ms mean · ${queryStat.total_exec_ms.toFixed(1)} ms total · ${queryStat.rows} rows`;
+    const metadata = document.createElement('small'); metadata.textContent = t('stats.summary', { calls: queryStat.calls, mean: queryStat.mean_exec_ms.toFixed(1), total: queryStat.total_exec_ms.toFixed(1), rows: queryStat.rows });
     detail.append(query, metadata);
     const actions = document.createElement('div'); actions.className = 'query-stat-actions';
-    const open = document.createElement('button'); open.className = 'button small'; open.type = 'button'; open.textContent = 'Open query'; open.addEventListener('click', () => openSqlInNewTab(queryStat.query, id));
-    const analyze = document.createElement('button'); analyze.className = 'button small'; analyze.type = 'button'; analyze.textContent = 'Ask assistant'; analyze.addEventListener('click', () => void askAssistantAboutQueryStat(id, queryStat));
+    const open = document.createElement('button'); open.className = 'button small'; open.type = 'button'; open.textContent = t('stats.openQuery'); open.addEventListener('click', () => openSqlInNewTab(queryStat.query, id));
+    const analyze = document.createElement('button'); analyze.className = 'button small'; analyze.type = 'button'; analyze.textContent = t('stats.askAssistant'); analyze.addEventListener('click', () => void askAssistantAboutQueryStat(id, queryStat));
     actions.append(open, analyze); row.append(detail, actions); panel.append(row);
   }
   sort.addEventListener('change', () => {
@@ -3022,23 +3022,23 @@ function renderAdminPanels(sections) {
 async function loadAdmin(id) {
   const content = byId('admin-content'); content.replaceChildren();
   const tabs = byId('admin-tabs'); tabs.hidden = true; tabs.replaceChildren();
-  if (!id) { content.append(errorState('Choose a connected connection', 'Activity and locks are read from PostgreSQL.')); return; }
-  content.append(errorState('Loading administration…', ''));
+  if (!id) { content.append(errorState(t('admin.chooseAConnectedConnection'), t('admin.activityAndLocksAreRead'))); return; }
+  content.append(errorState(t('admin.loadingAdministration'), ''));
   const [adminResult, rolesResult, cronResult, extensionsResult, queryStatsResult] = await Promise.allSettled([invoke('admin', { id }), invoke('list_roles', { id }), invoke('list_cron_jobs', { id }), invoke('list_extensions', { id }), invoke('query_stats', { id })]);
   if (byId('admin-connection').value !== id) return;
   const sections = [
-    ['roles', 'Roles', rolesResult.status === 'fulfilled' ? renderRolesPanel(id, rolesResult.value) : unavailablePanel('Roles unavailable', 'The connected role may not have permission to inspect PostgreSQL roles.')],
-    ['jobs', 'Scheduled Jobs', cronResult.status === 'fulfilled' ? renderCronJobsPanel(id, cronResult.value) : unavailablePanel('Scheduled jobs unavailable', 'Check pg_cron permissions and configuration.')],
-    ['extensions', 'Extensions', extensionsResult.status === 'fulfilled' ? renderExtensionsPanel(id, extensionsResult.value) : unavailablePanel('Extensions unavailable', 'The connected role may not have permission to inspect extensions.')],
-    ['query-stats', 'Query Stats', queryStatsResult.status === 'fulfilled' ? renderQueryStatsPanel(id, queryStatsResult.value) : unavailablePanel('Query statistics unavailable', 'Check pg_stat_statements configuration and monitoring permissions.')],
+    ['roles', t('admin.roles'), rolesResult.status === 'fulfilled' ? renderRolesPanel(id, rolesResult.value) : unavailablePanel(t('admin.rolesUnavailable'), t('admin.theConnectedRoleMayNot'))],
+    ['jobs', t('admin.scheduledJobs'), cronResult.status === 'fulfilled' ? renderCronJobsPanel(id, cronResult.value) : unavailablePanel(t('admin.scheduledJobsUnavailable'), t('admin.checkPgCronPermissionsAnd'))],
+    ['extensions', t('admin.extensions'), extensionsResult.status === 'fulfilled' ? renderExtensionsPanel(id, extensionsResult.value) : unavailablePanel(t('admin.extensionsUnavailable'), t('admin.theConnectedRoleMayNot2'))],
+    ['query-stats', t('admin.queryStats'), queryStatsResult.status === 'fulfilled' ? renderQueryStatsPanel(id, queryStatsResult.value) : unavailablePanel(t('admin.queryStatisticsUnavailable'), t('admin.checkPgStatStatementsConfiguration'))],
   ];
   if (adminResult.status === 'fulfilled') {
     const payload = adminResult.value;
-    sections.push(['activity', 'Activity', renderActivityPanel(id, payload.activity || [])]);
-    sections.push(['locks', 'Locks', renderLocksPanel(payload.locks || [])]);
+    sections.push(['activity', t('admin.activity'), renderActivityPanel(id, payload.activity || [])]);
+    sections.push(['locks', t('admin.locks'), renderLocksPanel(payload.locks || [])]);
   } else {
-    sections.push(['activity', 'Activity', unavailablePanel('Activity unavailable', 'Check monitoring permissions and reconnect.')]);
-    sections.push(['locks', 'Locks', unavailablePanel('Locks unavailable', 'Check monitoring permissions and reconnect.')]);
+    sections.push(['activity', t('admin.activity'), unavailablePanel(t('admin.activityUnavailable'), t('admin.checkMonitoringPermissionsAndReconnect'))]);
+    sections.push(['locks', t('admin.locks'), unavailablePanel(t('admin.locksUnavailable'), t('admin.checkMonitoringPermissionsAndReconnect'))]);
   }
   renderAdminPanels(sections);
 }
@@ -3071,32 +3071,32 @@ function returnToExplorer() {
 
 async function openTable(id, schema, table, kind = 'table') {
   rememberExplorerState();
-  switchView('table-detail'); byId('detail-title').textContent = table; byId('detail-eyebrow').textContent = `${schema.toUpperCase()} · ${kind === 'view' ? 'VIEW' : 'TABLE'} DETAIL`; byId('detail-summary').textContent = 'Loading';
-  const content = byId('detail-content'); content.replaceChildren(errorState('Loading table detail…', ''));
+  switchView('table-detail'); byId('detail-title').textContent = table; byId('detail-eyebrow').textContent = `${schema.toUpperCase()} · ${kind === 'view' ? t('table.viewDetailEyebrow') : t('table.tableDetailEyebrow')}`; byId('detail-summary').textContent = t('erd.loading');
+  const content = byId('detail-content'); content.replaceChildren(errorState(t('table.loadingTableDetail'), ''));
   try {
-    const payload = await invoke('table_detail', { id, schema, table }); const detail = payload.detail; content.replaceChildren(); byId('detail-summary').textContent = `${detail.row_estimate ?? 0} estimated rows`;
+    const payload = await invoke('table_detail', { id, schema, table }); const detail = payload.detail; content.replaceChildren(); byId('detail-summary').textContent = t('table.estimatedRows', { count: detail.row_estimate ?? 0 });
     if (kind === 'table') content.append(tableMaintenancePanel(id, schema, table, detail));
     content.append(tableDataPanel(id, schema, table));
-    content.append(dataPanel('Columns', (detail.columns || []).map((row) => [row.name, `${row.full_type || row.data_type}${row.is_nullable ? '' : ' · NOT NULL'}${row.is_primary_key ? ' · PK' : ''}`])));
-    content.append(dataPanel('Constraints', (detail.constraints || []).map((row) => [row.name, `${row.type}: ${row.definition}`])));
+    content.append(dataPanel(t('table.columns'), (detail.columns || []).map((row) => [row.name, `${row.full_type || row.data_type}${row.is_nullable ? '' : ' · NOT NULL'}${row.is_primary_key ? ' · PK' : ''}`])));
+    content.append(dataPanel(t('table.constraints'), (detail.constraints || []).map((row) => [row.name, `${row.type}: ${row.definition}`])));
     if (kind === 'table') content.append(indexPanel(id, schema, table, detail.indexes || []));
     content.append(foreignKeyMapPanel(id, detail.fk_map || []));
-    content.append(dataPanel('Column statistics', (payload.column_stats || []).map((row) => [row.column, `${row.null_frac == null ? '—' : `${(row.null_frac * 100).toFixed(1)}% null`} · ${row.n_distinct == null ? '—' : `${row.n_distinct} distinct`}`])));
+    content.append(dataPanel(t('table.columnStatistics'), (payload.column_stats || []).map((row) => [row.column, `${row.null_frac == null ? '—' : t('table.nullFraction', { percent: (row.null_frac * 100).toFixed(1) })} · ${row.n_distinct == null ? '—' : t('table.distinctValues', { count: row.n_distinct })}`])));
     content.append(codePanel('DDL', payload.ddl));
-  } catch (error) { content.replaceChildren(errorState('Table detail unavailable', 'The object may have been removed or permission denied.')); }
+  } catch (error) { content.replaceChildren(errorState(t('table.tableDetailUnavailable'), t('table.theObjectMayHaveBeen'))); }
 }
 
 async function openErd() {
   const id = state.selectedConnectionId; const schema = state.selectedSchema; if (!id || !schema) return;
-  switchView('erd'); byId('erd-title').textContent = `ERD · ${schema}`; byId('erd-summary').textContent = 'Loading';
-  const content = byId('erd-content'); content.replaceChildren(errorState('Loading ERD…', ''));
+  switchView('erd'); byId('erd-title').textContent = `ERD · ${schema}`; byId('erd-summary').textContent = t('erd.loading');
+  const content = byId('erd-content'); content.replaceChildren(errorState(t('erd.loadingErd'), ''));
   try {
-    const payload = await invoke('erd', { id, schema }); const data = payload.data; content.replaceChildren(); byId('erd-summary').textContent = `${(data.tables || []).length} tables · ${(data.relations || []).length} relations`;
+    const payload = await invoke('erd', { id, schema }); const data = payload.data; content.replaceChildren(); byId('erd-summary').textContent = `${t('erd.tableCount', { count: (data.tables || []).length })} · ${t('erd.relationCount', { count: (data.relations || []).length })}`;
     content.append(renderErdCanvas(data));
-    const relationsPanel = dataPanel('Relations', (data.relations || []).map((row) => [`${row.from_table}.${row.from_column}`, `→ ${row.to_table}.${row.to_column}`]));
+    const relationsPanel = dataPanel(t('erd.relations'), (data.relations || []).map((row) => [`${row.from_table}.${row.from_column}`, `→ ${row.to_table}.${row.to_column}`]));
     relationsPanel.classList.add('erd-relations-panel');
     content.append(relationsPanel);
-  } catch (error) { content.replaceChildren(errorState('ERD unavailable', 'Check schema permissions and reconnect.')); }
+  } catch (error) { content.replaceChildren(errorState(t('erd.erdUnavailable'), t('erd.checkSchemaPermissionsAndReconnect'))); }
 }
 
 function renderErdCanvas(data) {
@@ -3120,14 +3120,14 @@ function renderErdCanvas(data) {
   let selectedTable = null;
   const shell = document.createElement('section'); shell.className = 'erd-workspace';
   const toolbar = document.createElement('div'); toolbar.className = 'erd-toolbar';
-  const hint = document.createElement('span'); hint.className = 'query-hint'; hint.textContent = 'Drag to pan · Click a table to inspect it';
+  const hint = document.createElement('span'); hint.className = 'query-hint'; hint.textContent = t('erd.dragToPanClickA');
   const controls = document.createElement('div'); controls.className = 'erd-controls';
   const zoomLabel = document.createElement('span'); zoomLabel.className = 'badge';
-  const zoomOut = document.createElement('button'); zoomOut.className = 'button small'; zoomOut.type = 'button'; zoomOut.textContent = '−'; zoomOut.title = 'Zoom out';
-  const zoomIn = document.createElement('button'); zoomIn.className = 'button small'; zoomIn.type = 'button'; zoomIn.textContent = '+'; zoomIn.title = 'Zoom in';
-  const reset = document.createElement('button'); reset.className = 'button small'; reset.type = 'button'; reset.textContent = 'Reset view';
+  const zoomOut = document.createElement('button'); zoomOut.className = 'button small'; zoomOut.type = 'button'; zoomOut.textContent = '−'; zoomOut.title = t('erd.zoomOut');
+  const zoomIn = document.createElement('button'); zoomIn.className = 'button small'; zoomIn.type = 'button'; zoomIn.textContent = '+'; zoomIn.title = t('erd.zoomIn');
+  const reset = document.createElement('button'); reset.className = 'button small'; reset.type = 'button'; reset.textContent = t('erd.resetView');
   controls.append(zoomOut, zoomLabel, zoomIn, reset); toolbar.append(hint, controls);
-  const canvas = document.createElement('div'); canvas.className = 'erd-canvas'; canvas.tabIndex = 0; canvas.setAttribute('aria-label', 'Entity relationship diagram');
+  const canvas = document.createElement('div'); canvas.className = 'erd-canvas'; canvas.tabIndex = 0; canvas.setAttribute('aria-label', t('erd.entityRelationshipDiagram'));
   const viewport = document.createElement('div'); viewport.className = 'erd-viewport'; viewport.style.width = `${width}px`; viewport.style.height = `${height}px`;
   const links = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); links.classList.add('erd-links'); links.setAttribute('width', width); links.setAttribute('height', height); links.setAttribute('viewBox', `0 0 ${width} ${height}`);
   const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
@@ -3151,9 +3151,9 @@ function renderErdCanvas(data) {
     const kind = document.createElement('span'); kind.textContent = table.kind === 'view' ? 'VIEW' : 'TABLE'; header.append(title, kind);
     const list = document.createElement('div'); list.className = 'erd-node-columns';
     for (const column of (table.columns || []).slice(0, 8)) { const row = document.createElement('div'); row.className = 'erd-node-column'; const name = document.createElement('span'); name.textContent = `${column.is_pk ? '◆ ' : column.is_fk ? '↳ ' : ''}${column.name}`; const type = document.createElement('small'); type.textContent = column.data_type; row.append(name, type); list.append(row); }
-    if ((table.columns || []).length > 8) { const more = document.createElement('small'); more.className = 'erd-node-more'; more.textContent = `+${table.columns.length - 8} more columns`; list.append(more); }
+    if ((table.columns || []).length > 8) { const more = document.createElement('small'); more.className = 'erd-node-more'; more.textContent = t('erd.moreColumns', { count: table.columns.length - 8 }); list.append(more); }
     node.append(header, list);
-    const select = () => { selectedTable = table.name; updateSelection(); byId('erd-summary').textContent = `${table.name} · ${(table.columns || []).length} columns`; };
+    const select = () => { selectedTable = table.name; updateSelection(); byId('erd-summary').textContent = `${table.name} · ${t('erd.columnCount', { count: (table.columns || []).length })}`; };
     node.addEventListener('click', select); node.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } });
     nodes.append(node);
   }
@@ -3184,7 +3184,7 @@ function buildResultHeader(column, index, columnElement) {
   resizer.tabIndex = 0;
   resizer.setAttribute('role', 'separator');
   resizer.setAttribute('aria-orientation', 'vertical');
-  resizer.setAttribute('aria-label', `Resize column ${column}`);
+  resizer.setAttribute('aria-label', t('results.resizeColumn', { column }));
   resizer.setAttribute('aria-valuemin', '80');
   resizer.setAttribute('aria-valuemax', '640');
   let pointerId = null;
@@ -3862,16 +3862,16 @@ function switchView(name) {
 }
 
 const paletteCommands = [
-  ['Connections', 'Manage saved PostgreSQL connections', 'connections'],
-  ['Explorer', 'Browse schemas and tables', 'explorer'],
-  ['Programming', 'Develop views, functions, procedures and triggers', 'programming'],
-  ['Dashboard', 'Inspect database health and metrics', 'dashboard'],
-  ['Administration', 'Review activity, locks and extensions', 'admin', null, 'administration'],
-  ['Backup & Restore', 'Protect or restore PostgreSQL data', 'admin', null, 'backup'],
-  ['SQL Editor', 'Open a query workspace', 'query', 'editor'],
-  ['History', 'Reopen a recent query in SQL Editor', 'query', 'history'],
-  ['Snippets', 'Open reusable SQL snippets in SQL Editor', 'query', 'snippets'],
-  ['Preferences', 'Theme, colors, updates and about Draco', 'preferences'],
+  [t('connections.title'), t('palette.manageSavedPostgresqlConnections'), 'connections'],
+  [t('nav.explorer'), t('palette.browseSchemasAndTables'), 'explorer'],
+  [t('nav.programming'), t('palette.developViewsFunctionsProceduresAnd'), 'programming'],
+  [t('nav.dashboard'), t('palette.inspectDatabaseHealthAndMetrics'), 'dashboard'],
+  [t('nav.admin'), t('palette.reviewActivityLocksAndExtensions'), 'admin', null, 'administration'],
+  [t('palette.backupRestore'), t('palette.protectOrRestorePostgresqlData'), 'admin', null, 'backup'],
+  [t('nav.query'), t('palette.openAQueryWorkspace'), 'query', 'editor'],
+  [t('history.title'), t('palette.reopenARecentQueryIn'), 'query', 'history'],
+  [t('snippets.title'), t('palette.openReusableSqlSnippetsIn'), 'query', 'snippets'],
+  [t('nav.preferences'), t('palette.themeColorsUpdatesAndAbout'), 'preferences'],
 ];
 
 let commandSearchRequest = 0;
@@ -3881,7 +3881,7 @@ async function renderCommandPalette(filter = '') {
   list.replaceChildren();
   const query = filter.trim().toLowerCase();
   const commands = paletteCommands.filter(([name, description]) => `${name} ${description}`.toLowerCase().includes(query));
-  if (!commands.length && query.length < 2) { list.append(errorState('No commands found', 'Try another search term.')); return; }
+  if (!commands.length && query.length < 2) { list.append(errorState(t('palette.noCommandsFound'), t('palette.tryAnotherSearchTerm'))); return; }
   for (const [name, description, view, querySection, adminSection] of commands) {
     const item = document.createElement('button');
     item.type = 'button';
@@ -3899,17 +3899,17 @@ async function renderCommandPalette(filter = '') {
     list.append(item);
   }
   if (query.length < 2 || !state.selectedConnectionId) {
-    if (!commands.length) list.append(errorState('Search the database', 'Connect to PostgreSQL and type at least two characters.'));
+    if (!commands.length) list.append(errorState(t('palette.searchTheDatabase'), t('palette.connectToPostgresqlAndType')));
     return;
   }
   const request = ++commandSearchRequest;
-  const loading = errorState('Searching database…', 'Looking through tables, views, columns and functions.');
+  const loading = errorState(t('palette.searchingDatabase'), t('palette.lookingThroughTablesViewsColumns'));
   list.append(loading);
   try {
     const results = await invoke('global_search', { id: state.selectedConnectionId, term: query });
     if (request !== commandSearchRequest || byId('command-palette').hidden) return;
     loading.remove();
-    if (!results.length) { list.append(errorState('No database objects found', 'Try another term or schema.')); return; }
+    if (!results.length) { list.append(errorState(t('palette.noDatabaseObjectsFound'), t('palette.tryAnotherTermOrSchema'))); return; }
     for (const result of results) {
       const item = document.createElement('button');
       item.type = 'button'; item.className = 'command-item';
@@ -3926,7 +3926,7 @@ async function renderCommandPalette(filter = '') {
       list.append(item);
     }
   } catch (error) {
-    if (request === commandSearchRequest) { loading.replaceChildren(); loading.append(errorState('Database search unavailable', 'Reconnect and try again.')); }
+    if (request === commandSearchRequest) { loading.replaceChildren(); loading.append(errorState(t('palette.databaseSearchUnavailable'), t('palette.reconnectAndTryAgain'))); }
   }
 }
 
@@ -4089,7 +4089,7 @@ byId('format-sql').addEventListener('click', () => {
   else editor.value = formatted;
   syncEditorHighlight();
   saveCurrentQueryTab();
-  byId('query-status').textContent = 'SQL formatted';
+  byId('query-status').textContent = t('query.sqlFormatted');
 });
 byId('run-query').addEventListener('click', () => runQuery());
 byId('run-script').addEventListener('click', () => runQuery('script'));
@@ -4157,9 +4157,9 @@ byId('programming-repository').addEventListener('change', async (event) => {
     githubConnection = await invoke('select_github_repository', { owner, repository });
     githubBranches = await invoke('github_branches');
     renderProgrammingGithubBranches();
-    setProgrammingEditorStatus(`Repository ${owner}/${repository} selected.`, 'success');
+    setProgrammingEditorStatus(t('programmingGit.repositorySelected', { repository: `${owner}/${repository}` }), 'success');
   } catch (error) {
-    setProgrammingEditorStatus(error?.message || 'Could not select the repository', 'error');
+    setProgrammingEditorStatus(errorMessage(error, t, 'programmingGit.couldNotSelectRepository'), 'error');
     renderProgrammingRepositoryWorkspace();
   }
 });
@@ -4219,7 +4219,7 @@ byId('pf-language').addEventListener('change', () => {
   const body = editor.value.trim();
   if (byId('pf-language').value === 'sql' && /^BEGIN\b/i.test(body)) {
     setProgrammingEditorValue(SQL_FUNCTION_TEMPLATE_BODY);
-    setProgrammingEditorStatus('SQL functions use a direct SELECT body; the PL/pgSQL block was replaced.', 'success');
+    setProgrammingEditorStatus(t('programming.sqlBodyReplaced'), 'success');
   } else if (byId('pf-language').value === 'plpgsql' && /^SELECT\s+CURRENT_DATE\s*;?$/i.test(body)) {
     setProgrammingEditorValue(FUNCTION_TEMPLATE_BODY);
   }
@@ -4267,9 +4267,9 @@ for (const button of document.querySelectorAll('[data-theme-choice]')) button.ad
 for (const button of document.querySelectorAll('[data-accent-choice]')) button.addEventListener('click', () => void savePreferences({ accent: button.dataset.accentChoice }));
 byId('check-updates-startup').addEventListener('change', (event) => void savePreferences({ check_updates_on_startup: event.target.checked }));
 byId('check-updates').addEventListener('click', () => void checkForUpdates(true));
-byId('copy-release-link').addEventListener('click', async () => { if (!state.releaseUrl) return; await navigator.clipboard.writeText(state.releaseUrl); byId('update-detail').textContent = 'Release link copied'; });
-byId('copy-pix-key').addEventListener('click', async () => { await navigator.clipboard.writeText(PIX_KEY); byId('pix-status').textContent = 'Pix key copied'; });
-byId('copy-pix-code').addEventListener('click', async () => { await navigator.clipboard.writeText(PIX_COPY_AND_PASTE); byId('pix-status').textContent = 'Pix copy-and-paste code copied'; });
+byId('copy-release-link').addEventListener('click', async () => { if (!state.releaseUrl) return; await navigator.clipboard.writeText(state.releaseUrl); byId('update-detail').textContent = t('updates.releaseLinkCopied'); });
+byId('copy-pix-key').addEventListener('click', async () => { await navigator.clipboard.writeText(PIX_KEY); byId('pix-status').textContent = t('about.pixKeyCopied'); });
+byId('copy-pix-code').addEventListener('click', async () => { await navigator.clipboard.writeText(PIX_COPY_AND_PASTE); byId('pix-status').textContent = t('about.pixCodeCopied'); });
 for (const button of document.querySelectorAll('[data-view]')) button.addEventListener('click', () => {
   if (button.dataset.view === 'assistant') { assistantReturnView = null; byId('assistant-back').hidden = true; }
   switchView(button.dataset.view);

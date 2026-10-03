@@ -97,148 +97,148 @@
         <section id="view-programming" class="view" hidden>
           <section class="panel programming-panel">
             <div class="panel-heading">
-              <div><span class="eyebrow">DATABASE CODE</span><h2>Programming</h2></div>
+              <div><span class="eyebrow" data-i18n="programming.databaseCode">DATABASE CODE</span><h2 data-i18n="nav.programming">Programming</h2></div>
               <div class="form-actions programming-controls">
-                <select id="programming-connection" aria-label="Programming connection"><option value="">Select a connected connection</option></select>
-                <select id="programming-schema" aria-label="Programming schema" disabled><option value="">Select a schema</option></select>
-                <button class="button small" id="programming-new-function" type="button" disabled><span class="button-icon" aria-hidden="true">ƒ</span>New function</button>
-                <button class="button small" id="programming-new-procedure" type="button" disabled><span class="button-icon" aria-hidden="true">▣</span>New procedure</button>
-                <button class="button small" id="programming-new-trigger" type="button" disabled><span class="button-icon" aria-hidden="true">⚡</span>New trigger</button>
-                <button class="button small" id="programming-new-view" type="button" disabled><span class="button-icon" aria-hidden="true">◫</span>New view</button>
+                <select id="programming-connection" aria-label="Programming connection" data-i18n-aria-label="programming.programmingConnection"><option value="" data-i18n="common.selectConnected">Select a connected connection</option></select>
+                <select id="programming-schema" aria-label="Programming schema" data-i18n-aria-label="programming.programmingSchema" disabled><option value="" data-i18n="programming.selectASchema">Select a schema</option></select>
+                <button class="button small" id="programming-new-function" type="button" disabled><span class="button-icon" aria-hidden="true">ƒ</span><span data-i18n="explorer.newFunction">New function</span></button>
+                <button class="button small" id="programming-new-procedure" type="button" disabled><span class="button-icon" aria-hidden="true">▣</span><span data-i18n="explorer.newProcedure">New procedure</span></button>
+                <button class="button small" id="programming-new-trigger" type="button" disabled><span class="button-icon" aria-hidden="true">⚡</span><span data-i18n="explorer.newTrigger">New trigger</span></button>
+                <button class="button small" id="programming-new-view" type="button" disabled><span class="button-icon" aria-hidden="true">◫</span><span data-i18n="programming.newView">New view</span></button>
               </div>
             </div>
             <div id="programming-status" class="form-status" role="status"></div>
-            <div class="programming-repository-bar" aria-label="Source control workspace">
-              <div class="programming-repository-identity"><span class="repo-mark">⌘</span><div><span class="eyebrow">SOURCE CONTROL</span><strong id="programming-repository-label">Select a repository</strong></div></div>
-              <label>Repository<select id="programming-repository"><option value="">Connect GitHub in Preferences</option></select></label>
-              <label>Branch<select id="programming-workspace-branch"><option value="">Choose a branch</option></select></label>
-              <span class="source-state" id="programming-source-state">No file selected</span>
-              <button class="button small" id="programming-choose-workspace" type="button"><span class="button-icon" aria-hidden="true">⌂</span>Choose folder</button>
-              <button class="button small danger" id="programming-clear-workspace" type="button"><span class="button-icon" aria-hidden="true">×</span>Clear workspace</button>
-              <button class="button small" id="programming-refresh-source" type="button"><span class="button-icon" aria-hidden="true">↻</span>Refresh</button>
+            <div class="programming-repository-bar" aria-label="Source control workspace" data-i18n-aria-label="programming.sourceControlWorkspace">
+              <div class="programming-repository-identity"><span class="repo-mark">⌘</span><div><span class="eyebrow" data-i18n="programming.sourceControl">SOURCE CONTROL</span><strong id="programming-repository-label" data-i18n="programmingGit.selectARepository">Select a repository</strong></div></div>
+              <label><span data-i18n="programming.repository">Repository</span><select id="programming-repository"><option value="" data-i18n="programmingGit.connectGithubInPreferences">Connect GitHub in Preferences</option></select></label>
+              <label><span data-i18n="programming.branch">Branch</span><select id="programming-workspace-branch"><option value="" data-i18n="programmingGit.chooseABranch">Choose a branch</option></select></label>
+              <span class="source-state" id="programming-source-state" data-i18n="programming.noFileSelected">No file selected</span>
+              <button class="button small" id="programming-choose-workspace" type="button"><span class="button-icon" aria-hidden="true">⌂</span><span data-i18n="programming.chooseFolder">Choose folder</span></button>
+              <button class="button small danger" id="programming-clear-workspace" type="button"><span class="button-icon" aria-hidden="true">×</span><span data-i18n="programming.clearWorkspace">Clear workspace</span></button>
+              <button class="button small" id="programming-refresh-source" type="button"><span class="button-icon" aria-hidden="true">↻</span><span data-i18n="table.refresh">Refresh</span></button>
             </div>
             <div id="programming-browser-screen" class="programming-browser-screen">
-              <div class="programming-browser" aria-label="Database code objects">
-                <section class="programming-local-files" aria-label="Local SQL files"><div class="programming-local-files-heading"><div><span class="eyebrow">LOCAL WORKSPACE</span><h3>SQL files</h3></div><div class="form-actions"><span class="badge" id="programming-local-files-count">0</span><button class="button small danger" id="programming-clear-workspace-local" type="button"><span class="button-icon" aria-hidden="true">×</span>Remove workspace</button></div></div><div id="programming-local-files-list" class="programming-local-files-list"><div class="empty-state compact">Choose a workspace folder to browse files.</div></div></section>
-                <div id="programming-content" class="programming-content"><div class="empty-state"><strong>Choose a connection and schema</strong><span>Views, functions, procedures and triggers will appear here.</span></div></div>
+              <div class="programming-browser" aria-label="Database code objects" data-i18n-aria-label="programming.databaseCodeObjects">
+                <section class="programming-local-files" aria-label="Local SQL files" data-i18n-aria-label="programming.localSqlFiles"><div class="programming-local-files-heading"><div><span class="eyebrow" data-i18n="programming.localWorkspace">LOCAL WORKSPACE</span><h3 data-i18n="programming.sqlFiles">SQL files</h3></div><div class="form-actions"><span class="badge" id="programming-local-files-count">0</span><button class="button small danger" id="programming-clear-workspace-local" type="button"><span class="button-icon" aria-hidden="true">×</span><span data-i18n="programming.removeWorkspace">Remove workspace</span></button></div></div><div id="programming-local-files-list" class="programming-local-files-list"><div class="empty-state compact" data-i18n="programming.chooseAWorkspaceFolderTo">Choose a workspace folder to browse files.</div></div></section>
+                <div id="programming-content" class="programming-content"><div class="empty-state"><strong data-i18n="programming.chooseAConnectionAndSchema">Choose a connection and schema</strong><span data-i18n="programming.viewsFunctionsProceduresAndTriggers">Views, functions, procedures and triggers will appear here.</span></div></div>
               </div>
             </div>
-              <section id="programming-editor-screen" class="programming-editor-panel" aria-label="Database code editor" hidden>
+              <section id="programming-editor-screen" class="programming-editor-panel" aria-label="Database code editor" data-i18n-aria-label="programming.databaseCodeEditor" hidden>
                 <div class="programming-editor-heading">
-                  <div class="programming-editor-identity"><button class="button small" id="programming-back" type="button"><span class="button-icon" aria-hidden="true">←</span>Back</button><div><span class="eyebrow" id="programming-editor-kind">CODE EDITOR</span><h3 id="programming-editor-title">Select an object</h3></div></div>
+                  <div class="programming-editor-identity"><button class="button small" id="programming-back" type="button"><span class="button-icon" aria-hidden="true">←</span><span data-i18n="programming.back">Back</span></button><div><span class="eyebrow" id="programming-editor-kind" data-i18n="programming.codeEditor">CODE EDITOR</span><h3 id="programming-editor-title" data-i18n="programming.selectAnObject">Select an object</h3></div></div>
                   <div class="form-actions">
-                    <button class="button small" id="programming-reload" type="button" disabled><span class="button-icon" aria-hidden="true">↻</span>Reload</button>
-                    <button class="button small" id="programming-validate" type="button" disabled><span class="button-icon" aria-hidden="true">✓</span>Validate</button>
-                    <button class="button small" id="programming-review-ai" type="button" disabled><span class="button-icon" aria-hidden="true">✦</span>Review with AI</button>
-                    <button class="button small" id="programming-save-file" type="button" disabled><span class="button-icon" aria-hidden="true">▣</span>Save file</button>
-                    <button class="button small primary" id="programming-save" type="button" disabled><span class="button-icon" aria-hidden="true">⚙</span>Compile</button>
-                    <button class="button small success" id="programming-run" type="button" disabled><span class="button-icon" aria-hidden="true">▶</span>Run</button>
+                    <button class="button small" id="programming-reload" type="button" disabled><span class="button-icon" aria-hidden="true">↻</span><span data-i18n="programming.reload">Reload</span></button>
+                    <button class="button small" id="programming-validate" type="button" disabled><span class="button-icon" aria-hidden="true">✓</span><span data-i18n="definition.validate">Validate</span></button>
+                    <button class="button small" id="programming-review-ai" type="button" disabled><span class="button-icon" aria-hidden="true">✦</span><span data-i18n="programming.reviewWithAi">Review with AI</span></button>
+                    <button class="button small" id="programming-save-file" type="button" disabled><span class="button-icon" aria-hidden="true">▣</span><span data-i18n="programming.saveFile">Save file</span></button>
+                    <button class="button small primary" id="programming-save" type="button" disabled><span class="button-icon" aria-hidden="true">⚙</span><span data-i18n="programming.compile">Compile</span></button>
+                    <button class="button small success" id="programming-run" type="button" disabled><span class="button-icon" aria-hidden="true">▶</span><span data-i18n="programming.run">Run</span></button>
                   </div>
                 </div>
                 <div id="programming-function-form" class="programming-function-form" hidden>
                   <div class="object-form-grid">
-                    <label>Schema<select id="pf-schema"></select></label>
-                    <label>Name<input id="pf-name" autocomplete="off" placeholder="function_name" /></label>
-                    <label id="pf-returns-field">Returns
+                    <label><span data-i18n="tableEditor.schema">Schema</span><select id="pf-schema"></select></label>
+                    <label><span data-i18n="tableEditor.name">Name</span><input id="pf-name" autocomplete="off" placeholder="function_name" /></label>
+                    <label id="pf-returns-field"><span data-i18n="programming.returns">Returns</span>
                       <div class="pf-returns-row">
                         <select id="pf-returns-kind">
                           <option value="void">void</option>
-                          <option value="scalar">A type…</option>
-                          <option value="setof">SETOF a type…</option>
-                          <option value="table">TABLE of columns…</option>
+                          <option value="scalar" data-i18n="programming.aType">A type…</option>
+                          <option value="setof" data-i18n="programming.setofAType">SETOF a type…</option>
+                          <option value="table" data-i18n="programming.tableOfColumns">TABLE of columns…</option>
                           <option value="record">record</option>
                           <option value="trigger">trigger</option>
                         </select>
-                        <button class="button small" id="pf-returns-detail" type="button" aria-label="Define the return type details" hidden>…</button>
+                        <button class="button small" id="pf-returns-detail" type="button" aria-label="Define the return type details" data-i18n-aria-label="programming.defineTheReturnTypeDetails" hidden>…</button>
                       </div>
                     </label>
                     <input id="pf-returns" type="hidden" />
-                    <label>Language
+                    <label><span data-i18n="programming.language">Language</span>
                       <select id="pf-language">
                         <option value="plpgsql">plpgsql</option>
                         <option value="sql">sql</option>
                         <option value="plpython3u">plpython3u</option>
                         <option value="plperl">plperl</option>
                         <option value="pltcl">pltcl</option>
-                        <option value="__custom__">Other…</option>
+                        <option value="__custom__" data-i18n="programming.other">Other…</option>
                       </select>
                     </label>
-                    <input id="pf-language-custom" autocomplete="off" placeholder="language name" aria-label="Custom language name" hidden />
-                    <label class="pf-extra-field">Advanced clauses (kept as-is)<input id="pf-extra" autocomplete="off" placeholder="STRICT / SECURITY DEFINER / SET ..." /></label>
+                    <input id="pf-language-custom" autocomplete="off" placeholder="language name" data-i18n-placeholder="programming.languageName" aria-label="Custom language name" data-i18n-aria-label="programming.customLanguageName" hidden />
+                    <label class="pf-extra-field"><span data-i18n="programming.advancedClausesKeptAsIs">Advanced clauses (kept as-is)</span><input id="pf-extra" autocomplete="off" placeholder="STRICT / SECURITY DEFINER / SET ..." /></label>
                   </div>
                   <div class="function-param-list" id="pf-params"></div>
-                  <button class="button small" id="pf-add-param" type="button">Add parameter</button>
+                  <button class="button small" id="pf-add-param" type="button" data-i18n="programming.addParameter">Add parameter</button>
                   <datalist id="pg-type-suggestions"></datalist>
                 </div>
                 <div class="programming-github-toolbar">
-                  <span class="badge" id="programming-github-status">GitHub not connected</span>
-                  <label>Open branch<select id="programming-github-branch" disabled><option value="">Connect GitHub in Preferences</option></select></label>
-                  <label>Compare with<select id="programming-github-base" disabled><option value="">Base branch</option></select></label>
-                  <label>Commit message<input id="programming-github-message" disabled placeholder="Update database definition" /></label>
+                  <span class="badge" id="programming-github-status" data-i18n="programmingGit.githubNotConnected">GitHub not connected</span>
+                  <label><span data-i18n="programming.openBranch">Open branch</span><select id="programming-github-branch" disabled><option value="" data-i18n="programmingGit.connectGithubInPreferences">Connect GitHub in Preferences</option></select></label>
+                  <label><span data-i18n="programming.compareWith">Compare with</span><select id="programming-github-base" disabled><option value="" data-i18n="programmingGit.baseBranch">Base branch</option></select></label>
+                  <label><span data-i18n="programming.commitMessage">Commit message</span><input id="programming-github-message" disabled placeholder="Update database definition" data-i18n-placeholder="programming.updateDatabaseDefinition" /></label>
                   <div class="form-actions">
-                    <button class="button small" id="programming-github-load" type="button" disabled>Load branch</button>
-                    <button class="button small" id="programming-github-diff-deployed" type="button" disabled>Diff deployed</button>
-                    <button class="button small" id="programming-github-diff-branches" type="button" disabled>Diff branches</button>
+                    <button class="button small" id="programming-github-load" type="button" disabled data-i18n="programming.loadBranch">Load branch</button>
+                    <button class="button small" id="programming-github-diff-deployed" type="button" disabled data-i18n="programming.diffDeployed">Diff deployed</button>
+                    <button class="button small" id="programming-github-diff-branches" type="button" disabled data-i18n="programming.diffBranches">Diff branches</button>
                     <button class="button small" id="programming-github-commit" type="button" disabled><span class="button-icon" aria-hidden="true">●</span>Commit</button>
                     <button class="button small primary" id="programming-github-push" type="button" disabled><span class="button-icon" aria-hidden="true">↑</span>Push</button>
-                    <button class="button small primary" id="programming-github-pr" type="button" disabled>Create PR</button>
+                    <button class="button small primary" id="programming-github-pr" type="button" disabled data-i18n="programming.createPr">Create PR</button>
                   </div>
                 </div>
                 <form id="programming-github-pr-form" class="programming-github-pr-form" hidden>
-                  <label>Pull request title<input id="programming-github-pr-title" required placeholder="Describe the database change" /></label>
-                  <label>Description<textarea id="programming-github-pr-body" rows="3" placeholder="Explain the change, rollout and validation"></textarea></label>
-                  <div class="form-actions"><button class="button small" id="programming-github-pr-cancel" type="button">Cancel</button><button class="button small primary" type="submit">Open pull request</button></div>
+                  <label><span data-i18n="programming.pullRequestTitle">Pull request title</span><input id="programming-github-pr-title" required placeholder="Describe the database change" data-i18n-placeholder="programming.describeTheDatabaseChange" /></label>
+                  <label><span data-i18n="programming.description">Description</span><textarea id="programming-github-pr-body" rows="3" placeholder="Explain the change, rollout and validation" data-i18n-placeholder="programming.explainTheChangeRolloutAnd"></textarea></label>
+                  <div class="form-actions"><button class="button small" id="programming-github-pr-cancel" type="button" data-i18n="connectionForm.cancel">Cancel</button><button class="button small primary" type="submit" data-i18n="programming.openPullRequest">Open pull request</button></div>
                 </form>
                 <div class="sql-editor-wrap programming-editor-wrap">
                   <pre class="sql-editor-highlight" id="programming-editor-highlight" aria-hidden="true"></pre>
-                  <textarea id="programming-editor" spellcheck="false" autocomplete="off" disabled placeholder="Select a view, function, procedure or trigger to edit its definition."></textarea>
+                  <textarea id="programming-editor" spellcheck="false" autocomplete="off" disabled placeholder="Select a view, function, procedure or trigger to edit its definition." data-i18n-placeholder="programming.selectAViewFunctionProcedure"></textarea>
                   <ul class="sql-autocomplete" id="programming-sql-autocomplete" hidden role="listbox" aria-label="SQL suggestions" data-i18n-aria-label="query.suggestions"></ul>
                 </div>
                 <div id="programming-ddl-preview-wrap" class="programming-ddl-preview-wrap" hidden>
-                  <span class="eyebrow">ASSEMBLED SQL</span>
+                  <span class="eyebrow" data-i18n="programming.assembledSql">ASSEMBLED SQL</span>
                   <pre id="programming-ddl-preview" class="object-sql-preview"></pre>
                 </div>
-                <div class="programming-editor-footer"><div id="programming-editor-status" class="form-status" role="status">Select an object to start editing.</div><span class="query-hint">Ctrl+S saves. Ctrl+Enter validates functions and procedures.</span></div>
-                <section id="programming-execution-output" class="programming-execution-output" hidden aria-live="polite"><div class="execution-heading"><div><span class="eyebrow">EXECUTION OUTPUT</span><strong id="programming-execution-summary">Ready</strong></div><button class="button small" id="programming-clear-output" type="button">Clear</button></div><pre id="programming-execution-result"></pre></section>
+                <div class="programming-editor-footer"><div id="programming-editor-status" class="form-status" role="status" data-i18n="programming.selectAnObjectToStart">Select an object to start editing.</div><span class="query-hint" data-i18n="dashboard.ctrlSSavesCtrlEnter">Ctrl+S saves. Ctrl+Enter validates functions and procedures.</span></div>
+                <section id="programming-execution-output" class="programming-execution-output" hidden aria-live="polite"><div class="execution-heading"><div><span class="eyebrow" data-i18n="dashboard.executionOutput">EXECUTION OUTPUT</span><strong id="programming-execution-summary" data-i18n="query.ready">Ready</strong></div><button class="button small" id="programming-clear-output" type="button" data-i18n="history.clearAction">Clear</button></div><pre id="programming-execution-result"></pre></section>
                 <pre id="programming-github-diff" class="github-diff" hidden></pre>
               </section>
           </section>
         </section>
         <section id="view-dashboard" class="view" hidden>
-          <section class="panel"><div class="panel-heading"><div><span class="eyebrow">DATABASE OVERVIEW</span><h2>Dashboard</h2></div><select id="dashboard-connection"><option value="">Select a connected connection</option></select></div><div id="dashboard-content" class="dashboard-content"><div class="empty-state"><strong>Choose a connection</strong><span>KPIs and database health load from PostgreSQL.</span></div></div></section>
+          <section class="panel"><div class="panel-heading"><div><span class="eyebrow" data-i18n="admin.databaseOverview">DATABASE OVERVIEW</span><h2 data-i18n="nav.dashboard">Dashboard</h2></div><select id="dashboard-connection"><option value="" data-i18n="common.selectConnected">Select a connected connection</option></select></div><div id="dashboard-content" class="dashboard-content"><div class="empty-state"><strong data-i18n="explorer.chooseConnection">Choose a connection</strong><span data-i18n="admin.kpisAndDatabaseHealthLoad">KPIs and database health load from PostgreSQL.</span></div></div></section>
         </section>
         <section id="view-admin" class="view" hidden>
-          <div class="admin-workspace-nav" role="tablist" aria-label="Administration sections">
-            <button class="admin-workspace-tab active" data-admin-workspace="administration" type="button" role="tab" aria-selected="true">Administration</button>
-            <button class="admin-workspace-tab" data-admin-workspace="backup" type="button" role="tab" aria-selected="false">Backup &amp; Restore</button>
+          <div class="admin-workspace-nav" role="tablist" aria-label="Administration sections" data-i18n-aria-label="admin.administrationSections">
+            <button class="admin-workspace-tab active" data-admin-workspace="administration" type="button" role="tab" aria-selected="true" data-i18n="nav.admin">Administration</button>
+            <button class="admin-workspace-tab" data-admin-workspace="backup" type="button" role="tab" aria-selected="false" data-i18n="palette.backupRestore">Backup &amp; Restore</button>
           </div>
           <div class="admin-workspace-panel" data-admin-workspace-panel="administration">
-          <section class="panel"><div class="panel-heading"><div><span class="eyebrow">OPERATIONS</span><h2>Administration</h2></div><select id="admin-connection"><option value="">Select a connected connection</option></select></div><div id="admin-tabs" class="admin-tabs" role="tablist" aria-label="Administration tools" hidden></div><div id="admin-content" class="admin-content"><div class="empty-state"><strong>Choose a connection</strong><span>Roles, pg_cron, activity, locks, extensions and query stats.</span></div></div></section>
+          <section class="panel"><div class="panel-heading"><div><span class="eyebrow" data-i18n="admin.operations">OPERATIONS</span><h2 data-i18n="nav.admin">Administration</h2></div><select id="admin-connection"><option value="" data-i18n="common.selectConnected">Select a connected connection</option></select></div><div id="admin-tabs" class="admin-tabs" role="tablist" aria-label="Administration tools" data-i18n-aria-label="admin.administrationTools" hidden></div><div id="admin-content" class="admin-content"><div class="empty-state"><strong data-i18n="explorer.chooseConnection">Choose a connection</strong><span data-i18n="admin.rolesPgCronActivityLocks">Roles, pg_cron, activity, locks, extensions and query stats.</span></div></div></section>
           </div>
           <section class="panel admin-workspace-panel" data-admin-workspace-panel="backup" hidden>
-            <div class="panel-heading"><div><span class="eyebrow">DATA PROTECTION</span><h2>Backup &amp; Restore</h2></div><select id="backup-connection"><option value="">Select a connected connection</option></select></div>
+            <div class="panel-heading"><div><span class="eyebrow" data-i18n="admin.dataProtection">DATA PROTECTION</span><h2 data-i18n="palette.backupRestore">Backup &amp; Restore</h2></div><select id="backup-connection"><option value="" data-i18n="common.selectConnected">Select a connected connection</option></select></div>
             <div class="form-grid backup-grid">
-              <label>Backup file or directory<span class="file-picker-row"><input id="backup-output" placeholder="Choose a destination" readonly /><button class="button small" id="choose-backup-output" type="button">Choose…</button></span></label>
-              <label>Format<select id="backup-format"><option value="custom">Custom</option><option value="plain">Plain SQL</option><option value="directory">Directory</option></select></label>
-              <label>Restore input<span class="file-picker-row"><input id="restore-input" placeholder="Choose a backup" readonly /><button class="button small" id="choose-restore-input" type="button">Choose…</button></span></label>
-              <label>Target database<input id="restore-database" /></label>
+              <label><span data-i18n="admin.backupFileOrDirectory">Backup file or directory</span><span class="file-picker-row"><input id="backup-output" placeholder="Choose a destination" data-i18n-placeholder="admin.chooseADestination" readonly /><button class="button small" id="choose-backup-output" type="button" data-i18n="admin.choose">Choose…</button></span></label>
+              <label><span data-i18n="admin.format">Format</span><select id="backup-format"><option value="custom" data-i18n="admin.custom">Custom</option><option value="plain" data-i18n="table.plainSql">Plain SQL</option><option value="directory" data-i18n="table.directory">Directory</option></select></label>
+              <label><span data-i18n="table.restoreInput">Restore input</span><span class="file-picker-row"><input id="restore-input" placeholder="Choose a backup" data-i18n-placeholder="admin.chooseABackup" readonly /><button class="button small" id="choose-restore-input" type="button" data-i18n="table.choose">Choose…</button></span></label>
+              <label><span data-i18n="table.targetDatabase">Target database</span><input id="restore-database" /></label>
             </div>
-            <div class="form-actions"><button class="button primary" id="run-backup" type="button">Create backup</button><button class="button" id="run-restore" type="button">Restore</button><button class="button danger" id="cancel-operation" type="button" hidden>Cancel</button></div>
+            <div class="form-actions"><button class="button primary" id="run-backup" type="button" data-i18n="erd.createBackup">Create backup</button><button class="button" id="run-restore" type="button" data-i18n="window.restore">Restore</button><button class="button danger" id="cancel-operation" type="button" hidden data-i18n="connectionForm.cancel">Cancel</button></div>
             <div id="backup-status" class="form-status" role="status"></div>
             <pre id="backup-log" class="operation-log"></pre>
           </section>
         </section>
         <section id="view-table-detail" class="view" hidden>
-          <section class="panel"><div class="panel-heading"><div><span class="eyebrow" id="detail-eyebrow">TABLE DETAIL</span><h2 id="detail-title">Table</h2></div><div class="form-actions"><button class="button small" id="back-to-explorer" type="button">← Explorer</button><span class="badge" id="detail-summary">Loading</span></div></div><div id="detail-content" class="detail-content"></div></section>
+          <section class="panel"><div class="panel-heading"><div><span class="eyebrow" id="detail-eyebrow" data-i18n="assistant.tableDetail">TABLE DETAIL</span><h2 id="detail-title" data-i18n="nav.table-detail">Table</h2></div><div class="form-actions"><button class="button small" id="back-to-explorer" type="button" data-i18n="assistant.explorer">← Explorer</button><span class="badge" id="detail-summary" data-i18n="erd.loading">Loading</span></div></div><div id="detail-content" class="detail-content"></div></section>
         </section>
         <section id="view-erd" class="view" hidden>
-          <section class="panel"><div class="panel-heading"><div><span class="eyebrow">RELATIONSHIP MAP</span><h2 id="erd-title">ERD</h2></div><span class="badge" id="erd-summary">Loading</span></div><div id="erd-content" class="erd-content"></div></section>
+          <section class="panel"><div class="panel-heading"><div><span class="eyebrow" data-i18n="assistant.relationshipMap">RELATIONSHIP MAP</span><h2 id="erd-title" data-i18n="nav.erd">ERD</h2></div><span class="badge" id="erd-summary" data-i18n="erd.loading">Loading</span></div><div id="erd-content" class="erd-content"></div></section>
         </section>
         <section id="view-assistant" class="view" hidden>
           <section class="panel">
-            <div class="panel-heading"><div class="assistant-heading-identity"><button class="button small" id="assistant-back" type="button" hidden>← Back</button><div><span class="eyebrow">READ-ONLY ADVISOR</span><h2>AI Assistant</h2></div></div><select id="assistant-connection"><option value="">Select a connected connection</option></select></div>
-            <div id="assistant-history" class="assistant-history"><div class="empty-state"><strong>Ask about a query, schema, or execution plan</strong><span>The assistant can inspect the connected database but never changes it.</span></div></div>
-            <div class="assistant-compose"><textarea id="assistant-message" rows="3" placeholder="How can I improve this query?"></textarea><div class="form-actions"><button class="button small danger" id="clear-assistant" type="button">Clear</button><button class="button primary" id="send-assistant" type="button">Send</button></div></div>
+            <div class="panel-heading"><div class="assistant-heading-identity"><button class="button small" id="assistant-back" type="button" hidden data-i18n="assistant.back">← Back</button><div><span class="eyebrow" data-i18n="query.readOnlyAdvisor">READ-ONLY ADVISOR</span><h2 data-i18n="query.aiAssistant">AI Assistant</h2></div></div><select id="assistant-connection"><option value="" data-i18n="common.selectConnected">Select a connected connection</option></select></div>
+            <div id="assistant-history" class="assistant-history"><div class="empty-state"><strong data-i18n="assistant.askAboutAQuerySchema">Ask about a query, schema, or execution plan</strong><span data-i18n="assistant.theAssistantCanInspectThe">The assistant can inspect the connected database but never changes it.</span></div></div>
+            <div class="assistant-compose"><textarea id="assistant-message" rows="3" placeholder="How can I improve this query?" data-i18n-placeholder="assistant.howCanIImproveThis"></textarea><div class="form-actions"><button class="button small danger" id="clear-assistant" type="button" data-i18n="history.clearAction">Clear</button><button class="button primary" id="send-assistant" type="button" data-i18n="query.send">Send</button></div></div>
             <div id="assistant-status" class="form-status" role="status"></div>
           </section>
         </section>
@@ -271,72 +271,72 @@
         </section>
         <section id="view-preferences" class="view" hidden>
           <section class="panel preferences-panel">
-            <div class="panel-heading"><div><span class="eyebrow">APPLICATION</span><h2>Preferences</h2></div><span class="badge" id="preferences-status">Saved locally</span></div>
+            <div class="panel-heading"><div><span class="eyebrow" data-i18n="prefs.application">APPLICATION</span><h2 data-i18n="nav.preferences">Preferences</h2></div><span class="badge" id="preferences-status" data-i18n="prefs.savedLocally">Saved locally</span></div>
             <div class="preferences-layout">
-              <div class="preferences-tabs" role="tablist" aria-label="Preference sections">
-                <button class="preference-tab active" data-preference-section="appearance" type="button" role="tab" aria-selected="true">Appearance</button>
-                <button class="preference-tab" data-preference-section="ai" type="button" role="tab" aria-selected="false">AI Assistant</button>
+              <div class="preferences-tabs" role="tablist" aria-label="Preference sections" data-i18n-aria-label="prefs.preferenceSections">
+                <button class="preference-tab active" data-preference-section="appearance" type="button" role="tab" aria-selected="true" data-i18n="prefs.appearance">Appearance</button>
+                <button class="preference-tab" data-preference-section="ai" type="button" role="tab" aria-selected="false" data-i18n="prefs.aiAssistant">AI Assistant</button>
                 <button class="preference-tab" data-preference-section="github" type="button" role="tab" aria-selected="false">GitHub</button>
-                <button class="preference-tab" data-preference-section="updates" type="button" role="tab" aria-selected="false">Updates</button>
-                <button class="preference-tab" data-preference-section="about" type="button" role="tab" aria-selected="false">About</button>
+                <button class="preference-tab" data-preference-section="updates" type="button" role="tab" aria-selected="false" data-i18n="prefs.updates">Updates</button>
+                <button class="preference-tab" data-preference-section="about" type="button" role="tab" aria-selected="false" data-i18n="prefs.about">About</button>
               </div>
               <div class="preferences-content">
                 <section class="preference-section" data-preference-panel="appearance">
-                  <span class="eyebrow">THEME</span><h3>Choose your workspace theme</h3><p>Dark is the default and both themes keep the same contrast and database status semantics.</p>
+                  <span class="eyebrow" data-i18n="prefs.theme">THEME</span><h3 data-i18n="prefs.chooseYourWorkspaceTheme">Choose your workspace theme</h3><p data-i18n="prefs.darkIsTheDefaultAnd">Dark is the default and both themes keep the same contrast and database status semantics.</p>
                   <div class="theme-options">
-                    <button class="theme-option" data-theme-choice="dark" type="button" aria-pressed="true"><span class="theme-preview dark-preview"></span><strong>Dark</strong><small>Default</small></button>
-                    <button class="theme-option" data-theme-choice="light" type="button" aria-pressed="false"><span class="theme-preview light-preview"></span><strong>Light</strong><small>High clarity</small></button>
+                    <button class="theme-option" data-theme-choice="dark" type="button" aria-pressed="true"><span class="theme-preview dark-preview"></span><strong data-i18n="prefs.dark">Dark</strong><small data-i18n="tableEditor.default">Default</small></button>
+                    <button class="theme-option" data-theme-choice="light" type="button" aria-pressed="false"><span class="theme-preview light-preview"></span><strong data-i18n="prefs.light">Light</strong><small data-i18n="prefs.highClarity">High clarity</small></button>
                   </div>
-                  <span class="eyebrow preference-subheading">ACCENT COLOR</span><h3>Color</h3>
-                  <div class="accent-options" role="group" aria-label="Accent color">
-                    <button class="accent-option coral" data-accent-choice="coral" type="button" aria-label="Coral" aria-pressed="true"></button>
-                    <button class="accent-option blue" data-accent-choice="blue" type="button" aria-label="Blue" aria-pressed="false"></button>
-                    <button class="accent-option green" data-accent-choice="green" type="button" aria-label="Green" aria-pressed="false"></button>
-                    <button class="accent-option purple" data-accent-choice="purple" type="button" aria-label="Purple" aria-pressed="false"></button>
-                    <button class="accent-option amber" data-accent-choice="amber" type="button" aria-label="Amber" aria-pressed="false"></button>
+                  <span class="eyebrow preference-subheading" data-i18n="prefs.accentColor2">ACCENT COLOR</span><h3 data-i18n="prefs.color">Color</h3>
+                  <div class="accent-options" role="group" aria-label="Accent color" data-i18n-aria-label="prefs.accentColor">
+                    <button class="accent-option coral" data-accent-choice="coral" type="button" aria-label="Coral" data-i18n-aria-label="prefs.coral" aria-pressed="true"></button>
+                    <button class="accent-option blue" data-accent-choice="blue" type="button" aria-label="Blue" data-i18n-aria-label="prefs.blue" aria-pressed="false"></button>
+                    <button class="accent-option green" data-accent-choice="green" type="button" aria-label="Green" data-i18n-aria-label="prefs.green" aria-pressed="false"></button>
+                    <button class="accent-option purple" data-accent-choice="purple" type="button" aria-label="Purple" data-i18n-aria-label="prefs.purple" aria-pressed="false"></button>
+                    <button class="accent-option amber" data-accent-choice="amber" type="button" aria-label="Amber" data-i18n-aria-label="prefs.amber" aria-pressed="false"></button>
                   </div>
                 </section>
                 <section class="preference-section" data-preference-panel="ai" hidden>
-                  <span class="eyebrow">AI ASSISTANT</span><h3>Provider and model</h3><p>Choose the provider used by the read-only database advisor. Each provider keeps its own model configuration.</p>
+                  <span class="eyebrow" data-i18n="prefs.aiAssistant2">AI ASSISTANT</span><h3 data-i18n="prefs.providerAndModel">Provider and model</h3><p data-i18n="prefs.chooseTheProviderUsedBy">Choose the provider used by the read-only database advisor. Each provider keeps its own model configuration.</p>
                   <form id="ai-settings-form" class="ai-settings-form">
-                    <label>Provider<select id="ai-provider"><option value="anthropic">Anthropic</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option></select></label>
-                    <label>Model<span class="ai-model-picker"><input id="ai-model" list="ai-model-list" autocomplete="off" spellcheck="false" placeholder="Provider model ID" /><button class="button small" id="refresh-ai-models" type="button">Refresh</button></span><datalist id="ai-model-list"></datalist></label>
-                    <label>Daily message limit<input id="ai-daily-limit" type="number" min="1" max="10000" step="1" /></label>
-                    <label>Tool rounds per message<input id="ai-round-limit" type="number" min="1" max="32" step="1" /></label>
-                    <div class="form-actions ai-settings-actions"><button class="button primary" id="save-ai-settings" type="submit">Save AI settings</button></div>
+                    <label><span data-i18n="prefs.provider">Provider</span><select id="ai-provider"><option value="anthropic">Anthropic</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option></select></label>
+                    <label><span data-i18n="prefs.model">Model</span><span class="ai-model-picker"><input id="ai-model" list="ai-model-list" autocomplete="off" spellcheck="false" placeholder="Provider model ID" data-i18n-placeholder="prefs.providerModelId" /><button class="button small" id="refresh-ai-models" type="button" data-i18n="table.refresh">Refresh</button></span><datalist id="ai-model-list"></datalist></label>
+                    <label><span data-i18n="prefs.dailyMessageLimit">Daily message limit</span><input id="ai-daily-limit" type="number" min="1" max="10000" step="1" /></label>
+                    <label><span data-i18n="prefs.toolRoundsPerMessage">Tool rounds per message</span><input id="ai-round-limit" type="number" min="1" max="32" step="1" /></label>
+                    <div class="form-actions ai-settings-actions"><button class="button primary" id="save-ai-settings" type="submit" data-i18n="prefs.saveAiSettings">Save AI settings</button></div>
                   </form>
                   <div class="ai-key-card">
-                    <div><span class="eyebrow">API KEY</span><h3 id="ai-key-title">Anthropic credential</h3><p>The key is written directly to the system Secret Service and is never returned to this interface.</p></div>
-                    <label>New API key<input id="ai-api-key" type="password" autocomplete="new-password" spellcheck="false" placeholder="Paste a new key" /></label>
-                    <div class="form-actions"><button class="button primary" id="save-ai-key" type="button">Save key</button><button class="button danger" id="clear-ai-key" type="button">Remove key</button></div>
+                    <div><span class="eyebrow" data-i18n="prefs.apiKey">API KEY</span><h3 id="ai-key-title">Anthropic credential</h3><p data-i18n="prefs.theKeyIsWrittenDirectly">The key is written directly to the system Secret Service and is never returned to this interface.</p></div>
+                    <label><span data-i18n="prefs.newApiKey">New API key</span><input id="ai-api-key" type="password" autocomplete="new-password" spellcheck="false" placeholder="Paste a new key" data-i18n-placeholder="prefs.pasteANewKey" /></label>
+                    <div class="form-actions"><button class="button primary" id="save-ai-key" type="button" data-i18n="prefs.saveKey">Save key</button><button class="button danger" id="clear-ai-key" type="button" data-i18n="aiSettings.removeKey">Remove key</button></div>
                   </div>
                   <div id="ai-settings-status" class="form-status" role="status"></div>
                 </section>
                 <section class="preference-section" data-preference-panel="github" hidden>
-                  <span class="eyebrow">SOURCE CONTROL</span><h3>GitHub credential</h3><p>Save only your GitHub credential here. Repositories, branches, diffs, commits and pull requests are selected in Programming.</p>
+                  <span class="eyebrow" data-i18n="prefs.sourceControl">SOURCE CONTROL</span><h3 data-i18n="prefs.githubCredential">GitHub credential</h3><p data-i18n="prefs.saveOnlyYourGithubCredential">Save only your GitHub credential here. Repositories, branches, diffs, commits and pull requests are selected in Programming.</p>
                   <form id="github-settings-form" class="github-settings-form">
                     <div class="form-grid github-repository-legacy" hidden>
-                      <label>Owner or organization<input id="github-owner" autocomplete="off" spellcheck="false" placeholder="acme" /></label>
-                      <label>Repository<input id="github-repository" autocomplete="off" spellcheck="false" placeholder="database-code" /></label>
-                      <label>Definitions root path<input id="github-root-path" autocomplete="off" spellcheck="false" placeholder="database/definitions" /></label>
-                      <label>Default base branch<input id="github-default-branch" autocomplete="off" spellcheck="false" placeholder="main" /></label>
+                      <label><span data-i18n="prefs.ownerOrOrganization">Owner or organization</span><input id="github-owner" autocomplete="off" spellcheck="false" placeholder="acme" /></label>
+                      <label><span data-i18n="prefs.repository">Repository</span><input id="github-repository" autocomplete="off" spellcheck="false" placeholder="database-code" /></label>
+                      <label><span data-i18n="prefs.definitionsRootPath">Definitions root path</span><input id="github-root-path" autocomplete="off" spellcheck="false" placeholder="database/definitions" /></label>
+                      <label><span data-i18n="prefs.defaultBaseBranch">Default base branch</span><input id="github-default-branch" autocomplete="off" spellcheck="false" placeholder="main" /></label>
                     </div>
-                    <label>Personal access token<input id="github-token" type="password" autocomplete="new-password" spellcheck="false" placeholder="Fine-grained token with repository access" /></label>
-                    <label>Scripts folder (optional)<span class="file-picker-row"><input id="programming-workspace-preference" placeholder="No folder selected" readonly /><button class="button small" id="choose-programming-workspace-preference" type="button"><span class="button-icon" aria-hidden="true">⌂</span>Choose…</button><button class="button small danger" id="clear-programming-workspace-preference" type="button"><span class="button-icon" aria-hidden="true">×</span>Clear</button></span></label>
-                    <div class="form-actions"><button class="button primary" id="github-connect" type="submit"><span class="button-icon" aria-hidden="true">↗</span>Save credential</button><button class="button danger" id="github-disconnect" type="button"><span class="button-icon" aria-hidden="true">×</span>Disconnect</button></div>
+                    <label><span data-i18n="prefs.personalAccessToken">Personal access token</span><input id="github-token" type="password" autocomplete="new-password" spellcheck="false" placeholder="Fine-grained token with repository access" data-i18n-placeholder="prefs.fineGrainedTokenWithRepository" /></label>
+                    <label><span data-i18n="prefs.scriptsFolderOptional">Scripts folder (optional)</span><span class="file-picker-row"><input id="programming-workspace-preference" placeholder="No folder selected" data-i18n-placeholder="prefs.noFolderSelected" readonly /><button class="button small" id="choose-programming-workspace-preference" type="button"><span class="button-icon" aria-hidden="true">⌂</span><span data-i18n="prefs.choose">Choose…</span></button><button class="button small danger" id="clear-programming-workspace-preference" type="button"><span class="button-icon" aria-hidden="true">×</span><span data-i18n="history.clearAction">Clear</span></button></span></label>
+                    <div class="form-actions"><button class="button primary" id="github-connect" type="submit"><span class="button-icon" aria-hidden="true">↗</span><span data-i18n="prefs.saveCredential">Save credential</span></button><button class="button danger" id="github-disconnect" type="button"><span class="button-icon" aria-hidden="true">×</span><span data-i18n="connections.disconnect">Disconnect</span></button></div>
                   </form>
                   <div id="github-settings-status" class="form-status" role="status"></div>
-                  <p class="preference-note">Recommended token permissions: Contents read/write and Pull requests read/write for the selected repository.</p>
+                  <p class="preference-note" data-i18n="prefs.recommendedTokenPermissionsContentsRead">Recommended token permissions: Contents read/write and Pull requests read/write for the selected repository.</p>
                 </section>
                 <section class="preference-section" data-preference-panel="updates" hidden>
-                  <span class="eyebrow">RELEASES</span><h3>Application updates</h3><p>Draco checks the latest published release in the official GitHub repository. Updates are never installed automatically.</p>
-                  <label class="check-row preference-check"><input id="check-updates-startup" type="checkbox" checked /> Check for updates when Draco starts</label>
-                  <div class="update-card"><div><strong id="update-title">Draco is ready to check</strong><small id="update-detail">Current version: 2.1.4</small></div><div class="form-actions"><button class="button small" id="copy-release-link" type="button" hidden>Copy release link</button><button class="button primary" id="check-updates" type="button">Check now</button></div></div>
+                  <span class="eyebrow" data-i18n="prefs.releases">RELEASES</span><h3 data-i18n="prefs.applicationUpdates">Application updates</h3><p data-i18n="prefs.dracoChecksTheLatestPublished">Draco checks the latest published release in the official GitHub repository. Updates are never installed automatically.</p>
+                  <label class="check-row preference-check"><input id="check-updates-startup" type="checkbox" checked /> <span data-i18n="prefs.checkForUpdatesWhenDraco">Check for updates when Draco starts</span></label>
+                  <div class="update-card"><div><strong id="update-title" data-i18n="prefs.dracoIsReadyToCheck">Draco is ready to check</strong><small id="update-detail">Current version: 2.1.4</small></div><div class="form-actions"><button class="button small" id="copy-release-link" type="button" hidden data-i18n="prefs.copyReleaseLink">Copy release link</button><button class="button primary" id="check-updates" type="button" data-i18n="palette.checkNow">Check now</button></div></div>
                 </section>
                 <section class="preference-section" data-preference-panel="about" hidden>
                   <div class="about-grid">
-                    <div class="about-copy"><span class="brand-mark about-mark">D</span><span class="eyebrow">POSTGRESQL WORKBENCH</span><h3>Draco <span id="about-version">2.1.4</span></h3><p>A native, open-source workspace for PostgreSQL administration and query development.</p><dl><div><dt>License</dt><dd>GPL-3.0-or-later</dd></div><div><dt>Repository</dt><dd>github.com/britors/Draco</dd></div></dl></div>
-                    <div class="donation-card"><span class="eyebrow">SUPPORT DRACO</span><h3>Donate with Pix</h3><p>Scan the QR code or copy the key. Choose any amount and confirm the recipient in your bank app.</p><img class="pix-qr" src="./pix-donation.svg" alt="QR Code for a Pix donation" width="280" height="280" /><div class="form-actions donation-actions"><button class="button small" id="copy-pix-key" type="button">Copy key</button><button class="button primary" id="copy-pix-code" type="button">Copy Pix code</button></div><small id="pix-status" role="status"></small></div>
+                    <div class="about-copy"><span class="brand-mark about-mark">D</span><span class="eyebrow" data-i18n="app.eyebrow">POSTGRESQL WORKBENCH</span><h3>Draco <span id="about-version">2.1.4</span></h3><p data-i18n="palette.aNativeOpenSourceWorkspace">A native, open-source workspace for PostgreSQL administration and query development.</p><dl><div><dt data-i18n="palette.license">License</dt><dd>GPL-3.0-or-later</dd></div><div><dt data-i18n="palette.repository">Repository</dt><dd>github.com/britors/Draco</dd></div></dl></div>
+                    <div class="donation-card"><span class="eyebrow" data-i18n="palette.supportDraco">SUPPORT DRACO</span><h3 data-i18n="palette.donateWithPix">Donate with Pix</h3><p data-i18n="palette.scanTheQrCodeOr">Scan the QR code or copy the key. Choose any amount and confirm the recipient in your bank app.</p><img class="pix-qr" src="./pix-donation.svg" alt="QR Code for a Pix donation" width="280" height="280" /><div class="form-actions donation-actions"><button class="button small" id="copy-pix-key" type="button" data-i18n="programmingRun.copyKey">Copy key</button><button class="button primary" id="copy-pix-code" type="button" data-i18n="programmingRun.copyPixCode">Copy Pix code</button></div><small id="pix-status" role="status"></small></div>
                   </div>
                 </section>
               </div>
@@ -349,45 +349,45 @@
     <section id="command-palette" class="command-palette" hidden role="dialog" aria-modal="true" aria-labelledby="command-palette-title">
       <div class="command-backdrop" data-close-command-palette></div>
       <div class="command-dialog">
-        <div class="command-heading"><div><span class="eyebrow">QUICK NAVIGATION</span><h2 id="command-palette-title">Command palette</h2></div><button class="button small" type="button" data-close-command-palette aria-label="Close command palette">Esc</button></div>
-        <label class="sr-only" for="command-search">Filter commands</label>
-        <input id="command-search" class="command-search" type="search" placeholder="Search views or database objects…" autocomplete="off" />
+        <div class="command-heading"><div><span class="eyebrow" data-i18n="programmingRun.quickNavigation">QUICK NAVIGATION</span><h2 id="command-palette-title" data-i18n="programmingRun.commandPalette">Command palette</h2></div><button class="button small" type="button" data-close-command-palette aria-label="Close command palette" data-i18n-aria-label="palette.closeCommandPalette">Esc</button></div>
+        <label class="sr-only" for="command-search" data-i18n="dialog.filterCommands">Filter commands</label>
+        <input id="command-search" class="command-search" type="search" placeholder="Search views or database objects…" data-i18n-placeholder="palette.searchViewsOrDatabaseObjects" autocomplete="off" />
         <div id="command-list" class="command-list"></div>
       </div>
     </section>
     <section id="programming-run-dialog" class="app-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="programming-run-title">
       <div class="app-dialog-backdrop" data-close-programming-run></div>
       <div class="app-dialog-panel programming-run-panel">
-        <div class="app-dialog-heading"><div><span class="eyebrow">EXECUTE DATABASE CODE</span><h2 id="programming-run-title">Run routine</h2></div><button class="button small" type="button" data-close-programming-run aria-label="Close">Esc</button></div>
-        <p class="programming-run-description">Fill in the input parameters. Values are sent as bound literals and are never interpolated into the routine definition.</p>
+        <div class="app-dialog-heading"><div><span class="eyebrow" data-i18n="dialog.executeDatabaseCode">EXECUTE DATABASE CODE</span><h2 id="programming-run-title" data-i18n="dialog.runRoutine">Run routine</h2></div><button class="button small" type="button" data-close-programming-run aria-label="Close" data-i18n-aria-label="window.close">Esc</button></div>
+        <p class="programming-run-description" data-i18n="aiReview.fillInTheInputParameters">Fill in the input parameters. Values are sent as bound literals and are never interpolated into the routine definition.</p>
         <div id="programming-run-params" class="programming-run-params"></div>
         <div id="programming-run-status" class="form-status" role="status"></div>
-        <div class="app-dialog-actions"><button class="button" id="programming-run-cancel" type="button">Cancel</button><button class="button primary" id="programming-run-confirm" type="button">▶ Execute</button></div>
+        <div class="app-dialog-actions"><button class="button" id="programming-run-cancel" type="button" data-i18n="connectionForm.cancel">Cancel</button><button class="button primary" id="programming-run-confirm" type="button" data-i18n="aiReview.execute">▶ Execute</button></div>
       </div>
     </section>
     <section id="app-dialog" class="app-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="app-dialog-title" aria-describedby="app-dialog-message">
       <div class="app-dialog-backdrop" data-close-app-dialog></div>
       <div class="app-dialog-panel">
-        <div class="app-dialog-heading"><div><span class="eyebrow" id="app-dialog-eyebrow">DRACO</span><h2 id="app-dialog-title">Confirm action</h2></div></div>
+        <div class="app-dialog-heading"><div><span class="eyebrow" id="app-dialog-eyebrow">DRACO</span><h2 id="app-dialog-title" data-i18n="dialog.confirmTitle">Confirm action</h2></div></div>
         <p id="app-dialog-message"></p>
-        <label id="app-dialog-input-wrap" class="app-dialog-input-wrap" hidden><span id="app-dialog-input-label">Value</span><input id="app-dialog-input" autocomplete="off" /></label>
-        <div class="app-dialog-actions"><button class="button" id="app-dialog-cancel" type="button" data-i18n="dialog.cancel">Cancel</button><button class="button primary" id="app-dialog-confirm" type="button">Confirm</button></div>
+        <label id="app-dialog-input-wrap" class="app-dialog-input-wrap" hidden><span id="app-dialog-input-label" data-i18n="dialog.value">Value</span><input id="app-dialog-input" autocomplete="off" /></label>
+        <div class="app-dialog-actions"><button class="button" id="app-dialog-cancel" type="button" data-i18n="dialog.cancel">Cancel</button><button class="button primary" id="app-dialog-confirm" type="button" data-i18n="dialog.confirm">Confirm</button></div>
       </div>
     </section>
     <section id="ai-review-dialog" class="ai-review-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="ai-review-title" aria-describedby="ai-review-description">
       <div class="ai-review-backdrop" data-close-ai-review></div>
       <div class="ai-review-panel">
-        <div class="ai-review-heading"><div><span class="eyebrow">READ-ONLY ADVISOR</span><h2 id="ai-review-title">Review query with AI</h2></div><button class="button small" type="button" data-close-ai-review aria-label="Close AI review">Esc</button></div>
-        <p id="ai-review-description">Choose the focus of the review. The selected SQL is sent to your configured AI provider; database inspection tools remain read-only.</p>
-        <div class="ai-review-focus" role="group" aria-label="Review focus">
-          <button class="ai-review-focus-button active" data-ai-review-focus="general" type="button" aria-pressed="true">General</button>
-          <button class="ai-review-focus-button" data-ai-review-focus="performance" type="button" aria-pressed="false">Performance</button>
-          <button class="ai-review-focus-button" data-ai-review-focus="security" type="button" aria-pressed="false">Security</button>
-          <button class="ai-review-focus-button" data-ai-review-focus="readability" type="button" aria-pressed="false">Readability</button>
+        <div class="ai-review-heading"><div><span class="eyebrow" data-i18n="aiReview.readOnlyAdvisor">READ-ONLY ADVISOR</span><h2 id="ai-review-title" data-i18n="assistant.reviewQueryWithAi">Review query with AI</h2></div><button class="button small" type="button" data-close-ai-review aria-label="Close AI review" data-i18n-aria-label="aiReview.closeAiReview">Esc</button></div>
+        <p id="ai-review-description" data-i18n="aiReview.chooseTheFocusOfThe">Choose the focus of the review. The selected SQL is sent to your configured AI provider; database inspection tools remain read-only.</p>
+        <div class="ai-review-focus" role="group" aria-label="Review focus" data-i18n-aria-label="aiReview.reviewFocus">
+          <button class="ai-review-focus-button active" data-ai-review-focus="general" type="button" aria-pressed="true" data-i18n="aiReview.general">General</button>
+          <button class="ai-review-focus-button" data-ai-review-focus="performance" type="button" aria-pressed="false" data-i18n="aiReview.performance">Performance</button>
+          <button class="ai-review-focus-button" data-ai-review-focus="security" type="button" aria-pressed="false" data-i18n="aiReview.security">Security</button>
+          <button class="ai-review-focus-button" data-ai-review-focus="readability" type="button" aria-pressed="false" data-i18n="aiReview.readability">Readability</button>
         </div>
-        <div class="ai-review-query"><span class="eyebrow">QUERY TO REVIEW</span><pre id="ai-review-query-preview"></pre></div>
-        <label class="ai-review-note">Additional context (optional)<textarea id="ai-review-note" rows="3" placeholder="For example: this runs for every request and must preserve tenant isolation."></textarea></label>
-        <div class="ai-review-actions"><button class="button" id="cancel-ai-review" type="button">Cancel</button><button class="button primary" id="submit-ai-review" type="button">Review</button></div>
+        <div class="ai-review-query"><span class="eyebrow" data-i18n="aiReview.queryToReview">QUERY TO REVIEW</span><pre id="ai-review-query-preview"></pre></div>
+        <label class="ai-review-note"><span data-i18n="aiReview.additionalContextOptional">Additional context (optional)</span><textarea id="ai-review-note" rows="3" placeholder="For example: this runs for every request and must preserve tenant isolation." data-i18n-placeholder="aiReview.forExampleThisRunsFor"></textarea></label>
+        <div class="ai-review-actions"><button class="button" id="cancel-ai-review" type="button" data-i18n="connectionForm.cancel">Cancel</button><button class="button primary" id="submit-ai-review" type="button" data-i18n="aiReview.review">Review</button></div>
       </div>
     </section>
     <script type="module" src="./app.js"></script>
