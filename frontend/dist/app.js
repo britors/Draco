@@ -10,7 +10,11 @@ import { applyTranslations, createTranslator, errorMessage, resolveLocale } from
 
 const invoke = window.__TAURI__?.core?.invoke;
 const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
-const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.1.4', theme: 'dark', accent: 'coral', check_updates_on_startup: true, programming_workspace: null }, releaseUrl: '', queryTabs: [{ id: 1, label: 'Query 1', sql: '' }], currentQueryTabId: 1 };
+// The interface follows the system locale reported by the webview; English is the fallback.
+const t = createTranslator(resolveLocale(navigator.languages?.length ? navigator.languages : [navigator.language]));
+document.documentElement.lang = t.locale;
+applyTranslations(document, t);
+const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.1.4', theme: 'dark', accent: 'coral', check_updates_on_startup: true, programming_workspace: null }, releaseUrl: '', queryTabs: [{ id: 1, label: t('query.tabLabel', { number: 1 }), sql: '' }], currentQueryTabId: 1 };
 let dialogResolver = null;
 let aiReviewRequest = null;
 let aiReviewReturnFocus = null;
@@ -37,10 +41,6 @@ const value = (id) => byId(id).value.trim();
 const optional = (id) => value(id) || null;
 const numberOrNull = (id) => value(id) ? Number(value(id)) : null;
 
-// The interface follows the system locale reported by the webview; English is the fallback.
-const t = createTranslator(resolveLocale(navigator.languages?.length ? navigator.languages : [navigator.language]));
-document.documentElement.lang = t.locale;
-applyTranslations(document, t);
 
 function applyAppearance(preferences) {
   const root = document.documentElement;
@@ -486,7 +486,7 @@ function renderAutocomplete(items, position, editor, popup) {
     label.textContent = item.label;
     const detail = document.createElement('span');
     detail.className = 'sql-suggestion-detail';
-    detail.textContent = item.detail;
+    detail.textContent = [item.detail, t(`autocomplete.${item.kind}`)].filter(Boolean).join(' · ');
     option.append(label, detail);
     option.addEventListener('mousedown', (event) => { event.preventDefault(); acceptSuggestion(index); });
     popup.append(option);
@@ -532,15 +532,15 @@ function renderQueryTabs() {
     button.role = 'tab';
     button.ariaSelected = String(selected);
     button.textContent = tab.label;
-    button.title = 'Double-click to rename';
+    button.title = t('query.tabRenameHint');
     button.addEventListener('click', () => selectQueryTab(tab.id));
     button.addEventListener('dblclick', (event) => { event.preventDefault(); void renameQueryTab(tab.id); });
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'query-tab-close';
     close.textContent = '×';
-    close.title = `Close ${tab.label}`;
-    close.setAttribute('aria-label', `Close ${tab.label}`);
+    close.title = t('query.tabClose', { label: tab.label });
+    close.setAttribute('aria-label', close.title);
     close.addEventListener('click', (event) => { event.stopPropagation(); closeQueryTab(tab.id); });
     wrap.append(button, close);
     tabs.append(wrap);
@@ -549,8 +549,8 @@ function renderQueryTabs() {
   add.type = 'button';
   add.className = 'query-tab-new';
   add.textContent = '+';
-  add.title = 'New query';
-  add.setAttribute('aria-label', 'New query');
+  add.title = t('query.newTab');
+  add.setAttribute('aria-label', t('query.newTab'));
   add.addEventListener('click', newQueryTab);
   tabs.append(add);
 }
@@ -568,7 +568,7 @@ function selectQueryTab(id) {
 function newQueryTab() {
   saveCurrentQueryTab();
   const next = Math.max(...state.queryTabs.map((item) => item.id), 0) + 1;
-  state.queryTabs.push({ id: next, label: `Query ${next}`, sql: '' });
+  state.queryTabs.push({ id: next, label: t('query.tabLabel', { number: next }), sql: '' });
   state.currentQueryTabId = next;
   setEditorValue('');
   renderQueryTabs();
@@ -579,7 +579,7 @@ function closeQueryTab(id) {
   const index = state.queryTabs.findIndex((item) => item.id === id);
   if (index === -1) return;
   if (state.queryTabs.length === 1) {
-    state.queryTabs = [{ id, label: 'Query 1', sql: '' }];
+    state.queryTabs = [{ id, label: t('query.tabLabel', { number: 1 }), sql: '' }];
     state.currentQueryTabId = id;
     setEditorValue('');
     renderQueryTabs();
@@ -597,7 +597,7 @@ function closeQueryTab(id) {
 async function renameQueryTab(id) {
   const tab = state.queryTabs.find((item) => item.id === id);
   if (!tab) return;
-  const name = await showPrompt('Choose a name for this query tab.', 'Rename tab', 'Tab name', '', tab.label);
+  const name = await showPrompt(t('query.renameTabMessage'), t('query.renameTabTitle'), t('query.tabName'), '', tab.label);
   if (!name) return;
   tab.label = name;
   renderQueryTabs();
@@ -619,14 +619,14 @@ function openSqlInNewTab(sql, connectionId, label = null) {
 }
 
 async function saveCurrentSnippet() {
-  const name = await showPrompt('Choose a name for this reusable query.', 'Save snippet', 'Snippet name', 'e.g. active users');
+  const name = await showPrompt(t('snippets.saveMessage'), t('snippets.saveTitle'), t('snippets.name'), t('snippets.namePlaceholder'));
   const sql = byId('sql-editor').value;
   if (!name || !sql.trim()) return;
   try {
     await invoke('save_snippet', { input: { name, sql, conn_id: byId('query-connection').value || null } });
-    byId('query-status').textContent = 'Snippet saved';
+    byId('query-status').textContent = t('snippets.saved');
   } catch {
-    byId('query-status').textContent = 'Could not save snippet';
+    byId('query-status').textContent = t('snippets.saveFailed');
   }
 }
 
@@ -887,7 +887,7 @@ function renderExplorerConnections() {
   if (!state.connections.length) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.textContent = 'No connections';
+    empty.textContent = t('explorer.noConnections');
     pane.append(empty);
   }
 }
@@ -898,7 +898,7 @@ function renderQueryConnections() {
   select.replaceChildren();
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = 'Select a connected connection';
+  placeholder.textContent = t('common.selectConnected');
   select.append(placeholder);
   for (const connection of state.connections.filter((item) => item.state === 'connected')) {
     const option = document.createElement('option');
@@ -1310,24 +1310,24 @@ function openAlterTableDialog(id, schema, table, detail, options = {}) {
 
 async function createSchemaFromExplorer() {
   const id = state.selectedConnectionId; if (!id) return;
-  const schema = await showPrompt('Choose a PostgreSQL schema name.', 'New schema', 'Schema name', 'app'); if (!schema) return;
+  const schema = await showPrompt(t('explorer.newSchemaMessage'), t('explorer.newSchema'), t('explorer.schemaName'), 'app'); if (!schema) return;
   try { await invoke('create_schema', { id, schema }); await openExplorer(id); }
-  catch (error) { await showAlert(error?.message || 'Could not create schema', 'Schema not created'); }
+  catch (error) { await showAlert(errorMessage(error, t, 'explorer.createSchemaFailed'), t('explorer.schemaNotCreated')); }
 }
 
 async function createSequenceFromExplorer() {
   const id = state.selectedConnectionId; const schema = state.selectedSchema; if (!id || !schema) return;
-  const name = await showPrompt(`Create a sequence in “${schema}”.`, 'New sequence', 'Sequence name', 'items_id_seq'); if (!name) return;
+  const name = await showPrompt(t('explorer.newSequenceMessage', { schema }), t('explorer.newSequence'), t('explorer.sequenceName'), 'items_id_seq'); if (!name) return;
   try { await invoke('create_sequence', { id, schema, name }); await openExplorer(id); }
-  catch (error) { await showAlert(error?.message || 'Could not create sequence', 'Sequence not created'); }
+  catch (error) { await showAlert(errorMessage(error, t, 'explorer.createSequenceFailed'), t('explorer.sequenceNotCreated')); }
 }
 
 function openTriggerCreator(id, schema, onCreated = null) {
-  const dialog = objectDialog(`New trigger · ${schema}`); const grid = document.createElement('div'); grid.className = 'object-form-grid';
+  const dialog = objectDialog(t('explorer.newTriggerTitle', { schema })); const grid = document.createElement('div'); grid.className = 'object-form-grid';
   const name = textInput('', 'audit_change'); const table = textInput('', 'table'); const timing = selectInput(['BEFORE', 'AFTER', 'INSTEAD OF'], 'BEFORE'); const events = textInput('INSERT', 'INSERT UPDATE'); const func = textInput('', 'schema.function_name');
-  grid.append(labeledControl('Trigger name', name), labeledControl('Table', table), labeledControl('Timing', timing), labeledControl('Events', events), labeledControl('Function', func)); dialog.body.append(grid);
-  const create = document.createElement('button'); create.className = 'button primary'; create.type = 'button'; create.textContent = 'Create trigger';
-  create.addEventListener('click', async () => { create.disabled = true; dialog.status.textContent = 'Creating trigger…'; try { await invoke('create_trigger', { id, schema, input: { name: name.value.trim(), table: table.value.trim(), timing: timing.value, events: events.value.trim(), function: func.value.trim() } }); dialog.close(); if (onCreated) await onCreated(); else await openExplorer(id); } catch (error) { dialog.status.textContent = error?.message || 'Could not create trigger'; dialog.status.className = 'form-status error'; create.disabled = false; } });
+  grid.append(labeledControl(t('trigger.name'), name), labeledControl(t('trigger.table'), table), labeledControl(t('trigger.timing'), timing), labeledControl(t('trigger.events'), events), labeledControl(t('trigger.function'), func)); dialog.body.append(grid);
+  const create = document.createElement('button'); create.className = 'button primary'; create.type = 'button'; create.textContent = t('trigger.create');
+  create.addEventListener('click', async () => { create.disabled = true; dialog.status.textContent = t('trigger.creating'); try { await invoke('create_trigger', { id, schema, input: { name: name.value.trim(), table: table.value.trim(), timing: timing.value, events: events.value.trim(), function: func.value.trim() } }); dialog.close(); if (onCreated) await onCreated(); else await openExplorer(id); } catch (error) { dialog.status.textContent = errorMessage(error, t, 'trigger.createFailed'); dialog.status.className = 'form-status error'; create.disabled = false; } });
   dialog.actions.append(create);
 }
 
@@ -2357,7 +2357,7 @@ function programmingGroup(title, objects, id, schema, onChanged) {
     if (['function', 'procedure', 'trigger'].includes(object.kind)) {
       const del = document.createElement('button'); del.className = 'button small danger'; del.type = 'button'; del.textContent = 'Delete';
       del.disabled = Boolean(object.is_extension);
-      del.title = object.is_extension ? 'Installed by a PostgreSQL extension — cannot be deleted here' : `Delete this ${object.kind}`;
+      del.title = object.is_extension ? t('explorer.extensionObject') : t(`explorer.deleteKind.${object.kind}`);
       del.addEventListener('click', () => void deleteSchemaProgrammingObject(id, schema, object, onChanged));
       actions.append(del);
     }
@@ -3243,10 +3243,10 @@ function buildResultRow(result, rowIndex) {
   const detail = document.createElement('button');
   detail.className = 'button small row-detail-action';
   detail.type = 'button';
-  detail.textContent = 'Details';
-  detail.setAttribute('aria-label', `View details for row ${rowIndex + 1}`);
+  detail.textContent = t('results.details');
+  detail.setAttribute('aria-label', t('results.detailsFor', { row: rowIndex + 1 }));
   detail.addEventListener('click', () => {
-    void showAlert(resultRowToText(row, result.columns), `Row ${rowIndex + 1}`);
+    void showAlert(resultRowToText(row, result.columns), t('results.rowNumber', { row: rowIndex + 1 }));
   });
   actionCell.append(detail);
   tr.append(actionCell);
@@ -3308,20 +3308,22 @@ function renderResult(result) {
   byId('export-json').disabled = !result;
   byId('copy-result').disabled = !result;
   if (!result) {
-    byId('result-summary').textContent = 'No result';
+    byId('result-summary').textContent = t('results.none');
+    delete byId('result-summary').dataset.rows;
     grid.replaceChildren();
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.textContent = 'Run a query to see results';
+    empty.textContent = t('results.emptyTitle');
     grid.append(empty);
     return;
   }
-  byId('result-summary').textContent = `${result.rows.length} rows · ${result.duration_ms} ms`;
+  byId('result-summary').textContent = t('results.summary', { count: result.rows.length, ms: result.duration_ms });
+  byId('result-summary').dataset.rows = String(result.rows.length);
   grid.replaceChildren();
   if (!result.columns.length) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.textContent = 'Statement completed without rows';
+    empty.textContent = t('results.noRows');
     grid.append(empty);
     return;
   }
@@ -3338,7 +3340,7 @@ function renderResult(result) {
   actionColumn.className = 'result-action-column';
   columnGroup.append(actionColumn);
   const actionHeader = document.createElement('th');
-  actionHeader.textContent = 'Row';
+  actionHeader.textContent = t('results.row');
   headerRow.append(actionHeader);
   head.append(headerRow);
   const body = document.createElement('tbody');
@@ -3353,8 +3355,8 @@ async function runQuery(mode = 'query') {
   const id = byId('query-connection').value;
   const sql = script ? byId('sql-editor').value : selectedQueryText();
   const selectionActive = !script && byId('sql-editor').selectionStart !== byId('sql-editor').selectionEnd;
-  if (!id) { byId('query-status').textContent = 'Select a connected connection'; return; }
-  if (!sql.trim()) { byId('query-status').textContent = 'SQL is empty'; return; }
+  if (!id) { byId('query-status').textContent = t('common.selectConnected'); return; }
+  if (!sql.trim()) { byId('query-status').textContent = t('query.empty'); return; }
   saveCurrentQueryTab();
   state.currentQueryId = id;
   state.currentQueryOperationId = operationId();
@@ -3363,17 +3365,17 @@ async function runQuery(mode = 'query') {
   byId('run-script').disabled = true;
   byId('explain-query').disabled = true;
   byId('cancel-query').hidden = false;
-  byId('query-status').textContent = explain ? 'Planning query…' : script ? 'Running script…' : selectionActive ? 'Running selection…' : 'Running query…';
+  byId('query-status').textContent = explain ? t('query.planning') : script ? t('query.runningScript') : selectionActive ? t('query.runningSelection') : t('query.running');
   byId('result-error').textContent = '';
   try {
     const command = explain ? 'execute_explain' : script ? 'execute_script' : 'execute_query';
     const result = await invoke(command, { id, sql, operationId: state.currentQueryOperationId });
     renderResult(result);
-    byId('query-status').textContent = explain ? 'Plan ready' : 'Completed';
+    byId('query-status').textContent = explain ? t('query.planReady') : t('query.completed');
   } catch (error) {
     renderResult(null);
-    byId('result-error').textContent = state.cancelRequested ? 'Query cancelled.' : explain ? 'EXPLAIN failed. Check the connection and SQL.' : 'Query failed. Check the connection and SQL.';
-    byId('query-status').textContent = state.cancelRequested ? 'Cancelled' : 'Error';
+    byId('result-error').textContent = state.cancelRequested ? t('query.cancelledDetail') : explain ? t('query.explainFailed') : t('query.failed');
+    byId('query-status').textContent = state.cancelRequested ? t('query.cancelled') : t('query.error');
   } finally {
     state.currentQueryId = null;
     state.currentQueryOperationId = null;
@@ -3388,7 +3390,7 @@ async function runQuery(mode = 'query') {
 async function cancelQuery() {
   if (!state.currentQueryId) return;
   state.cancelRequested = true;
-  byId('query-status').textContent = 'Cancelling…';
+  byId('query-status').textContent = t('query.cancelling');
   try { await invoke('cancel_query', { id: state.currentQueryId, operationId: state.currentQueryOperationId }); } catch (error) { /* query result reports the final state */ }
 }
 
@@ -3405,9 +3407,9 @@ async function copyResult() {
   try {
     if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
     await navigator.clipboard.writeText(resultToTsv(state.result));
-    byId('query-status').textContent = 'Result copied';
+    byId('query-status').textContent = t('results.copied');
   } catch {
-    await showAlert('The result could not be copied. Check clipboard permission for the Draco window.', 'Copy unavailable');
+    await showAlert(t('results.copyFailed'), t('results.copyUnavailable'));
   }
 }
 
@@ -3415,12 +3417,12 @@ async function loadHistory() {
   const list = byId('history-list');
   list.replaceChildren();
   const entries = await invoke('list_history');
-  if (!entries.length) { const empty = document.createElement('div'); empty.className = 'empty-state'; empty.textContent = 'No query history'; list.append(empty); return; }
+  if (!entries.length) { const empty = document.createElement('div'); empty.className = 'empty-state'; empty.textContent = t('history.empty'); list.append(empty); return; }
   for (const entry of entries) {
     const item = document.createElement('article'); item.className = 'history-item';
     const sql = document.createElement('code'); sql.textContent = entry.sql;
-    const meta = document.createElement('small'); meta.textContent = `${entry.conn_label} · ${entry.row_count} rows · ${entry.duration_ms} ms`;
-    const remove = document.createElement('button'); remove.className = 'button small danger history-meta'; remove.type = 'button'; remove.textContent = 'Delete';
+    const meta = document.createElement('small'); meta.textContent = `${entry.conn_label} · ${t('results.summary', { count: entry.row_count, ms: entry.duration_ms })}`;
+    const remove = document.createElement('button'); remove.className = 'button small danger history-meta'; remove.type = 'button'; remove.textContent = t('common.delete');
     remove.addEventListener('click', async (event) => { event.stopPropagation(); await invoke('delete_history_entry', { id: entry.id }); loadHistory(); });
     item.append(sql, meta, remove); item.addEventListener('click', () => { setEditorValue(entry.sql); switchView('query'); showQueryWorkspaceSection('editor'); }); list.append(item);
   }
@@ -3429,27 +3431,27 @@ async function loadHistory() {
 async function loadSnippets() {
   const list = byId('snippet-list'); list.replaceChildren();
   const snippets = await invoke('list_snippets');
-  if (!snippets.length) { const empty = document.createElement('div'); empty.className = 'empty-state'; empty.textContent = 'No saved snippets'; list.append(empty); return; }
+  if (!snippets.length) { const empty = document.createElement('div'); empty.className = 'empty-state'; empty.textContent = t('snippets.empty'); list.append(empty); return; }
   for (const snippet of snippets) {
     const item = document.createElement('article'); item.className = 'snippet-item';
     const name = document.createElement('strong'); name.textContent = snippet.name;
     const sql = document.createElement('code'); sql.textContent = snippet.sql;
-    const meta = document.createElement('small'); meta.textContent = snippet.conn_label || 'All connections';
+    const meta = document.createElement('small'); meta.textContent = snippet.conn_label || t('snippets.allConnections');
     const actions = document.createElement('div'); actions.className = 'snippet-meta snippet-actions';
-    const rename = document.createElement('button'); rename.className = 'button small'; rename.type = 'button'; rename.textContent = 'Rename';
+    const rename = document.createElement('button'); rename.className = 'button small'; rename.type = 'button'; rename.textContent = t('snippets.rename');
     rename.addEventListener('click', async (event) => {
       event.stopPropagation();
-      const nextName = await showPrompt('Choose a new name for this snippet.', 'Rename snippet', 'Snippet name', '', snippet.name);
+      const nextName = await showPrompt(t('snippets.renameMessage'), t('snippets.renameTitle'), t('snippets.name'), '', snippet.name);
       if (!nextName || nextName === snippet.name) return;
       try { await invoke('rename_snippet', { id: snippet.id, name: nextName }); await loadSnippets(); }
-      catch (error) { await showAlert(error?.message || 'Could not rename snippet', 'Snippet not renamed'); }
+      catch (error) { await showAlert(errorMessage(error, t, 'snippets.renameFailed'), t('snippets.notRenamed')); }
     });
-    const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = 'Delete';
+    const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = t('common.delete');
     remove.addEventListener('click', async (event) => {
       event.stopPropagation();
-      if (!await showConfirm(`Delete the snippet “${snippet.name}”?`, 'Delete snippet', true)) return;
+      if (!await showConfirm(t('snippets.deleteConfirm', { name: snippet.name }), t('snippets.deleteTitle'), true)) return;
       try { await invoke('delete_snippet', { id: snippet.id }); await loadSnippets(); }
-      catch (error) { await showAlert(error?.message || 'Could not delete snippet', 'Snippet not deleted'); }
+      catch (error) { await showAlert(errorMessage(error, t, 'snippets.deleteFailed'), t('snippets.notDeleted')); }
     });
     actions.append(rename, remove);
     item.append(name, sql, meta, actions); item.addEventListener('click', () => { setEditorValue(snippet.sql); switchView('query'); showQueryWorkspaceSection('editor'); }); list.append(item);
@@ -3517,7 +3519,7 @@ function updateExplorerObjectActions() {
 }
 
 function formatEstimatedRows(value) {
-  return `${new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(Math.max(0, Number(value) || 0))} rows`;
+  return t('explorer.estimatedRows', { rows: new Intl.NumberFormat(t.locale, { notation: 'compact', maximumFractionDigits: 1 }).format(Math.max(0, Number(value) || 0)) });
 }
 
 function explorerSection(children, label) {
@@ -3550,24 +3552,24 @@ function appendSchemaObjectRow(parent, id, schemaName, object) {
   item.append(name, detail); item.addEventListener('click', () => openSchemaObject(id, schemaName, object));
   const row = document.createElement('div'); row.className = 'tree-object-row';
   if (object.kind === 'sequence') {
-    const next = document.createElement('button'); next.className = 'button small tree-object-action'; next.type = 'button'; next.textContent = 'Next';
+    const next = document.createElement('button'); next.className = 'button small tree-object-action'; next.type = 'button'; next.textContent = t('explorer.sequenceNext');
     next.addEventListener('click', () => void advanceSequence(id, schemaName, object.name));
-    const reset = document.createElement('button'); reset.className = 'button small danger tree-object-action'; reset.type = 'button'; reset.textContent = 'Reset';
+    const reset = document.createElement('button'); reset.className = 'button small danger tree-object-action'; reset.type = 'button'; reset.textContent = t('explorer.sequenceReset');
     reset.addEventListener('click', () => void resetSequence(id, schemaName, object.name));
-    const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = 'Edit';
+    const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = t('common.edit');
     edit.addEventListener('click', () => editSequenceDefinition(id, schemaName, object));
     row.append(item, next, reset, edit);
   } else {
-    const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = 'Edit';
+    const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = t('common.edit');
     edit.addEventListener('click', () => {
       if (object.kind === 'trigger') void openProgrammingFromExplorer(id, schemaName, object);
       else void openProgrammingFromExplorer(id, schemaName, object);
     });
     row.append(item, edit);
     if (['function', 'procedure', 'trigger'].includes(object.kind)) {
-      const del = document.createElement('button'); del.className = 'button small danger tree-object-action'; del.type = 'button'; del.textContent = 'Delete';
+      const del = document.createElement('button'); del.className = 'button small danger tree-object-action'; del.type = 'button'; del.textContent = t('common.delete');
       del.disabled = Boolean(object.is_extension);
-      del.title = object.is_extension ? 'Installed by a PostgreSQL extension — cannot be deleted here' : `Delete this ${object.kind}`;
+      del.title = object.is_extension ? t('explorer.extensionObject') : t(`explorer.deleteKind.${object.kind}`);
       del.addEventListener('click', () => void deleteSchemaProgrammingObject(id, schemaName, object, () => row.remove()));
       row.append(del);
     }
@@ -3594,29 +3596,29 @@ function openSchemaObject(id, schema, object) {
     openSqlInNewTab(sql, id, object.name);
     return;
   }
-  void showAlert('This object does not have a navigable surface yet.', 'Object unavailable');
+  void showAlert(t('explorer.objectUnavailableMessage'), t('explorer.objectUnavailable'));
 }
 
 async function advanceSequence(id, schema, name) {
-  if (!await showConfirm(`Advance sequence “${schema}.${name}” and return its next value? This changes the sequence state.`, 'Advance sequence', false, 'Advance')) return;
+  if (!await showConfirm(t('sequence.advanceConfirm', { schema, name }), t('sequence.advanceTitle'), false, t('sequence.advance'))) return;
   try {
     const value = await invoke('next_sequence_value', { id, schema, name });
-    await showAlert(`Next value: ${value}`, `Sequence · ${schema}.${name}`);
+    await showAlert(t('sequence.nextValue', { value }), t('sequence.title', { schema, name }));
   } catch (error) {
-    await showAlert(error?.message || 'Could not advance the sequence', 'Sequence not changed');
+    await showAlert(errorMessage(error, t, 'sequence.advanceFailed'), t('sequence.notChanged'));
   }
 }
 
 async function resetSequence(id, schema, name) {
-  const value = await showPrompt(`Choose the value for sequence “${schema}.${name}”.`, 'Reset sequence', 'Signed 64-bit integer', '1');
+  const value = await showPrompt(t('sequence.resetMessage', { schema, name }), t('sequence.resetTitle'), t('sequence.valueLabel'), '1');
   if (value === null) return;
-  if (!/^-?\d+$/.test(value)) { await showAlert('Enter a whole number without decimals.', 'Invalid sequence value'); return; }
-  if (!await showConfirm(`Set sequence “${schema}.${name}” to ${value}? Existing table values are not checked.`, 'Confirm sequence reset', true, 'Reset')) return;
+  if (!/^-?\d+$/.test(value)) { await showAlert(t('sequence.invalidValueMessage'), t('sequence.invalidValue')); return; }
+  if (!await showConfirm(t('sequence.resetConfirm', { schema, name, value }), t('sequence.resetConfirmTitle'), true, t('explorer.sequenceReset'))) return;
   try {
     await invoke('set_sequence_value', { id, schema, name, value });
-    await showAlert(`Sequence set to ${value}.`, `Sequence · ${schema}.${name}`);
+    await showAlert(t('sequence.resetDone', { value }), t('sequence.title', { schema, name }));
   } catch (error) {
-    await showAlert(error?.message || 'Could not reset the sequence', 'Sequence not changed');
+    await showAlert(errorMessage(error, t, 'sequence.resetFailed'), t('sequence.notChanged'));
   }
 }
 
@@ -3629,12 +3631,12 @@ function renderExplorerExtensions(id, tree, extensions) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'tree-item';
-  button.textContent = `▾ Extensions (${installed.length})`;
+  button.textContent = `▾ ${t('explorer.extensions', { count: installed.length })}`;
   const children = document.createElement('div');
   children.className = 'tree-children';
   button.addEventListener('click', () => {
     children.hidden = !children.hidden;
-    button.textContent = `${children.hidden ? '▸' : '▾'} Extensions (${installed.length})`;
+    button.textContent = `${children.hidden ? '▸' : '▾'} ${t('explorer.extensions', { count: installed.length })}`;
   });
   for (const extension of installed) {
     const item = document.createElement('button');
@@ -3659,7 +3661,7 @@ function renderExplorerRetry(id, title, message) {
   const retry = document.createElement('button');
   retry.type = 'button';
   retry.className = 'button small';
-  retry.textContent = 'Retry';
+  retry.textContent = t('common.retry');
   retry.addEventListener('click', () => void openExplorer(id));
   failure.append(retry);
   tree.replaceChildren(failure);
@@ -3667,7 +3669,7 @@ function renderExplorerRetry(id, title, message) {
 
 function renderExplorerTables(id, schemaName, children, tables, objects = []) {
   children.replaceChildren();
-  if (tables.length) explorerSection(children, 'Tables & views');
+  if (tables.length) explorerSection(children, t('explorer.tablesAndViews'));
   for (const table of tables) {
     const tableItem = document.createElement('button');
     tableItem.type = 'button';
@@ -3680,7 +3682,7 @@ function renderExplorerTables(id, schemaName, children, tables, objects = []) {
     tableItem.append(tableName, estimate);
     tableItem.addEventListener('click', () => openTable(id, schemaName, table.name, table.kind));
     const row = document.createElement('div'); row.className = 'tree-table-row';
-    const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = 'Edit';
+    const edit = document.createElement('button'); edit.className = 'button small tree-object-action'; edit.type = 'button'; edit.textContent = t('common.edit');
     if (table.kind === 'table') {
       edit.addEventListener('click', async () => {
         edit.disabled = true;
@@ -3691,7 +3693,7 @@ function renderExplorerTables(id, schemaName, children, tables, objects = []) {
             onApplied: (newName) => { table.name = newName; tableName.textContent = `▦ ${newName}`; },
           });
         } catch (error) {
-          await showAlert(error?.message || 'Could not load the table structure', 'Table editor unavailable');
+          await showAlert(errorMessage(error, t, 'explorer.tableStructureFailed'), t('explorer.tableEditorUnavailable'));
         } finally {
           edit.disabled = false;
         }
@@ -3702,13 +3704,13 @@ function renderExplorerTables(id, schemaName, children, tables, objects = []) {
     row.append(tableItem, edit); children.append(row);
   }
   const { programming, sequences } = groupSchemaObjects(objects);
-  const programmingArea = explorerFolder(children, 'Programming');
+  const programmingArea = explorerFolder(children, t('nav.programming'));
   if (programming.length) {
     for (const object of programming) appendSchemaObjectRow(programmingArea, id, schemaName, object);
   } else {
-    const empty = document.createElement('div'); empty.className = 'tree-folder-empty'; empty.textContent = 'No functions, procedures or triggers'; programmingArea.append(empty);
+    const empty = document.createElement('div'); empty.className = 'tree-folder-empty'; empty.textContent = t('explorer.noProgramming'); programmingArea.append(empty);
   }
-  if (sequences.length) explorerSection(children, 'Sequences');
+  if (sequences.length) explorerSection(children, t('explorer.sequences'));
   for (const object of sequences) appendSchemaObjectRow(children, id, schemaName, object);
 }
 
@@ -3732,9 +3734,9 @@ async function loadExplorerSchemaGroup(id, schemaName, group) {
   group.dataset.loaded = 'false';
   const button = group.firstElementChild;
   const children = group.querySelector('.tree-children');
-  button.textContent = `× ${schemaName} · loading`;
+  button.textContent = `× ${schemaName} · ${t('explorer.schemaLoading')}`;
   children.hidden = false;
-  children.replaceChildren(errorState('Loading schema objects…', 'Click the schema again to cancel.'));
+  children.replaceChildren(errorState(t('explorer.loadingObjects'), t('explorer.loadingObjectsHint')));
   try {
     const [tables, objects] = await Promise.all([
       invoke('list_tables', { id, schema: schemaName }),
@@ -3751,7 +3753,7 @@ async function loadExplorerSchemaGroup(id, schemaName, group) {
     group.dataset.loadState = 'error';
     group.dataset.loaded = 'false';
     button.textContent = `↻ ${schemaName}`;
-    children.replaceChildren(errorState('Could not load schema objects', 'Click the schema to retry.'));
+    children.replaceChildren(errorState(t('explorer.objectsFailed'), t('explorer.objectsFailedHint')));
     return false;
   }
 }
@@ -3782,8 +3784,8 @@ async function openExplorer(id) {
   renderExplorerConnections();
   const current = state.connections.find((item) => item.id === id);
   if (current?.state !== 'connected') {
-    byId('explorer-status').textContent = 'Connect failed';
-    renderExplorerRetry(id, 'Could not connect', 'Check the connection settings and try again.');
+    byId('explorer-status').textContent = t('explorer.connectFailed');
+    renderExplorerRetry(id, t('explorer.connectFailedTitle'), t('explorer.connectFailedHint'));
     return;
   }
   byId('explorer-status').textContent = current.label;
@@ -3792,7 +3794,7 @@ async function openExplorer(id) {
   tree.replaceChildren();
   const loading = document.createElement('div');
   loading.className = 'empty-state';
-  loading.textContent = 'Loading schemas…';
+  loading.textContent = t('explorer.loadingSchemas');
   tree.append(loading);
   try {
     const [schemasResult, extensionsResult] = await Promise.allSettled([
@@ -3837,10 +3839,10 @@ async function openExplorer(id) {
       tree.append(group);
       filterExplorerTree();
     }
-    if (!schemas.length) tree.append(errorState('No schemas', 'This database did not expose any schemas.'));
+    if (!schemas.length) tree.append(errorState(t('explorer.noSchemas'), t('explorer.noSchemasHint')));
   } catch (error) {
     if (request !== state.explorerConnectionRequest || state.selectedConnectionId !== id) return;
-    renderExplorerRetry(id, 'Could not load schemas', 'Reconnect and try loading the Explorer again.');
+    renderExplorerRetry(id, t('explorer.schemasFailed'), t('explorer.schemasFailedHint'));
   }
 }
 
@@ -4102,7 +4104,7 @@ byId('submit-ai-review').addEventListener('click', () => void submitAiReview());
 byId('cancel-ai-review').addEventListener('click', closeAiReviewDialog);
 for (const element of document.querySelectorAll('[data-close-ai-review]')) element.addEventListener('click', closeAiReviewDialog);
 for (const button of document.querySelectorAll('[data-ai-review-focus]')) button.addEventListener('click', () => setAiReviewFocus(button.dataset.aiReviewFocus));
-byId('clear-history').addEventListener('click', async () => { if (await showConfirm('Clear all saved query history?', 'Clear history', true, 'Clear')) { await invoke('clear_history'); loadHistory(); } });
+byId('clear-history').addEventListener('click', async () => { if (await showConfirm(t('history.clearConfirm'), t('history.clear'), true, t('history.clearAction'))) { await invoke('clear_history'); loadHistory(); } });
 // Shared by the SQL editor and the Programming body editor: ArrowUp/Down/Enter/Tab/Escape
 // steer the open suggestion popup instead of the editor when one is showing. Returns true if
 // the key was consumed by the popup, so the caller's own shortcuts (Ctrl+Enter, Ctrl+S, ...)

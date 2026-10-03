@@ -90,8 +90,8 @@
         </section>
         <section id="view-explorer" class="view" hidden>
           <section class="panel explorer-panel">
-            <div class="panel-heading"><div><span class="eyebrow">LAZY INTROSPECTION</span><h2>Explorer</h2></div><div class="form-actions explorer-actions"><input class="explorer-filter" id="explorer-filter" type="search" placeholder="Filter schemas and objects" aria-label="Filter schemas and objects" autocomplete="off" /><span class="badge" id="explorer-status">Select a connection</span><button class="button small" id="new-schema" type="button" disabled>New schema</button><button class="button small" id="new-table" type="button" disabled>New table</button><button class="button small" id="new-function" type="button" disabled>New function</button><button class="button small" id="new-procedure" type="button" disabled>New procedure</button><button class="button small" id="new-sequence" type="button" disabled>New sequence</button><button class="button small" id="new-trigger" type="button" disabled>New trigger</button><button class="button small" id="open-erd" type="button" disabled>Open ERD</button></div></div>
-            <div class="explorer-layout"><div id="explorer-connections" class="tree-pane"></div><div id="explorer-tree" class="tree-pane tree-content"><div class="empty-state"><strong>Choose a connection</strong><span>Schema objects load on demand.</span></div></div></div>
+            <div class="panel-heading"><div><span class="eyebrow" data-i18n="explorer.eyebrow">LAZY INTROSPECTION</span><h2 data-i18n="nav.explorer">Explorer</h2></div><div class="form-actions explorer-actions"><input class="explorer-filter" id="explorer-filter" type="search" placeholder="Filter schemas and objects" aria-label="Filter schemas and objects" data-i18n-placeholder="explorer.filter" data-i18n-aria-label="explorer.filter" autocomplete="off" /><span class="badge" id="explorer-status" data-i18n="explorer.selectConnection">Select a connection</span><button class="button small" id="new-schema" type="button" disabled data-i18n="explorer.newSchema">New schema</button><button class="button small" id="new-table" type="button" disabled data-i18n="explorer.newTable">New table</button><button class="button small" id="new-function" type="button" disabled data-i18n="explorer.newFunction">New function</button><button class="button small" id="new-procedure" type="button" disabled data-i18n="explorer.newProcedure">New procedure</button><button class="button small" id="new-sequence" type="button" disabled data-i18n="explorer.newSequence">New sequence</button><button class="button small" id="new-trigger" type="button" disabled data-i18n="explorer.newTrigger">New trigger</button><button class="button small" id="open-erd" type="button" disabled data-i18n="explorer.openErd">Open ERD</button></div></div>
+            <div class="explorer-layout"><div id="explorer-connections" class="tree-pane"></div><div id="explorer-tree" class="tree-pane tree-content"><div class="empty-state"><strong data-i18n="explorer.chooseConnection">Choose a connection</strong><span data-i18n="explorer.chooseConnectionHint">Schema objects load on demand.</span></div></div></div>
           </section>
         </section>
         <section id="view-programming" class="view" hidden>
@@ -192,7 +192,7 @@
                 <div class="sql-editor-wrap programming-editor-wrap">
                   <pre class="sql-editor-highlight" id="programming-editor-highlight" aria-hidden="true"></pre>
                   <textarea id="programming-editor" spellcheck="false" autocomplete="off" disabled placeholder="Select a view, function, procedure or trigger to edit its definition."></textarea>
-                  <ul class="sql-autocomplete" id="programming-sql-autocomplete" hidden role="listbox" aria-label="SQL suggestions"></ul>
+                  <ul class="sql-autocomplete" id="programming-sql-autocomplete" hidden role="listbox" aria-label="SQL suggestions" data-i18n-aria-label="query.suggestions"></ul>
                 </div>
                 <div id="programming-ddl-preview-wrap" class="programming-ddl-preview-wrap" hidden>
                   <span class="eyebrow">ASSEMBLED SQL</span>
@@ -243,31 +243,31 @@
           </section>
         </section>
         <section id="view-query" class="view" hidden>
-          <div class="query-workspace-nav" role="tablist" aria-label="SQL workspace sections">
-            <button class="query-workspace-tab active" data-query-workspace="editor" type="button" role="tab" aria-selected="true">Editor</button>
-            <button class="query-workspace-tab" data-query-workspace="history" type="button" role="tab" aria-selected="false">History</button>
-            <button class="query-workspace-tab" data-query-workspace="snippets" type="button" role="tab" aria-selected="false">Snippets</button>
+          <div class="query-workspace-nav" role="tablist" aria-label="SQL workspace sections" data-i18n-aria-label="query.sections">
+            <button class="query-workspace-tab active" data-query-workspace="editor" type="button" role="tab" aria-selected="true" data-i18n="query.sectionEditor">Editor</button>
+            <button class="query-workspace-tab" data-query-workspace="history" type="button" role="tab" aria-selected="false" data-i18n="history.title">History</button>
+            <button class="query-workspace-tab" data-query-workspace="snippets" type="button" role="tab" aria-selected="false" data-i18n="snippets.title">Snippets</button>
           </div>
           <div class="query-workspace-panel" data-query-workspace-panel="editor">
           <section class="panel query-panel">
-            <div class="panel-heading"><div><span class="eyebrow">QUERY WORKSPACE</span><h2>SQL Editor</h2></div><span class="badge" id="query-status">Ready</span></div>
-            <div class="query-tabs" id="query-tabs" role="tablist" aria-label="Open SQL queries"></div>
-            <div class="query-toolbar"><label>Connection<select id="query-connection"><option value="">Select a connected connection</option></select></label><div class="form-actions"><button class="button" id="format-sql" type="button">Format SQL</button><button class="button" id="save-current-snippet" type="button">Save snippet</button><button class="button" id="review-query-ai" type="button">✦ Review with AI</button><button class="button" id="explain-query" type="button">Explain (F10)</button><button class="button" id="run-script" type="button">Run script</button><button class="button primary" id="run-query" type="button">Run query</button><button class="button danger" id="cancel-query" type="button" hidden>Cancel</button></div></div>
+            <div class="panel-heading"><div><span class="eyebrow" data-i18n="query.eyebrow">QUERY WORKSPACE</span><h2 data-i18n="nav.query">SQL Editor</h2></div><span class="badge" id="query-status" data-i18n="query.ready">Ready</span></div>
+            <div class="query-tabs" id="query-tabs" role="tablist" aria-label="Open SQL queries" data-i18n-aria-label="query.openTabs"></div>
+            <div class="query-toolbar"><label><span data-i18n="common.connection">Connection</span><select id="query-connection"><option value="" data-i18n="common.selectConnected">Select a connected connection</option></select></label><div class="form-actions"><button class="button" id="format-sql" type="button" data-i18n="query.format">Format SQL</button><button class="button" id="save-current-snippet" type="button" data-i18n="snippets.saveTitle">Save snippet</button><button class="button" id="review-query-ai" type="button" data-i18n="query.reviewAi">✦ Review with AI</button><button class="button" id="explain-query" type="button" data-i18n="query.explain">Explain (F10)</button><button class="button" id="run-script" type="button" data-i18n="query.runScript">Run script</button><button class="button primary" id="run-query" type="button" data-i18n="query.run">Run query</button><button class="button danger" id="cancel-query" type="button" hidden data-i18n="common.cancel">Cancel</button></div></div>
             <div class="sql-editor-wrap">
               <pre class="sql-editor-highlight" id="sql-editor-highlight" aria-hidden="true"></pre>
               <textarea id="sql-editor" spellcheck="false" autocomplete="off" placeholder="SELECT current_database(), now();"></textarea>
-              <ul class="sql-autocomplete" id="sql-autocomplete" hidden role="listbox" aria-label="SQL suggestions"></ul>
+              <ul class="sql-autocomplete" id="sql-autocomplete" hidden role="listbox" aria-label="SQL suggestions" data-i18n-aria-label="query.suggestions"></ul>
             </div>
-            <div class="query-hint">Ctrl+Enter or F8 runs the selection or the whole editor. F10 shows a planning-only EXPLAIN; multiple statements use “Run script”. Tab or Enter accepts a highlighted suggestion.</div>
+            <div class="query-hint" data-i18n="query.hint">Ctrl+Enter or F8 runs the selection or the whole editor. F10 shows a planning-only EXPLAIN; multiple statements use “Run script”. Tab or Enter accepts a highlighted suggestion.</div>
           </section>
           <section class="panel result-panel">
-            <div class="panel-heading"><div><span class="eyebrow">RESULTS</span><h2>Data grid</h2></div><div class="form-actions"><button class="button small" id="copy-result" type="button" disabled>Copy</button><button class="button small" id="export-csv" type="button" disabled>CSV</button><button class="button small" id="export-json" type="button" disabled>JSON</button><span class="badge" id="result-summary">No result</span></div></div>
+            <div class="panel-heading"><div><span class="eyebrow" data-i18n="results.eyebrow">RESULTS</span><h2 data-i18n="results.title">Data grid</h2></div><div class="form-actions"><button class="button small" id="copy-result" type="button" disabled data-i18n="results.copy">Copy</button><button class="button small" id="export-csv" type="button" disabled>CSV</button><button class="button small" id="export-json" type="button" disabled>JSON</button><span class="badge" id="result-summary" data-i18n="results.none">No result</span></div></div>
             <div id="result-error" class="form-status error"></div>
-            <div id="result-grid" class="result-grid"><div class="empty-state"><strong>Run a query to see results</strong><span>Only the rows in view are rendered — scroll to page through the full result.</span></div></div>
+            <div id="result-grid" class="result-grid"><div class="empty-state"><strong data-i18n="results.emptyTitle">Run a query to see results</strong><span data-i18n="results.emptyHint">Only the rows in view are rendered — scroll to page through the full result.</span></div></div>
           </section>
           </div>
-          <section class="panel query-workspace-panel" data-query-workspace-panel="history" hidden><div class="panel-heading"><div><span class="eyebrow">LAST 50 QUERIES</span><h2>History</h2></div><button class="button small danger" id="clear-history" type="button">Clear history</button></div><div id="history-list" class="history-list"></div></section>
-          <section class="panel query-workspace-panel" data-query-workspace-panel="snippets" hidden><div class="panel-heading"><div><span class="eyebrow">REUSABLE SQL</span><h2>Snippets</h2></div></div><div id="snippet-list" class="snippet-list"></div></section>
+          <section class="panel query-workspace-panel" data-query-workspace-panel="history" hidden><div class="panel-heading"><div><span class="eyebrow" data-i18n="history.eyebrow">LAST 50 QUERIES</span><h2 data-i18n="history.title">History</h2></div><button class="button small danger" id="clear-history" type="button" data-i18n="history.clear">Clear history</button></div><div id="history-list" class="history-list"></div></section>
+          <section class="panel query-workspace-panel" data-query-workspace-panel="snippets" hidden><div class="panel-heading"><div><span class="eyebrow" data-i18n="snippets.eyebrow">REUSABLE SQL</span><h2 data-i18n="snippets.title">Snippets</h2></div></div><div id="snippet-list" class="snippet-list"></div></section>
         </section>
         <section id="view-preferences" class="view" hidden>
           <section class="panel preferences-panel">

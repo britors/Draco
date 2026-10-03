@@ -37,6 +37,9 @@ test('plurals follow each locale, with exact forms taking precedence', () => {
   assert.equal(pt('connections.count', { count: 1 }), '1 conexão');
   assert.equal(pt('connections.count', { count: 2 }), '2 conexões');
   assert.equal(pt('connections.count', { count: 1500 }), '1.500 conexões');
+  assert.equal(pt('results.summary', { count: 0, ms: 3 }), '0 linhas · 3 ms');
+  assert.equal(pt('results.summary', { count: 1, ms: 3 }), '1 linha · 3 ms');
+  assert.equal(en('results.summary', { count: 1, ms: 3 }), '1 row · 3 ms');
 });
 
 test('missing keys fall back to English, then to the key itself', () => {
@@ -68,11 +71,19 @@ test('every key referenced by the shell and app.js exists in the catalog', () =>
   const htmlKeys = [...index.matchAll(/data-i18n(?:-title|-aria-label|-placeholder)?="([^"]+)"/g)].map((match) => match[1]);
   assert.ok(htmlKeys.length > 40);
   const staticKeys = [...app.matchAll(/\bt\('([^']+)'/g)].map((match) => match[1]);
+  // Fallback keys handed to errorMessage(error, t, 'key') are catalog keys too.
+  staticKeys.push(...[...app.matchAll(/errorMessage\([^)]*?, t, '([^']+)'\)/g)].map((match) => match[1]));
   assert.ok(staticKeys.length > 20);
   for (const key of [...htmlKeys, ...staticKeys]) assert.ok(Object.hasOwn(english, key), `missing catalog key ${key}`);
   // Keys built at runtime from fixed enumerations.
   for (const view of ['connections', 'explorer', 'programming', 'dashboard', 'admin', 'assistant', 'query', 'preferences', 'table-detail', 'erd']) {
     assert.ok(Object.hasOwn(english, `nav.${view}`), `missing nav.${view}`);
+  }
+  for (const kind of ['keyword', 'schema', 'table', 'view', 'function', 'column']) {
+    assert.ok(Object.hasOwn(english, `autocomplete.${kind}`), `missing autocomplete.${kind}`);
+  }
+  for (const kind of ['function', 'procedure', 'trigger', 'sequence', 'view']) {
+    assert.ok(Object.hasOwn(english, `explorer.deleteKind.${kind}`), `missing explorer.deleteKind.${kind}`);
   }
   for (const state of ['disconnected', 'connecting', 'connected', 'error']) {
     assert.ok(Object.hasOwn(english, `connections.state.${state}`), `missing connections.state.${state}`);
