@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Draco Postgres</title>
+  <meta name="description" content="Draco Postgres: cliente desktop PostgreSQL livre do ecossistema Lyra OS — explorador de schemas, editor SQL, administração, ERD, backup e Assistente de IA somente leitura.">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta property="og:title" content="Draco Postgres">
+  <meta property="og:description" content="Cliente desktop PostgreSQL livre, rápido e seguro para Linux e Windows.">
+  <meta property="og:image" content="assets/draco-logo.png">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="#topo" aria-label="Draco Postgres — início">
+        <img src="assets/draco-logo.png" alt="" width="36" height="36">
+        <span>Draco <strong>Postgres</strong></span>
+      </a>
+      <nav class="site-nav" aria-label="Navegação principal">
+        <a href="#recursos">Recursos</a>
+        <a href="#seguranca">Segurança</a>
+        <a href="#download">Download</a>
+        <a class="nav-cta" href="https://github.com/britors/Draco">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="conteudo">
+    <section class="hero" id="topo">
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow">Ecossistema Lyra OS · versão 2.1.4</p>
+          <h1>Draco <span class="gold">Postgres</span></h1>
+          <p class="lead">
+            O cliente desktop PostgreSQL que une explorador de schemas, editor SQL e
+            ferramentas de administração em um app nativo, leve e livre — sem
+            depender de <code>psql</code> para o dia a dia.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#download">Baixar o Draco Postgres</a>
+            <a class="btn btn-ghost" href="https://github.com/britors/Draco">Ver código-fonte</a>
+          </div>
+          <ul class="hero-meta" aria-label="Destaques">
+            <li>Rust + Tauri 2</li>
+            <li>Linux e Windows</li>
+            <li>GPL-3.0-or-later</li>
+          </ul>
+        </div>
+
+        <div class="hero-visual" aria-hidden="true">
+          <img class="hero-logo" src="assets/draco-logo.png" alt="" width="220" height="220">
+          <div class="mock-window">
+            <div class="mock-bar">
+              <span></span><span></span><span></span>
+              <em>query.sql — producao</em>
+            </div>
+<pre class="mock-code"><span class="k">SELECT</span> c.nome, <span class="f">count</span>(p.id) <span class="k">AS</span> pedidos
+  <span class="k">FROM</span> clientes c
+  <span class="k">JOIN</span> pedidos p <span class="k">ON</span> p.cliente_id = c.id
+ <span class="k">WHERE</span> p.criado_em &gt;= <span class="s">'2026-01-01'</span>
+ <span class="k">GROUP BY</span> c.nome
+ <span class="k">ORDER BY</span> pedidos <span class="k">DESC</span>
+ <span class="k">LIMIT</span> <span class="n">10</span>;</pre>
+            <div class="mock-grid">
+              <div class="row head"><span>nome</span><span>pedidos</span></div>
+              <div class="row"><span>Ana Souza</span><span>182</span></div>
+              <div class="row"><span>Bruno Lima</span><span>147</span></div>
+              <div class="row"><span>Carla Dias</span><span>139</span></div>
+            </div>
+            <div class="mock-status"><i></i>10 linhas · 12 ms</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="recursos" aria-labelledby="recursos-titulo">
+      <div class="container">
+        <p class="eyebrow">Recursos</p>
+        <h2 id="recursos-titulo">Tudo o que você precisa para trabalhar com PostgreSQL</h2>
+        <p class="section-lead">Do primeiro <code>SELECT</code> à manutenção do servidor, em uma única janela.</p>
+
+        <div class="feature-grid">
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m16 15 3 3-3 3"/></svg>
+            </div>
+            <h3>Editor SQL completo</h3>
+            <p>Abas, highlighting, autocomplete a partir do schema, execução de query ou script, <code>EXPLAIN</code> e cancelamento direcionado ao backend da operação.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 5h6v6H4zM14 13h6v6h-6z"/><path d="M7 11v5h7M17 13V8h-7"/></svg>
+            </div>
+            <h3>Explorer e ERD</h3>
+            <p>Navegação lazy por schemas, tabelas, views, funções, procedures, sequences e triggers, busca global e diagrama ER navegável.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 4h18v16H3z"/><path d="M3 10h18M9 4v16"/></svg>
+            </div>
+            <h3>Grid de resultados</h3>
+            <p>Resultados virtualizados, detalhe de linha, cópia TSV, exportação CSV/JSON e edição paginada por chave primária.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V7z"/><path d="m9 12 2 2 4-4"/></svg>
+            </div>
+            <h3>Administração</h3>
+            <p>Dashboard, Activity/Locks, roles, extensões, <code>pg_cron</code>, <code>pg_stat_statements</code> e manutenção com <code>VACUUM</code>/<code>ANALYZE</code>.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M8 6 3 12l5 6M16 6l5 6-5 6M14 4l-4 16"/></svg>
+            </div>
+            <h3>Programming + GitHub</h3>
+            <p>Editor dedicado para views, funções, procedures e triggers, com branches, diff contra o banco implantado, commit e pull request.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            <h3>Assistente de IA</h3>
+            <p>Anthropic, OpenAI ou Gemini por conexão, com ferramentas somente leitura e revisão de SQL quanto a segurança, performance e legibilidade.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 7h16v12H4z"/><path d="M8 7V4h8v3M12 11v5M9.5 13.5 12 16l2.5-2.5"/></svg>
+            </div>
+            <h3>Backup e restauração</h3>
+            <p>Operações canceláveis com <code>pg_dump</code>, <code>pg_restore</code> e <code>psql</code>, com caminhos redigidos nos logs.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg>
+            </div>
+            <h3>Túnel SSH nativo</h3>
+            <p>SSH e jump host feitos em processo com <code>russh</code>, sem chamar o executável <code>ssh</code>. TLS via <code>rustls</code>.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="seguranca" aria-labelledby="seguranca-titulo">
+      <div class="container split">
+        <div>
+          <p class="eyebrow">Segurança por padrão</p>
+          <h2 id="seguranca-titulo">Suas credenciais nunca ficam em texto plano</h2>
+          <p class="section-lead">
+            O Draco Postgres foi desenhado para lidar com bancos reais de produção
+            sem vazar segredos.
+          </p>
+        </div>
+        <ul class="check-list">
+          <li><strong>Cofre do sistema.</strong> Senhas, passphrases e chaves de API ficam no GNOME Keyring, KWallet ou Credential Manager — nunca em arquivos de configuração.</li>
+          <li><strong>Logs limpos.</strong> SQL, resultados e credenciais não aparecem em logs nem em mensagens de erro.</li>
+          <li><strong>Confirmação explícita.</strong> Mutações destrutivas exigem confirmação, inclusive nominal quando aplicável.</li>
+          <li><strong>IA somente leitura.</strong> O Assistente inspeciona o banco, mas nunca executa DDL ou DML; sugestões são texto para revisão manual.</li>
+          <li><strong>Sem rede no frontend.</strong> Interface 100% local, sem CDN, com CSP restrita e IPC mínimo.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="download" aria-labelledby="download-titulo">
+      <div class="container">
+        <p class="eyebrow">Download</p>
+        <h2 id="download-titulo">Instale o Draco Postgres</h2>
+        <p class="section-lead">Pacotes nativos da versão 2.1.4, gerados a partir de tag imutável.</p>
+
+        <div class="download-grid">
+          <a class="download-card" href="https://github.com/britors/Draco/releases/download/v2.1.4/draco_2.1.4_ubuntu24.04_amd64.deb">
+            <span class="os">Ubuntu 24.04</span>
+            <span class="pkg">.deb · amd64</span>
+            <span class="arrow" aria-hidden="true">↓</span>
+          </a>
+          <a class="download-card" href="https://github.com/britors/Draco/releases/download/v2.1.4/draco_2.1.4_fedora43_x86_64.rpm">
+            <span class="os">Fedora 43</span>
+            <span class="pkg">.rpm · x86_64</span>
+            <span class="arrow" aria-hidden="true">↓</span>
+          </a>
+          <a class="download-card" href="https://github.com/britors/Draco/releases/download/v2.1.4/draco_2.1.4_opensuse-leap16.0_x86_64.rpm">
+            <span class="os">openSUSE Leap 16.0</span>
+            <span class="pkg">.rpm · x86_64</span>
+            <span class="arrow" aria-hidden="true">↓</span>
+          </a>
+          <a class="download-card" href="https://github.com/britors/Draco/releases/download/v2.1.4/Draco_2.1.4_windows_x64-setup.exe">
+            <span class="os">Windows</span>
+            <span class="pkg">instalador NSIS · x64</span>
+            <span class="arrow" aria-hidden="true">↓</span>
+          </a>
+        </div>
+
+        <div class="install-notes">
+          <div class="note">
+            <h3>openSUSE via OBS</h3>
+            <p>O RPM oficial também está no Open Build Service, no projeto
+              <code>home:rodrigosbrito:lyra</code>, pacote <code>postgres-draco</code>.</p>
+          </div>
+          <div class="note">
+            <h3>Compilar do código-fonte</h3>
+<pre class="shell"><code>git clone https://github.com/britors/Draco.git
+cd Draco
+cargo build --locked --release -p draco-tauri
+./target/release/draco</code></pre>
+          </div>
+        </div>
+        <p class="all-releases"><a href="https://github.com/britors/Draco/releases">Ver todas as versões e notas de release →</a></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="brand footer-brand">
+        <img src="assets/draco-logo.png" alt="" width="28" height="28">
+        <span>Draco <strong>Postgres</strong></span>
+      </div>
+      <p>Software livre sob <a href="https://github.com/britors/Draco/blob/main/LICENSE">GPL-3.0-or-later</a> © Rodrigo Brito · Parte do ecossistema Lyra OS.</p>
+      <p class="footnote">PostgreSQL é marca registrada do PostgreSQL Community Association. O Draco Postgres é um projeto independente.</p>
+    </div>
+  </footer>
+</body>
+</html>
