@@ -23,7 +23,12 @@ export DRACO_E2E_CONNECTION_LABEL="Draco E2E"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-for tool in tauri-driver WebKitWebDriver node pg_isready; do
+# cargo installs tauri-driver in ~/.cargo/bin, which is not always on PATH.
+: "${DRACO_E2E_TAURI_DRIVER:=$(command -v tauri-driver || echo "$HOME/.cargo/bin/tauri-driver")}"
+: "${DRACO_E2E_NATIVE_DRIVER:=$(command -v WebKitWebDriver || true)}"
+[[ -x "$DRACO_E2E_TAURI_DRIVER" ]] || { echo "missing required tool: tauri-driver" >&2; exit 2; }
+[[ -x "$DRACO_E2E_NATIVE_DRIVER" ]] || { echo "missing required tool: WebKitWebDriver" >&2; exit 2; }
+for tool in node pg_isready curl; do
   command -v "$tool" >/dev/null || { echo "missing required tool: $tool" >&2; exit 2; }
 done
 [[ -x "$DRACO_E2E_APP" ]] || { echo "application not found: $DRACO_E2E_APP" >&2; exit 2; }
@@ -56,7 +61,7 @@ database = "$DRACO_TEST_DB"
 user = "$DRACO_TEST_USER"
 EOF
 
-tauri-driver --port "$DRACO_E2E_DRIVER_PORT" >"$work_dir/tauri-driver.log" 2>&1 &
+"$DRACO_E2E_TAURI_DRIVER" --port "$DRACO_E2E_DRIVER_PORT" --native-driver "$DRACO_E2E_NATIVE_DRIVER" >"$work_dir/tauri-driver.log" 2>&1 &
 driver_pid=$!
 for _ in $(seq 1 50); do
   curl -fsS "$DRACO_E2E_DRIVER_URL/status" >/dev/null 2>&1 && break
