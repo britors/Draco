@@ -105,6 +105,26 @@ Dependências: o pacote a testar, `tauri-driver` (`cargo install tauri-driver --
 e `pg_isready`. O teste fica em `frontend/tests/e2e/` e não é executado por `npm test`, porque
 precisa de display, do app instalado e de um PostgreSQL real.
 
+Cliques e digitação são disparados por eventos do DOM, porque o `WebKitWebDriver` recusa entrada
+nativa de ponteiro e teclado em sessões Wayland ("unsupported operation"). Os listeners do próprio
+app tratam cada ação; o que o teste não exercita é o roteamento de entrada do compositor.
+
+Resultado mais recente em 03/10/2026: pacote `postgres-draco` 2.1.4 do OBS no openSUSE Leap
+16.1 (Wayland), PostgreSQL 18.6 local, `tauri-driver` 2.1.0 e `WebKitWebDriver` 2.52.5 do pacote
+`webkit2gtk4-minibrowser`:
+
+```text
+✔ lists the stored connection
+✔ connects using the password from the credential store
+✔ loads schemas in the Explorer
+✔ runs a query and renders the result grid
+ℹ pass 5
+ℹ fail 0
+```
+
+Com um `DRACO_TEST_CONN_ID` sem senha no credential store, o teste falha na etapa de conexão
+(estado `error`), como esperado.
+
 Ainda fora da cobertura: SSH/jump host real, as APIs de IA e a execução na CI.
 
 ## Checklist transversal

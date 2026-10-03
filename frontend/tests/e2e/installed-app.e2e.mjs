@@ -49,12 +49,22 @@ class Session {
     return value[ELEMENT];
   }
 
-  async click(css) { await this.command('POST', `/element/${await this.find(css)}/click`, {}); }
+  // WebKitWebDriver rejects native pointer and keyboard input on some sessions (notably Wayland),
+  // so interactions go through DOM events. The app's own listeners still handle every action.
+  async click(css) {
+    await this.find(css);
+    await this.run('document.querySelector(arguments[0]).click();', css);
+  }
 
   async type(css, text) {
-    const element = await this.find(css);
-    await this.command('POST', `/element/${element}/clear`, {});
-    await this.command('POST', `/element/${element}/value`, { text });
+    await this.find(css);
+    await this.run(`
+      const [selector, text] = arguments;
+      const field = document.querySelector(selector);
+      field.focus();
+      field.value = text;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    `, css, text);
   }
 
   // Polls `script` until it returns a truthy value; the last value is reported on timeout.

@@ -166,8 +166,17 @@ credential store a partir de `DRACO_TEST_CONN_ID`:
 
 Ele aceita também `DRACO_TEST_HOST`, `DRACO_TEST_DB` e `DRACO_TEST_USER`; nunca
 colocar a senha no ambiente. A última execução documentada passou contra
-PostgreSQL 18.4, mas ainda não cobre webview instalada, SSH/jump host real nem
-as três APIs de IA.
+PostgreSQL 18.4, mas ainda não cobre SSH/jump host real nem as três APIs de IA.
+
+O smoke do pacote instalado via `tauri-driver` usa a mesma regra de credenciais e
+uma configuração XDG temporária (passou contra PostgreSQL 18.6 em 03/10/2026):
+
+```sh
+./scripts/test-installed-app.sh
+```
+
+A decisão de remover o frontend GTK e o plano de rollback estão em
+`docs/architecture/adr-0003-gtk-removal.md`.
 
 O workspace, o RPM/OBS e o AppStream estão em `2.1.4`. Releases devem usar uma
 tag imutável; nunca reutilizar uma tag nem gerar o tarball de um branch mutável.
