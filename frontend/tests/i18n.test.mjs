@@ -79,6 +79,9 @@ test('every key referenced by the shell and app.js exists in the catalog', () =>
   for (const view of ['connections', 'explorer', 'programming', 'dashboard', 'admin', 'assistant', 'query', 'preferences', 'table-detail', 'erd']) {
     assert.ok(Object.hasOwn(english, `nav.${view}`), `missing nav.${view}`);
   }
+  for (const kind of ['function', 'procedure', 'trigger', 'view', 'sequence', 'index', 'table']) {
+    assert.ok(Object.hasOwn(english, `kind.${kind}`), `missing kind.${kind}`);
+  }
   for (const kind of ['keyword', 'schema', 'table', 'view', 'function', 'column']) {
     assert.ok(Object.hasOwn(english, `autocomplete.${kind}`), `missing autocomplete.${kind}`);
   }
