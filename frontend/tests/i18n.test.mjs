@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { CATALOGS, DEFAULT_LOCALE, applyTranslations, createTranslator, errorMessage, resolveLocale } from '../dist/i18n.js';
 
-const [index, app] = await Promise.all([
+const [index, app, applicationRust, bridgeRust] = await Promise.all([
   readFile(new URL('../dist/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../dist/app.js', import.meta.url), 'utf8'),
+  readFile(new URL('../../draco-app/src/lib.rs', import.meta.url), 'utf8'),
+  readFile(new URL('../../src-tauri/src/main.rs', import.meta.url), 'utf8'),
 ]);
 const english = CATALOGS[DEFAULT_LOCALE];
 
@@ -120,4 +122,35 @@ test('IPC errors are translated by key but PostgreSQL text is never rewritten', 
   assert.equal(errorMessage({ code: 'operation_error', key: 'error.not_in_catalog', message: 'English fallback' }, t), 'English fallback');
   assert.equal(errorMessage(new Error(''), t), 'Não foi possível concluir a operação.');
   assert.equal(errorMessage(null, t, 'connectionForm.saveFailed'), 'Não foi possível salvar a conexão.');
+});
+
+test('every backend validation key exists and literal messages match the English catalog', () => {
+  const rust = applicationRust + bridgeRust;
+  const keys = new Set([...rust.matchAll(/"((?:validation|error)\.[A-Za-z_.]+)"/g)].map((match) => match[1]));
+  assert.ok(keys.size > 70);
+  for (const key of keys) {
+    for (const [locale, catalog] of Object.entries(CATALOGS)) assert.ok(Object.hasOwn(catalog, key), `${locale} is missing ${key}`);
+  }
+  // Validation::new("key", "literal") keeps the English fallback identical to the catalog text.
+  for (const match of rust.matchAll(/Validation::new\(\s*"(validation\.[A-Za-z]+)",\s*"((?:[^"\\]|\\.)*)"/g)) {
+    assert.equal(english[match[1]], JSON.parse(`"${match[2]}"`), `${match[1]} differs from the Rust message`);
+  }
+  const labelSources = [...rust.matchAll(/validate_(?:schema_object_name|definition_text|file_path)\([^;]*?"([A-Za-z ]+)"\)/g)].map((match) => match[1]);
+  for (const label of labelSources) {
+    const key = `label.${label.split(' ').map((word, index) => index ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word.toLowerCase()).join('')}`;
+    assert.ok(Object.hasOwn(english, key), `missing ${key}`);
+  }
+});
+
+test('validation errors are translated with their parameters', () => {
+  const t = createTranslator('pt-BR');
+  assert.equal(
+    errorMessage({ code: 'invalid_input', key: 'validation.objectNameRequired', params: { label: 'label.table' }, message: 'Table name is required and cannot contain control characters' }, t),
+    'O nome (tabela) é obrigatório e não pode conter caracteres de controle',
+  );
+  assert.equal(
+    errorMessage({ code: 'invalid_input', key: 'validation.indexManagedByConstraint', params: { constraint: 'label.not_a_key' }, message: 'x' }, t),
+    'O índice é gerenciado pela constraint label.not_a_key',
+  );
+  assert.equal(errorMessage({ code: 'invalid_input', key: 'validation.onlyAlterSequenceDefinitionsAreAccepted', message: 'Only ALTER SEQUENCE definitions are accepted' }, t), 'Só são aceitas definições ALTER SEQUENCE');
 });

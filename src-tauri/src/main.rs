@@ -27,6 +27,9 @@ struct CommandError {
     code: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     key: Option<&'static str>,
+    /// Named values for the `key` message, e.g. `{ "label": "label.schema" }`.
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    params: std::collections::BTreeMap<&'static str, String>,
     message: String,
 }
 
@@ -41,34 +44,35 @@ struct ConnectionSecretRequest {
 impl From<ApplicationError> for CommandError {
     fn from(error: ApplicationError) -> Self {
         match error {
-            ApplicationError::InvalidConnection(message) => Self {
+            ApplicationError::InvalidConnection(validation)
+            | ApplicationError::InvalidInput(validation) => Self {
                 code: "invalid_input",
-                key: None,
-                message,
-            },
-            ApplicationError::InvalidInput(message) => Self {
-                code: "invalid_input",
-                key: None,
-                message,
+                key: Some(validation.key),
+                params: validation.params.into_iter().collect(),
+                message: validation.message,
             },
             ApplicationError::ConnectionNotFound(id) => Self {
                 code: "connection_not_found",
                 key: Some("error.connection_not_found"),
+                params: std::collections::BTreeMap::new(),
                 message: format!("Connection '{id}' was not found"),
             },
             ApplicationError::ConnectionNotActive(id) => Self {
                 code: "connection_not_active",
                 key: Some("error.connection_not_active"),
+                params: std::collections::BTreeMap::new(),
                 message: format!("Connection '{id}' is not connected"),
             },
             ApplicationError::Assistant(_) | ApplicationError::Operation(_) => Self {
                 code: "operation_error",
                 key: Some("error.operation_error"),
+                params: std::collections::BTreeMap::new(),
                 message: "The requested operation could not be completed".to_string(),
             },
             ApplicationError::Github(message) => Self {
                 code: "github_error",
                 key: None,
+                params: std::collections::BTreeMap::new(),
                 message,
             },
             // PostgreSQL's Display implementation is intentionally terse (often just "db error"),
@@ -78,11 +82,13 @@ impl From<ApplicationError> for CommandError {
                 draco_core::error::CoreError::Postgres(_) => Self {
                     code: "backend_error",
                     key: None,
+                    params: std::collections::BTreeMap::new(),
                     message: error.detailed_message(),
                 },
                 _ => Self {
                     code: "backend_error",
                     key: Some("error.operation_error"),
+                    params: std::collections::BTreeMap::new(),
                     message: "The requested operation could not be completed".to_string(),
                 },
             },
@@ -826,6 +832,7 @@ async fn choose_backup_output(
     .map_err(|_| CommandError {
         code: "operation_error",
         key: Some("error.file_picker_unavailable"),
+        params: std::collections::BTreeMap::new(),
         message: "The native file picker could not be opened".to_string(),
     })?;
     let Some(path) = selected else {
@@ -856,6 +863,7 @@ async fn choose_restore_input(
     .map_err(|_| CommandError {
         code: "operation_error",
         key: Some("error.file_picker_unavailable"),
+        params: std::collections::BTreeMap::new(),
         message: "The native file picker could not be opened".to_string(),
     })?;
     let Some(path) = selected else {
@@ -1013,7 +1021,8 @@ fn save_programming_file(
     {
         return Err(CommandError {
             code: "invalid_input",
-            key: None,
+            key: Some("validation.programmingFileRelative"),
+            params: std::collections::BTreeMap::new(),
             message: "Programming files must be relative .sql paths inside the selected workspace."
                 .into(),
         });
@@ -1022,7 +1031,8 @@ fn save_programming_file(
     if !workspace.is_absolute() {
         return Err(CommandError {
             code: "invalid_input",
-            key: None,
+            key: Some("validation.workspaceFolderInvalid"),
+            params: std::collections::BTreeMap::new(),
             message: "Choose a valid local workspace folder.".into(),
         });
     }
@@ -1031,12 +1041,14 @@ fn save_programming_file(
         fs::create_dir_all(parent).map_err(|error| CommandError {
             code: "filesystem_error",
             key: None,
+            params: std::collections::BTreeMap::new(),
             message: error.to_string(),
         })?;
     }
     fs::write(destination, content).map_err(|error| CommandError {
         code: "filesystem_error",
         key: None,
+        params: std::collections::BTreeMap::new(),
         message: error.to_string(),
     })
 }
@@ -1048,6 +1060,7 @@ async fn list_programming_files(workspace: String) -> Result<Vec<String>, Comman
         .map_err(|error| CommandError {
             code: "filesystem_error",
             key: None,
+            params: std::collections::BTreeMap::new(),
             message: error.to_string(),
         })?
 }
@@ -1071,7 +1084,8 @@ fn list_programming_files_sync(workspace: &str) -> Result<Vec<String>, CommandEr
     if !root.is_absolute() || !root.is_dir() {
         return Err(CommandError {
             code: "invalid_input",
-            key: None,
+            key: Some("validation.workspaceFolderInvalid"),
+            params: std::collections::BTreeMap::new(),
             message: "Choose a valid local workspace folder.".into(),
         });
     }
@@ -1079,6 +1093,7 @@ fn list_programming_files_sync(workspace: &str) -> Result<Vec<String>, CommandEr
     walk(&root, &root, &mut files).map_err(|error| CommandError {
         code: "filesystem_error",
         key: None,
+        params: std::collections::BTreeMap::new(),
         message: error.to_string(),
     })?;
     files.sort();
@@ -1098,13 +1113,15 @@ fn read_programming_file(workspace: String, relative_path: String) -> Result<Str
     {
         return Err(CommandError {
             code: "invalid_input",
-            key: None,
+            key: Some("validation.programmingFilePathInvalid"),
+            params: std::collections::BTreeMap::new(),
             message: "Invalid programming file path.".into(),
         });
     }
     fs::read_to_string(PathBuf::from(workspace).join(relative)).map_err(|error| CommandError {
         code: "filesystem_error",
         key: None,
+        params: std::collections::BTreeMap::new(),
         message: error.to_string(),
     })
 }
@@ -1433,9 +1450,23 @@ mod tests {
         }
         assert!(catalog.contains("'error.file_picker_unavailable'"));
 
-        let invalid = CommandError::from(ApplicationError::InvalidInput("detail".to_string()));
+        let invalid =
+            CommandError::from(ApplicationError::InvalidInput(draco_app::Validation::new(
+                "validation.searchTermIsRequired",
+                "Search term is required",
+            )));
         let json = serde_json::to_value(&invalid).expect("command error serializes");
-        assert!(json.get("key").is_none(), "absent keys are not serialized");
+        assert_eq!(json["key"], "validation.searchTermIsRequired");
+        assert!(
+            json.get("params").is_none(),
+            "empty params are not serialized"
+        );
+
+        let database = CommandError::from(ApplicationError::Core(
+            draco_core::error::CoreError::Other("postgres detail".to_string()),
+        ));
+        let json = serde_json::to_value(&database).expect("command error serializes");
+        assert!(json.get("params").is_none());
     }
 
     fn draco_core_error_for_test() -> draco_core::error::CoreError {
