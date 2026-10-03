@@ -31,9 +31,9 @@ pub type SharedApplication = Arc<Application>;
 #[derive(Debug, thiserror::Error)]
 pub enum ApplicationError {
     #[error("invalid connection: {0}")]
-    InvalidConnection(String),
+    InvalidConnection(Validation),
     #[error("invalid input: {0}")]
-    InvalidInput(String),
+    InvalidInput(Validation),
     #[error("connection not found: {0}")]
     ConnectionNotFound(String),
     #[error("connection is not active: {0}")]
@@ -49,6 +49,55 @@ pub enum ApplicationError {
 }
 
 pub type Result<T> = std::result::Result<T, ApplicationError>;
+
+/// A rejected input with a stable interface message key (see `frontend/dist/locales`), named
+/// parameters for that message and the English text used as fallback and in logs. Parameter
+/// values that start with `label.` are themselves catalog keys and are translated by the UI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Validation {
+    pub key: &'static str,
+    pub params: Vec<(&'static str, String)>,
+    pub message: String,
+}
+
+impl Validation {
+    pub fn new(key: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            key,
+            params: Vec::new(),
+            message: message.into(),
+        }
+    }
+
+    pub fn param(mut self, name: &'static str, value: impl Into<String>) -> Self {
+        self.params.push((name, value.into()));
+        self
+    }
+
+    /// Adds a `label` parameter that the interface translates, e.g. "Primary key column" becomes
+    /// the catalog key `label.primaryKeyColumn`.
+    fn label(self, label: &str) -> Self {
+        let mut key = String::from("label.");
+        for (index, word) in label.split_whitespace().enumerate() {
+            let mut chars = word.chars();
+            if let Some(first) = chars.next() {
+                if index == 0 {
+                    key.extend(first.to_lowercase());
+                } else {
+                    key.extend(first.to_uppercase());
+                }
+                key.extend(chars.flat_map(char::to_lowercase));
+            }
+        }
+        self.param("label", key)
+    }
+}
+
+impl std::fmt::Display for Validation {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -884,9 +933,10 @@ impl Application {
     pub fn save_snippet(&self, input: SnippetInput) -> Result<SnippetView> {
         let name = validate_snippet_name(&input.name)?;
         if input.sql.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "Snippet SQL must not be empty".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.snippetSqlMustNotBeEmpty",
+                "Snippet SQL must not be empty",
+            )));
         }
         let conn_label = input
             .conn_id
@@ -911,18 +961,20 @@ impl Application {
 
     pub fn rename_snippet(&self, id: &str, name: &str) -> Result<()> {
         if id.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "Snippet id is required".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.snippetIdIsRequired",
+                "Snippet id is required",
+            )));
         }
         let name = validate_snippet_name(name)?;
         if !store::list_snippets()
             .iter()
             .any(|snippet| snippet.id == id)
         {
-            return Err(ApplicationError::InvalidInput(
-                "Snippet not found".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.snippetNotFound",
+                "Snippet not found",
+            )));
         }
         store::rename_snippet(id, &name)?;
         Ok(())
@@ -1031,9 +1083,10 @@ impl Application {
         validate_schema_object_name(schema, "Schema")?;
         validate_schema_object_name(name, "Sequence")?;
         let value = value.trim().parse::<i64>().map_err(|_| {
-            ApplicationError::InvalidInput(
-                "Sequence value must be a signed 64-bit integer".to_string(),
-            )
+            ApplicationError::InvalidInput(Validation::new(
+                "validation.sequenceValueMustBeASigned",
+                "Sequence value must be a signed 64-bit integer",
+            ))
         })?;
         let (driver, _) = self.connected_driver(id).await?;
         queries::seq_set_val(&driver, schema, name, value).await?;
@@ -1082,9 +1135,10 @@ impl Application {
     pub async fn global_search(&self, id: &str, term: &str) -> Result<Vec<SearchResultView>> {
         let term = term.trim();
         if term.is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "Search term is required".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.searchTermIsRequired",
+                "Search term is required",
+            )));
         }
         let (driver, _) = self.connected_driver(id).await?;
         Ok(queries::global_search(&driver, term)
@@ -1148,12 +1202,16 @@ impl Application {
     ) -> Result<BrowseTableView> {
         validate_table_name(schema, table)?;
         if !(1..=200).contains(&limit) {
-            return Err(ApplicationError::InvalidInput(
-                "Table page size must be between 1 and 200".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.tablePageSizeMustBeBetween",
+                "Table page size must be between 1 and 200",
+            )));
         }
         let offset_i64 = i64::try_from(offset).map_err(|_| {
-            ApplicationError::InvalidInput("Table page offset is too large".to_string())
+            ApplicationError::InvalidInput(Validation::new(
+                "validation.tablePageOffsetIsTooLarge",
+                "Table page offset is too large",
+            ))
         })?;
         let (driver, _) = self.connected_driver(id).await?;
         let metadata = table_edit_metadata(&driver, schema, table).await?;
@@ -1234,9 +1292,10 @@ impl Application {
     pub async fn create_table(&self, id: &str, input: CreateTableInput) -> Result<()> {
         validate_table_name(&input.schema, &input.table)?;
         if input.columns.is_empty() || input.columns.len() > 512 {
-            return Err(ApplicationError::InvalidInput(
-                "A table requires between 1 and 512 columns".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.aTableRequiresBetween1And",
+                "A table requires between 1 and 512 columns",
+            )));
         }
         let columns = input
             .columns
@@ -1327,14 +1386,19 @@ impl Application {
         let Some((ddl, constraint_name)) =
             queries::get_index_ddl(&driver, schema, table, name).await?
         else {
-            return Err(ApplicationError::InvalidInput(
-                "Index was not found".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.indexWasNotFound",
+                "Index was not found",
+            )));
         };
         if let Some(constraint_name) = constraint_name {
-            return Err(ApplicationError::InvalidInput(format!(
-                "Index is managed by constraint {constraint_name}"
-            )));
+            return Err(ApplicationError::InvalidInput(
+                Validation::new(
+                    "validation.indexManagedByConstraint",
+                    format!("Index is managed by constraint {constraint_name}"),
+                )
+                .param("constraint", constraint_name),
+            ));
         }
         Ok(ddl)
     }
@@ -1354,14 +1418,19 @@ impl Application {
         let Some((_, constraint_name)) =
             queries::get_index_ddl(&driver, schema, table, name).await?
         else {
-            return Err(ApplicationError::InvalidInput(
-                "Index was not found".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.indexWasNotFound",
+                "Index was not found",
+            )));
         };
         if let Some(constraint_name) = constraint_name {
-            return Err(ApplicationError::InvalidInput(format!(
-                "Index is managed by constraint {constraint_name}"
-            )));
+            return Err(ApplicationError::InvalidInput(
+                Validation::new(
+                    "validation.indexManagedByConstraint",
+                    format!("Index is managed by constraint {constraint_name}"),
+                )
+                .param("constraint", constraint_name),
+            ));
         }
         queries::replace_index_definition(&driver, schema, table, name, ddl).await?;
         Ok(())
@@ -1372,9 +1441,10 @@ impl Application {
         validate_schema_object_name(&input.name, "Trigger")?;
         validate_schema_object_name(&input.table, "Table")?;
         if input.function.trim().is_empty() || input.function.chars().any(char::is_control) {
-            return Err(ApplicationError::InvalidInput(
-                "Trigger function is required and cannot contain control characters".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.triggerFunctionIsRequiredAndCannot",
+                "Trigger function is required and cannot contain control characters",
+            )));
         }
         let (driver, _) = self.connected_driver(id).await?;
         queries::create_trigger(
@@ -1521,9 +1591,10 @@ impl Application {
 
     pub async fn cancel_activity(&self, id: &str, pid: i32) -> Result<()> {
         if pid <= 0 {
-            return Err(ApplicationError::InvalidInput(
-                "Activity PID must be positive".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.activityPidMustBePositive",
+                "Activity PID must be positive",
+            )));
         }
         let (driver, _) = self.connected_driver(id).await?;
         queries::cancel_activity(&driver, pid).await?;
@@ -1625,9 +1696,10 @@ impl Application {
     pub async fn drop_extension(&self, id: &str, name: &str) -> Result<()> {
         let name = validate_extension_name(name)?;
         if name.eq_ignore_ascii_case("plpgsql") {
-            return Err(ApplicationError::InvalidInput(
-                "The built-in plpgsql extension is protected".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.theBuiltInPlpgsqlExtensionIs",
+                "The built-in plpgsql extension is protected",
+            )));
         }
         let (driver, _) = self.connected_driver(id).await?;
         queries::ext_drop(&driver, &name).await?;
@@ -1667,9 +1739,10 @@ impl Application {
         operation: TableMaintenanceOperation,
     ) -> Result<()> {
         if schema.is_empty() || table.is_empty() || schema.contains('\0') || table.contains('\0') {
-            return Err(ApplicationError::InvalidInput(
-                "Schema and table are required for maintenance".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.schemaAndTableAreRequiredFor",
+                "Schema and table are required for maintenance",
+            )));
         }
         let (driver, _) = self.connected_driver(id).await?;
         queries::run_vacuum(&driver, schema, table, operation.sql()).await?;
@@ -1696,9 +1769,10 @@ impl Application {
     pub async fn create_role(&self, id: &str, input: CreateRoleInput) -> Result<()> {
         let name = validate_role_name(&input.name)?;
         if input.connection_limit < -1 {
-            return Err(ApplicationError::InvalidInput(
-                "Role connection limit must be -1 or greater".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.roleConnectionLimitMustBe1",
+                "Role connection limit must be -1 or greater",
+            )));
         }
         let (driver, _) = self.connected_driver(id).await?;
         queries::create_role(
@@ -1721,9 +1795,10 @@ impl Application {
     pub async fn update_role(&self, id: &str, name: &str, input: UpdateRoleInput) -> Result<()> {
         let name = validate_role_name(name)?;
         if input.connection_limit < -1 {
-            return Err(ApplicationError::InvalidInput(
-                "Role connection limit must be -1 or greater".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.roleConnectionLimitMustBe1",
+                "Role connection limit must be -1 or greater",
+            )));
         }
         let valid_until = normalize_role_valid_until(input.valid_until.as_deref())?;
         let (driver, _) = self.connected_driver(id).await?;
@@ -1759,15 +1834,17 @@ impl Application {
         options: BackupOptionsInput,
     ) -> Result<ToolResultView> {
         if options.output.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "Backup output is required".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.backupOutputIsRequired",
+                "Backup output is required",
+            )));
         }
         validate_file_path(&options.output, "Backup output")?;
         if options.compression.is_some_and(|level| level > 9) {
-            return Err(ApplicationError::InvalidInput(
-                "Backup compression must be between 0 and 9".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.backupCompressionMustBeBetween0",
+                "Backup compression must be between 0 and 9",
+            )));
         }
         self.consume_file_authorization(&options.output, FileAuthorizationPurpose::Backup)
             .await?;
@@ -1795,9 +1872,10 @@ impl Application {
         options: RestoreOptionsInput,
     ) -> Result<ToolResultView> {
         if options.input.trim().is_empty() || options.target_database.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "Restore input and target database are required".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.restoreInputAndTargetDatabaseAre",
+                "Restore input and target database are required",
+            )));
         }
         validate_file_path(&options.input, "Restore input")?;
         self.consume_file_authorization(&options.input, FileAuthorizationPurpose::Restore)
@@ -1850,10 +1928,10 @@ impl Application {
         }) {
             Ok(())
         } else {
-            Err(ApplicationError::InvalidInput(
-                "Choose the file again with the native file picker before running this operation"
-                    .to_string(),
-            ))
+            Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.chooseTheFileAgainWithThe",
+                "Choose the file again with the native file picker before running this operation",
+            )))
         }
     }
 
@@ -1984,9 +2062,10 @@ impl Application {
     pub async fn assistant_send(&self, id: &str, message: &str) -> Result<AssistantReplyView> {
         let message = message.trim();
         if message.is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "Assistant message is required".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.assistantMessageIsRequired",
+                "Assistant message is required",
+            )));
         }
         let settings = store::get_ai_settings();
         let mut history = store::get_ai_history(id);
@@ -2061,9 +2140,10 @@ impl Application {
         operation: ToolOperation,
     ) -> Result<ToolResultView> {
         if operation_id.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "Operation id is required".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.operationIdIsRequired",
+                "Operation id is required",
+            )));
         }
         let (driver, conn) = self.connected_context(id).await?;
         let password = secrets::get_password(id).await?;
@@ -2095,9 +2175,10 @@ impl Application {
             Ok(Ok(result)) => result,
             Ok(Err(CoreError::Io(error))) if error.kind() == std::io::ErrorKind::NotFound => {
                 self.finish_operation(operation_id).await;
-                return Err(ApplicationError::InvalidInput(
-                    "Required PostgreSQL client tool is not installed".to_string(),
-                ));
+                return Err(ApplicationError::InvalidInput(Validation::new(
+                    "validation.requiredPostgresqlClientToolIsNot",
+                    "Required PostgreSQL client tool is not installed",
+                )));
             }
             Ok(Err(error)) => {
                 self.finish_operation(operation_id).await;
@@ -2137,9 +2218,10 @@ impl Application {
         operation_id: Option<&str>,
     ) -> Result<QueryResult> {
         if sql.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "SQL must not be empty".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.sqlMustNotBeEmpty",
+                "SQL must not be empty",
+            )));
         }
         let (driver, conn_label) = self.connected_driver(id).await?;
         let cancel_rx = match operation_id {
@@ -2188,9 +2270,10 @@ impl Application {
         operation_id: Option<&str>,
     ) -> Result<QueryResult> {
         if sql.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "SQL must not be empty".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.sqlMustNotBeEmpty",
+                "SQL must not be empty",
+            )));
         }
         let (driver, conn_label) = self.connected_driver(id).await?;
         let cancel_rx = match operation_id {
@@ -2227,9 +2310,10 @@ impl Application {
 
     async fn register_operation(&self, operation_id: &str) -> Result<watch::Receiver<bool>> {
         if operation_id.trim().is_empty() {
-            return Err(ApplicationError::InvalidInput(
-                "Operation id is required".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.operationIdIsRequired",
+                "Operation id is required",
+            )));
         }
         let (cancel_tx, cancel_rx) = watch::channel(false);
         let mut operations = self.operations.lock().await;
@@ -2318,9 +2402,13 @@ fn validate_file_path(value: &str, label: &str) -> Result<()> {
             .components()
             .any(|component| component == Component::ParentDir)
     {
-        return Err(ApplicationError::InvalidInput(format!(
-            "{label} must be an absolute path without parent traversal"
-        )));
+        return Err(ApplicationError::InvalidInput(
+            Validation::new(
+                "validation.absolutePathRequired",
+                format!("{label} must be an absolute path without parent traversal"),
+            )
+            .label(label),
+        ));
     }
     Ok(())
 }
@@ -2330,31 +2418,38 @@ fn validate_selected_path(value: &str, purpose: FileAuthorizationPurpose) -> Res
     match purpose {
         FileAuthorizationPurpose::Backup => {
             let parent = path.parent().ok_or_else(|| {
-                ApplicationError::InvalidInput("Backup destination has no parent".to_string())
+                ApplicationError::InvalidInput(Validation::new(
+                    "validation.backupDestinationHasNoParent",
+                    "Backup destination has no parent",
+                ))
             })?;
             if !parent.is_dir() {
-                return Err(ApplicationError::InvalidInput(
-                    "Backup destination directory does not exist".to_string(),
-                ));
+                return Err(ApplicationError::InvalidInput(Validation::new(
+                    "validation.backupDestinationDirectoryDoesNotExist",
+                    "Backup destination directory does not exist",
+                )));
             }
             if std::fs::symlink_metadata(path)
                 .is_ok_and(|metadata| metadata.file_type().is_symlink())
             {
-                return Err(ApplicationError::InvalidInput(
-                    "Backup destination cannot be a symbolic link".to_string(),
-                ));
+                return Err(ApplicationError::InvalidInput(Validation::new(
+                    "validation.backupDestinationCannotBeASymbolic",
+                    "Backup destination cannot be a symbolic link",
+                )));
             }
         }
         FileAuthorizationPurpose::Restore => {
             let metadata = std::fs::symlink_metadata(path).map_err(|_| {
-                ApplicationError::InvalidInput(
-                    "Restore input must be an existing regular file".to_string(),
-                )
+                ApplicationError::InvalidInput(Validation::new(
+                    "validation.restoreInputMustBeAnExisting",
+                    "Restore input must be an existing regular file",
+                ))
             })?;
             if !metadata.is_file() || metadata.file_type().is_symlink() {
-                return Err(ApplicationError::InvalidInput(
-                    "Restore input must be a regular file, not a symbolic link".to_string(),
-                ));
+                return Err(ApplicationError::InvalidInput(Validation::new(
+                    "validation.restoreInputMustBeARegular",
+                    "Restore input must be a regular file, not a symbolic link",
+                )));
             }
         }
     }
@@ -2364,24 +2459,28 @@ fn validate_selected_path(value: &str, purpose: FileAuthorizationPurpose) -> Res
 fn validate_role_name(value: &str) -> Result<String> {
     let name = value.trim();
     if name.is_empty() {
-        return Err(ApplicationError::InvalidInput(
-            "Role name is required".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.roleNameIsRequired",
+            "Role name is required",
+        )));
     }
     if name.len() > 63 {
-        return Err(ApplicationError::InvalidInput(
-            "Role name must be at most 63 bytes".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.roleNameMustBeAtMost",
+            "Role name must be at most 63 bytes",
+        )));
     }
     if name.contains('\0') || name.chars().any(char::is_control) {
-        return Err(ApplicationError::InvalidInput(
-            "Role name contains invalid characters".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.roleNameContainsInvalidCharacters",
+            "Role name contains invalid characters",
+        )));
     }
     if name.to_ascii_lowercase().starts_with("pg_") {
-        return Err(ApplicationError::InvalidInput(
-            "Roles beginning with pg_ are reserved by PostgreSQL".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.rolesBeginningWithPgAreReserved",
+            "Roles beginning with pg_ are reserved by PostgreSQL",
+        )));
     }
     Ok(name.to_string())
 }
@@ -2407,9 +2506,10 @@ fn normalize_role_valid_until(value: Option<&str>) -> Result<Option<String>> {
             .parse::<u8>()
             .is_ok_and(|day| (1..=31).contains(&day));
     if !valid_date {
-        return Err(ApplicationError::InvalidInput(
-            "Role expiration must use YYYY-MM-DD".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.roleExpirationMustUseYyyyMm",
+            "Role expiration must use YYYY-MM-DD",
+        )));
     }
     Ok(Some(value.to_string()))
 }
@@ -2417,28 +2517,32 @@ fn normalize_role_valid_until(value: Option<&str>) -> Result<Option<String>> {
 fn validate_snippet_name(value: &str) -> Result<String> {
     let name = value.trim();
     if name.is_empty() {
-        return Err(ApplicationError::InvalidInput(
-            "Snippet name is required".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.snippetNameIsRequired",
+            "Snippet name is required",
+        )));
     }
     if name.chars().count() > 120 {
-        return Err(ApplicationError::InvalidInput(
-            "Snippet name must be at most 120 characters".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.snippetNameMustBeAtMost",
+            "Snippet name must be at most 120 characters",
+        )));
     }
     if name.chars().any(char::is_control) {
-        return Err(ApplicationError::InvalidInput(
-            "Snippet name contains invalid characters".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.snippetNameContainsInvalidCharacters",
+            "Snippet name contains invalid characters",
+        )));
     }
     Ok(name.to_string())
 }
 
 fn validate_job_id(job_id: i64) -> Result<()> {
     if job_id <= 0 {
-        Err(ApplicationError::InvalidInput(
-            "Scheduled job id must be positive".to_string(),
-        ))
+        Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.scheduledJobIdMustBePositive",
+            "Scheduled job id must be positive",
+        )))
     } else {
         Ok(())
     }
@@ -2446,14 +2550,22 @@ fn validate_job_id(job_id: i64) -> Result<()> {
 
 fn validate_schema_object_name(value: &str, label: &str) -> Result<()> {
     if value.trim().is_empty() || value.contains('\0') || value.chars().any(char::is_control) {
-        return Err(ApplicationError::InvalidInput(format!(
-            "{label} name is required and cannot contain control characters"
-        )));
+        return Err(ApplicationError::InvalidInput(
+            Validation::new(
+                "validation.objectNameRequired",
+                format!("{label} name is required and cannot contain control characters"),
+            )
+            .label(label),
+        ));
     }
     if value.len() > 63 {
-        return Err(ApplicationError::InvalidInput(format!(
-            "{label} name must be at most 63 bytes"
-        )));
+        return Err(ApplicationError::InvalidInput(
+            Validation::new(
+                "validation.objectNameTooLong",
+                format!("{label} name must be at most 63 bytes"),
+            )
+            .label(label),
+        ));
     }
     Ok(())
 }
@@ -2497,9 +2609,10 @@ fn build_alter_table_preview(
 ) -> Result<AlterTablePreviewView> {
     validate_schema_object_name(&input.new_table_name, "Table")?;
     if input.columns.is_empty() || input.columns.len() > 512 {
-        return Err(ApplicationError::InvalidInput(
-            "An edited table requires between 1 and 512 column entries".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.anEditedTableRequiresBetween1",
+            "An edited table requires between 1 and 512 column entries",
+        )));
     }
     let original_names = detail
         .columns
@@ -2514,9 +2627,10 @@ fn build_alter_table_preview(
             if !original_names.contains(original_name)
                 || !supplied_originals.insert(original_name.clone())
             {
-                return Err(ApplicationError::InvalidInput(
-                    "Edited columns do not match the current table".to_string(),
-                ));
+                return Err(ApplicationError::InvalidInput(Validation::new(
+                    "validation.editedColumnsDoNotMatchThe",
+                    "Edited columns do not match the current table",
+                )));
             }
         }
         if !column.removed {
@@ -2526,9 +2640,10 @@ fn build_alter_table_preview(
                 column.default.as_deref(),
             )?;
             if !resulting_names.insert(column.name.clone()) {
-                return Err(ApplicationError::InvalidInput(
-                    "The edited table contains duplicate column names".to_string(),
-                ));
+                return Err(ApplicationError::InvalidInput(Validation::new(
+                    "validation.theEditedTableContainsDuplicateColumn",
+                    "The edited table contains duplicate column names",
+                )));
             }
         }
         edits.push(queries::ColumnEdit {
@@ -2542,9 +2657,10 @@ fn build_alter_table_preview(
         });
     }
     if supplied_originals != original_names {
-        return Err(ApplicationError::InvalidInput(
-            "Every current table column must be included in an alter request".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.everyCurrentTableColumnMustBe",
+            "Every current table column must be included in an alter request",
+        )));
     }
     let primary_key_constraint = detail
         .constraints
@@ -2676,9 +2792,13 @@ impl<'a> DdlCursor<'a> {
 fn validate_definition_text<'a>(ddl: &'a str, label: &str) -> Result<&'a str> {
     let ddl = ddl.trim();
     if ddl.is_empty() || ddl.len() > 2_097_152 || ddl.contains('\0') {
-        return Err(ApplicationError::InvalidInput(format!(
-            "{label} definition is required and must be at most 2 MiB"
-        )));
+        return Err(ApplicationError::InvalidInput(
+            Validation::new(
+                "validation.definitionRequired",
+                format!("{label} definition is required and must be at most 2 MiB"),
+            )
+            .label(label),
+        ));
     }
     Ok(ddl)
 }
@@ -2701,9 +2821,13 @@ fn require_target(
     if matches {
         Ok(())
     } else {
-        Err(ApplicationError::InvalidInput(format!(
-            "The {label} definition must target the selected object"
-        )))
+        Err(ApplicationError::InvalidInput(
+            Validation::new(
+                "validation.definitionTarget",
+                format!("The definition must target the selected object ({label})"),
+            )
+            .label(label),
+        ))
     }
 }
 
@@ -2715,9 +2839,10 @@ fn validate_view_ddl(ddl: &str, schema: &str, name: &str) -> Result<()> {
         && cursor.keyword("REPLACE")
         && cursor.keyword("VIEW"))
     {
-        return Err(ApplicationError::InvalidInput(
-            "Only CREATE OR REPLACE VIEW definitions are accepted".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.onlyCreateOrReplaceViewDefinitions",
+            "Only CREATE OR REPLACE VIEW definitions are accepted",
+        )));
     }
     require_target(cursor.qualified_name(), schema, name, "view", true)
 }
@@ -2726,9 +2851,10 @@ fn validate_sequence_ddl(ddl: &str, schema: &str, name: &str) -> Result<()> {
     let ddl = validate_definition_text(ddl, "Sequence")?;
     let mut cursor = DdlCursor::new(ddl);
     if !(cursor.keyword("ALTER") && cursor.keyword("SEQUENCE")) {
-        return Err(ApplicationError::InvalidInput(
-            "Only ALTER SEQUENCE definitions are accepted".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.onlyAlterSequenceDefinitionsAreAccepted",
+            "Only ALTER SEQUENCE definitions are accepted",
+        )));
     }
     require_target(cursor.qualified_name(), schema, name, "sequence", true)
 }
@@ -2737,21 +2863,24 @@ fn validate_index_ddl(ddl: &str, schema: &str, table: &str, name: &str) -> Resul
     let ddl = validate_definition_text(ddl, "Index")?;
     let mut cursor = DdlCursor::new(ddl);
     if !cursor.keyword("CREATE") {
-        return Err(ApplicationError::InvalidInput(
-            "Only CREATE INDEX definitions are accepted".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.onlyCreateIndexDefinitionsAreAccepted",
+            "Only CREATE INDEX definitions are accepted",
+        )));
     }
     cursor.keyword("UNIQUE");
     if !cursor.keyword("INDEX") || cursor.keyword("CONCURRENTLY") {
-        return Err(ApplicationError::InvalidInput(
-            "Only transactional CREATE [UNIQUE] INDEX definitions are accepted".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.onlyTransactionalCreateUniqueIndexDefinitions",
+            "Only transactional CREATE [UNIQUE] INDEX definitions are accepted",
+        )));
     }
     let index_target = cursor.qualified_name();
     if !cursor.keyword("ON") {
-        return Err(ApplicationError::InvalidInput(
-            "The index definition must identify its table".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.theIndexDefinitionMustIdentifyIts",
+            "The index definition must identify its table",
+        )));
     }
     cursor.keyword("ONLY");
     let table_target = cursor.qualified_name();
@@ -2762,9 +2891,10 @@ fn validate_index_ddl(ddl: &str, schema: &str, table: &str, name: &str) -> Resul
 fn validate_function_ddl(ddl: &str) -> Result<()> {
     let ddl = ddl.trim();
     if ddl.is_empty() || ddl.len() > 2_097_152 || ddl.contains('\0') {
-        return Err(ApplicationError::InvalidInput(
-            "Function definition is required and must be at most 2 MiB".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.functionDefinitionIsRequiredAndMust",
+            "Function definition is required and must be at most 2 MiB",
+        )));
     }
     let prefix = ddl
         .split_whitespace()
@@ -2777,9 +2907,10 @@ fn validate_function_ddl(ddl: &str) -> Result<()> {
         || prefix.starts_with("create or replace function")
         || prefix.starts_with("create or replace procedure"))
     {
-        return Err(ApplicationError::InvalidInput(
-            "Only CREATE [OR REPLACE] FUNCTION/PROCEDURE definitions are accepted".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.onlyCreateOrReplaceFunctionProcedure",
+            "Only CREATE [OR REPLACE] FUNCTION/PROCEDURE definitions are accepted",
+        )));
     }
     Ok(())
 }
@@ -2787,9 +2918,10 @@ fn validate_function_ddl(ddl: &str) -> Result<()> {
 fn validate_trigger_ddl(ddl: &str) -> Result<()> {
     let ddl = ddl.trim();
     if ddl.is_empty() || ddl.len() > 1_048_576 || ddl.contains('\0') {
-        return Err(ApplicationError::InvalidInput(
-            "Trigger definition is required and must be at most 1 MiB".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.triggerDefinitionIsRequiredAndMust",
+            "Trigger definition is required and must be at most 1 MiB",
+        )));
     }
     let prefix = ddl
         .split_whitespace()
@@ -2798,9 +2930,10 @@ fn validate_trigger_ddl(ddl: &str) -> Result<()> {
         .join(" ")
         .to_ascii_lowercase();
     if !(prefix.starts_with("create trigger ") || prefix.starts_with("create or replace trigger")) {
-        return Err(ApplicationError::InvalidInput(
-            "Only CREATE [OR REPLACE] TRIGGER definitions are accepted".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.onlyCreateOrReplaceTriggerDefinitions",
+            "Only CREATE [OR REPLACE] TRIGGER definitions are accepted",
+        )));
     }
     Ok(())
 }
@@ -2822,9 +2955,10 @@ async fn table_edit_metadata(
         .map(|column| column.name.clone())
         .collect::<HashSet<_>>();
     if columns.is_empty() {
-        return Err(ApplicationError::InvalidInput(
-            "Table was not found or has no visible columns".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.tableWasNotFoundOrHas",
+            "Table was not found or has no visible columns",
+        )));
     }
     let primary_keys = detail
         .columns
@@ -2846,9 +2980,10 @@ fn validate_table_name(schema: &str, table: &str) -> Result<()> {
 fn validate_table_column(column: &str, columns: &HashSet<String>) -> Result<()> {
     validate_schema_object_name(column, "Column")?;
     if !columns.contains(column) {
-        return Err(ApplicationError::InvalidInput(
-            "Column does not belong to the selected table".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.columnDoesNotBelongToThe",
+            "Column does not belong to the selected table",
+        )));
     }
     Ok(())
 }
@@ -2858,9 +2993,10 @@ fn validate_table_values(
     columns: &HashSet<String>,
 ) -> Result<Vec<(String, serde_json::Value)>> {
     if values.len() > columns.len() {
-        return Err(ApplicationError::InvalidInput(
-            "Table row contains too many columns".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.tableRowContainsTooManyColumns",
+            "Table row contains too many columns",
+        )));
     }
     let mut seen = HashSet::with_capacity(values.len());
     values
@@ -2868,9 +3004,10 @@ fn validate_table_values(
         .map(|cell| {
             validate_table_column(&cell.column, columns)?;
             if !seen.insert(cell.column.clone()) {
-                return Err(ApplicationError::InvalidInput(
-                    "Table row contains a duplicate column".to_string(),
-                ));
+                return Err(ApplicationError::InvalidInput(Validation::new(
+                    "validation.tableRowContainsADuplicateColumn",
+                    "Table row contains a duplicate column",
+                )));
             }
             let value = parse_json_value(&cell.value_json)?;
             Ok((cell.column, value))
@@ -2883,15 +3020,17 @@ fn parse_table_row(
     columns: &HashSet<String>,
 ) -> Result<Vec<(String, serde_json::Value)>> {
     if values_json.len() > 8_388_608 {
-        return Err(ApplicationError::InvalidInput(
-            "Table rows must be at most 8 MiB".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.tableRowsMustBeAtMost",
+            "Table rows must be at most 8 MiB",
+        )));
     }
     let values = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(values_json)
         .map_err(|_| {
-            ApplicationError::InvalidInput(
-                "A new table row must be a valid JSON object".to_string(),
-            )
+            ApplicationError::InvalidInput(Validation::new(
+                "validation.aNewTableRowMustBe",
+                "A new table row must be a valid JSON object",
+            ))
         })?
         .into_iter()
         .map(|(column, value)| TableCellInput {
@@ -2907,23 +3046,26 @@ fn validate_row_keys(
     primary_keys: &[String],
 ) -> Result<Vec<(String, serde_json::Value)>> {
     if primary_keys.is_empty() {
-        return Err(ApplicationError::InvalidInput(
-            "Editing requires a primary key on the table".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.editingRequiresAPrimaryKeyOn",
+            "Editing requires a primary key on the table",
+        )));
     }
     let mut supplied = HashMap::with_capacity(keys.len());
     for key in keys {
         validate_schema_object_name(&key.column, "Primary key column")?;
         let value = parse_json_value(&key.value_json)?;
         if value.is_null() {
-            return Err(ApplicationError::InvalidInput(
-                "Primary key values cannot be null".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.primaryKeyValuesCannotBeNull",
+                "Primary key values cannot be null",
+            )));
         }
         if supplied.insert(key.column, value).is_some() {
-            return Err(ApplicationError::InvalidInput(
-                "Primary key contains a duplicate column".to_string(),
-            ));
+            return Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.primaryKeyContainsADuplicateColumn",
+                "Primary key contains a duplicate column",
+            )));
         }
     }
     if supplied.len() != primary_keys.len()
@@ -2931,9 +3073,10 @@ fn validate_row_keys(
             .iter()
             .any(|column| !supplied.contains_key(column))
     {
-        return Err(ApplicationError::InvalidInput(
-            "A complete primary key is required to identify the table row".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.aCompletePrimaryKeyIsRequired",
+            "A complete primary key is required to identify the table row",
+        )));
     }
     Ok(primary_keys
         .iter()
@@ -2950,14 +3093,16 @@ fn validate_row_keys(
 
 fn parse_json_value(value: &str) -> Result<serde_json::Value> {
     if value.len() > 1_048_576 {
-        return Err(ApplicationError::InvalidInput(
-            "Table values must be at most 1 MiB each".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.tableValuesMustBeAtMost",
+            "Table values must be at most 1 MiB each",
+        )));
     }
     serde_json::from_str(value).map_err(|_| {
-        ApplicationError::InvalidInput(
-            "Table values must use valid JSON; strings require double quotes".to_string(),
-        )
+        ApplicationError::InvalidInput(Validation::new(
+            "validation.tableValuesMustUseValidJson",
+            "Table values must use valid JSON; strings require double quotes",
+        ))
     })
 }
 
@@ -2970,25 +3115,27 @@ fn validate_cron_job_input(input: CronJobInput) -> Result<(Option<String>, Strin
         .as_ref()
         .is_some_and(|name| name.chars().count() > 63 || name.chars().any(char::is_control))
     {
-        return Err(ApplicationError::InvalidInput(
-            "Scheduled job name must be at most 63 characters without control characters"
-                .to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.scheduledJobNameMustBeAt",
+            "Scheduled job name must be at most 63 characters without control characters",
+        )));
     }
     let schedule = input.schedule.trim().to_string();
     if schedule.is_empty()
         || schedule.chars().count() > 100
         || schedule.chars().any(char::is_control)
     {
-        return Err(ApplicationError::InvalidInput(
-            "Scheduled job schedule must be 1 to 100 printable characters".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.scheduledJobScheduleMustBe1",
+            "Scheduled job schedule must be 1 to 100 printable characters",
+        )));
     }
     let command = input.command.trim().to_string();
     if command.is_empty() || command.len() > 100_000 || command.contains('\0') {
-        return Err(ApplicationError::InvalidInput(
-            "Scheduled job command must be 1 to 100000 bytes".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.scheduledJobCommandMustBe1",
+            "Scheduled job command must be 1 to 100000 bytes",
+        )));
     }
     Ok((name, schedule, command))
 }
@@ -2996,14 +3143,16 @@ fn validate_cron_job_input(input: CronJobInput) -> Result<(Option<String>, Strin
 fn validate_extension_name(value: &str) -> Result<String> {
     let name = value.trim();
     if name.is_empty() {
-        return Err(ApplicationError::InvalidInput(
-            "Extension name is required".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.extensionNameIsRequired",
+            "Extension name is required",
+        )));
     }
     if name.len() > 63 || name.chars().any(char::is_control) {
-        return Err(ApplicationError::InvalidInput(
-            "Extension name contains invalid characters".to_string(),
-        ));
+        return Err(ApplicationError::InvalidInput(Validation::new(
+            "validation.extensionNameContainsInvalidCharacters",
+            "Extension name contains invalid characters",
+        )));
     }
     Ok(name.to_string())
 }
@@ -3051,7 +3200,10 @@ fn validate_input(input: &ConnectionInput) -> Result<()> {
     if errors.is_empty() {
         Ok(())
     } else {
-        Err(ApplicationError::InvalidConnection(errors.join("; ")))
+        Err(ApplicationError::InvalidConnection(
+            Validation::new("validation.connectionFields", errors.join("; "))
+                .param("details", errors.join("; ")),
+        ))
     }
 }
 

@@ -85,17 +85,21 @@ comando devolve o objeto interno `PostgresDriver`; o threat model está em
 Toda falha de comando chega ao frontend como:
 
 ```json
-{ "code": "connection_not_active", "key": "error.connection_not_active", "message": "Connection 'id' is not connected" }
+{ "code": "invalid_input", "key": "validation.objectNameRequired", "params": { "label": "label.schema" }, "message": "Schema name is required and cannot contain control characters" }
 ```
 
 - `code` é a categoria estável: `invalid_input`, `connection_not_found`, `connection_not_active`,
   `operation_error`, `github_error`, `backend_error` ou `filesystem_error`.
 - `key`, quando presente, é uma chave estável dos catálogos em `frontend/dist/locales`; o
-  frontend traduz por ela (`errorMessage` em `i18n.js`). Hoje carregam chave: conexão não
+  frontend traduz por ela (`errorMessage` em `i18n.js`). Carregam chave: todas as validações
+  (`invalid_input`, chaves `validation.*`, montadas com `draco_app::Validation`), conexão não
   encontrada/inativa, falha genérica de operação, falha não-PostgreSQL do core e seletor de
   arquivos indisponível.
-- `message` é o texto em inglês, usado como fallback. Diagnósticos do PostgreSQL nunca recebem
-  `key` e são exibidos sem tradução; mensagens de validação (`invalid_input`) ainda não têm chave.
+- `params`, quando presente, traz os valores nomeados da mensagem. Valores que começam com
+  `label.` são chaves de catálogo e também são traduzidos; os demais (nomes de objetos,
+  constraints) entram como estão.
+- `message` é o texto em inglês, usado como fallback e em logs. Diagnósticos do PostgreSQL e
+  respostas da API do GitHub nunca recebem `key` e são exibidos sem tradução.
 
 ## Bridge implementada
 

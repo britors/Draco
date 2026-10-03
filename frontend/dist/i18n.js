@@ -64,12 +64,22 @@ export function applyTranslations(root, t) {
   }
 }
 
+// Validation parameters whose value is a `label.*` catalog key (e.g. which object a name belongs
+// to) are translated too; every other value, such as identifiers, is inserted as is.
+function translateParams(params, t) {
+  const translated = {};
+  for (const [name, value] of Object.entries(params || {})) {
+    translated[name] = typeof value === 'string' && value.startsWith('label.') && t(value) !== value ? t(value) : value;
+  }
+  return translated;
+}
+
 // Builds the text shown for an IPC failure. When the bridge sends a stable message `key`, the
 // interface text is translated from it; otherwise the backend message is shown as is, because
 // PostgreSQL diagnostics and validation details are never rewritten.
 export function errorMessage(error, t, fallbackKey = 'error.operation_error') {
   const key = typeof error?.key === 'string' ? error.key : null;
-  if (key && t(key) !== key) return t(key, error.params || {});
+  if (key && t(key) !== key) return t(key, translateParams(error.params, t));
   if (typeof error?.message === 'string' && error.message.trim()) return error.message;
   return t(fallbackKey);
 }
