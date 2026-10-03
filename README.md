@@ -15,6 +15,10 @@
   </a>
 </p>
 
+<p align="center">
+  <strong><a href="https://dracodb.com.br">dracodb.com.br</a></strong> — site oficial do Draco Postgres, com downloads e instalação
+</p>
+
 **Draco** é o cliente de banco de dados do ecossistema **Lyra OS**: explorador de
 esquemas, editor SQL e ferramenta de administração para PostgreSQL. Funciona em
 qualquer distribuição Linux moderna, com integração visual prioritária ao Lyra
@@ -49,6 +53,8 @@ qualquer distribuição Linux moderna, com integração visual prioritária ao L
 - `frontend/dist`: shell web local empacotado pelo Tauri, sem dependências de
   rede em runtime.
 - `data`: `.desktop` e metadados AppStream.
+- `site`: site estático publicado em <https://dracodb.com.br> pelo workflow `Site` (GitHub
+  Pages) a cada mudança na `main`.
 - `packaging/obs`: artefatos para o pacote RPM no OBS
   (`home:rodrigosbrito:lyra/postgres-draco`).
 
