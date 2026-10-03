@@ -143,10 +143,12 @@ test('installed app connects, browses the schema and runs a query', async (t) =>
     const summary = await session.waitFor('the query result', `
       const error = document.getElementById('result-error');
       if (error && !error.hidden && error.textContent.trim()) return 'error: ' + error.textContent.trim();
-      const summary = document.getElementById('result-summary').textContent;
-      return /^1 rows/.test(summary) ? summary : null;
+      // data-rows carries the raw row count; the visible summary is translated.
+      const summary = document.getElementById('result-summary');
+      const rows = summary.dataset.rows ?? summary.textContent.match(/^(\\d+) rows/)?.[1];
+      return rows === undefined ? null : rows;
     `);
-    assert.match(summary, /^1 rows/);
+    assert.equal(summary, '1');
     const grid = await session.run(`return document.getElementById('result-grid').textContent;`);
     assert.match(grid, /answer/);
     assert.match(grid, /42/);
