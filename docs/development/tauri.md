@@ -35,7 +35,7 @@ Os canais de distribuição são:
 | Ubuntu 24.04 x64 (`.deb`) | GitHub Release | suportado a partir da próxima tag |
 | Fedora 43 x64 (`.rpm`) | GitHub Release | suportado a partir da próxima tag |
 | openSUSE Leap 16.0 x64 (`.rpm`) | GitHub Release | suportado a partir da próxima tag |
-| openSUSE Leap 16.0 (`.rpm`) | OBS `home:rodrigosbrito:lyra/postgres-draco` | suportado |
+| openSUSE Leap 16.1 (`.rpm`) | OBS `home:rodrigosbrito:lyra/postgres-draco` | suportado |
 
 O workflow `release.yml` é acionado apenas por uma tag `vX.Y.Z` existente (ou
 manualmente apontando para ela), exige que a tag coincida com as versões do
@@ -51,6 +51,13 @@ descrevem a mesma tag imutável. O teste `frontend/tests/distribution.test.mjs` 
 entre os metadados publicados. A versão `2.1.4` corrige a identidade da janela no GNOME;
 `2.0.4` foi a primeira a publicar os quatro formatos
 nativos no GitHub, além do RPM no OBS.
+
+## Rollback
+
+O rollback suportado é instalar o pacote de uma release Tauri anterior; a configuração XDG e o
+credential store são preservados entre versões `2.x`. A decisão de remover o frontend GTK, os
+gates que ficaram pendentes e os passos de downgrade por distribuição estão no
+[ADR-0003](../architecture/adr-0003-gtk-removal.md).
 
 ## Build offline e validação do pacote
 
