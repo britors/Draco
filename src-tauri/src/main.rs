@@ -19,9 +19,14 @@ use draco_core::assistant::{AiMessage, Provider, Settings};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+/// IPC error envelope. `code` is a stable category. `key`, when present, is a stable interface
+/// message key (see `frontend/dist/locales`) that the frontend translates; `message` stays as the
+/// English fallback. PostgreSQL diagnostics never carry a key: database text is shown verbatim.
 #[derive(Debug, Serialize)]
 struct CommandError {
     code: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    key: Option<&'static str>,
     message: String,
 }
 
@@ -38,36 +43,47 @@ impl From<ApplicationError> for CommandError {
         match error {
             ApplicationError::InvalidConnection(message) => Self {
                 code: "invalid_input",
+                key: None,
                 message,
             },
             ApplicationError::InvalidInput(message) => Self {
                 code: "invalid_input",
+                key: None,
                 message,
             },
             ApplicationError::ConnectionNotFound(id) => Self {
                 code: "connection_not_found",
+                key: Some("error.connection_not_found"),
                 message: format!("Connection '{id}' was not found"),
             },
             ApplicationError::ConnectionNotActive(id) => Self {
                 code: "connection_not_active",
+                key: Some("error.connection_not_active"),
                 message: format!("Connection '{id}' is not connected"),
             },
             ApplicationError::Assistant(_) | ApplicationError::Operation(_) => Self {
                 code: "operation_error",
+                key: Some("error.operation_error"),
                 message: "The requested operation could not be completed".to_string(),
             },
             ApplicationError::Github(message) => Self {
                 code: "github_error",
+                key: None,
                 message,
             },
             // PostgreSQL's Display implementation is intentionally terse (often just "db error"),
             // so expose its source-chain diagnostic to the editor. Keep filesystem, Secret
             // Service and arbitrary backend details out of IPC responses.
-            ApplicationError::Core(error) => Self {
-                code: "backend_error",
-                message: match &error {
-                    draco_core::error::CoreError::Postgres(_) => error.detailed_message(),
-                    _ => "The requested operation could not be completed".to_string(),
+            ApplicationError::Core(error) => match &error {
+                draco_core::error::CoreError::Postgres(_) => Self {
+                    code: "backend_error",
+                    key: None,
+                    message: error.detailed_message(),
+                },
+                _ => Self {
+                    code: "backend_error",
+                    key: Some("error.operation_error"),
+                    message: "The requested operation could not be completed".to_string(),
                 },
             },
         }
@@ -809,6 +825,7 @@ async fn choose_backup_output(
     .await
     .map_err(|_| CommandError {
         code: "operation_error",
+        key: Some("error.file_picker_unavailable"),
         message: "The native file picker could not be opened".to_string(),
     })?;
     let Some(path) = selected else {
@@ -838,6 +855,7 @@ async fn choose_restore_input(
     .await
     .map_err(|_| CommandError {
         code: "operation_error",
+        key: Some("error.file_picker_unavailable"),
         message: "The native file picker could not be opened".to_string(),
     })?;
     let Some(path) = selected else {
@@ -995,6 +1013,7 @@ fn save_programming_file(
     {
         return Err(CommandError {
             code: "invalid_input",
+            key: None,
             message: "Programming files must be relative .sql paths inside the selected workspace."
                 .into(),
         });
@@ -1003,6 +1022,7 @@ fn save_programming_file(
     if !workspace.is_absolute() {
         return Err(CommandError {
             code: "invalid_input",
+            key: None,
             message: "Choose a valid local workspace folder.".into(),
         });
     }
@@ -1010,11 +1030,13 @@ fn save_programming_file(
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent).map_err(|error| CommandError {
             code: "filesystem_error",
+            key: None,
             message: error.to_string(),
         })?;
     }
     fs::write(destination, content).map_err(|error| CommandError {
         code: "filesystem_error",
+        key: None,
         message: error.to_string(),
     })
 }
@@ -1025,6 +1047,7 @@ async fn list_programming_files(workspace: String) -> Result<Vec<String>, Comman
         .await
         .map_err(|error| CommandError {
             code: "filesystem_error",
+            key: None,
             message: error.to_string(),
         })?
 }
@@ -1048,12 +1071,14 @@ fn list_programming_files_sync(workspace: &str) -> Result<Vec<String>, CommandEr
     if !root.is_absolute() || !root.is_dir() {
         return Err(CommandError {
             code: "invalid_input",
+            key: None,
             message: "Choose a valid local workspace folder.".into(),
         });
     }
     let mut files = Vec::new();
     walk(&root, &root, &mut files).map_err(|error| CommandError {
         code: "filesystem_error",
+        key: None,
         message: error.to_string(),
     })?;
     files.sort();
@@ -1073,11 +1098,13 @@ fn read_programming_file(workspace: String, relative_path: String) -> Result<Str
     {
         return Err(CommandError {
             code: "invalid_input",
+            key: None,
             message: "Invalid programming file path.".into(),
         });
     }
     fs::read_to_string(PathBuf::from(workspace).join(relative)).map_err(|error| CommandError {
         code: "filesystem_error",
+        key: None,
         message: error.to_string(),
     })
 }
@@ -1385,6 +1412,30 @@ mod tests {
         assert!(!csp.contains("https://"));
         assert!(!csp.contains("*"));
         assert!(csp.contains("form-action 'none'"));
+    }
+
+    #[test]
+    fn generic_errors_carry_catalog_keys_and_database_text_does_not() {
+        let catalog = include_str!("../../frontend/dist/locales/en.js");
+        let errors = [
+            ApplicationError::ConnectionNotFound("id".to_string()),
+            ApplicationError::ConnectionNotActive("id".to_string()),
+            ApplicationError::Operation("detail".to_string()),
+            ApplicationError::Core(draco_core_error_for_test()),
+        ];
+        for error in errors {
+            let error = CommandError::from(error);
+            let key = error.key.expect("generic errors carry a message key");
+            assert!(
+                catalog.contains(&format!("'{key}'")),
+                "{key} is missing from en.js"
+            );
+        }
+        assert!(catalog.contains("'error.file_picker_unavailable'"));
+
+        let invalid = CommandError::from(ApplicationError::InvalidInput("detail".to_string()));
+        let json = serde_json::to_value(&invalid).expect("command error serializes");
+        assert!(json.get("key").is_none(), "absent keys are not serialized");
     }
 
     fn draco_core_error_for_test() -> draco_core::error::CoreError {

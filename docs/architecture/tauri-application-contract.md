@@ -80,6 +80,23 @@ capability restrita à janela `main` e nenhum plugin de filesystem/processo habi
 comando devolve o objeto interno `PostgresDriver`; o threat model está em
 [`docs/security/threat-model.md`](../security/threat-model.md).
 
+## Envelope de erro
+
+Toda falha de comando chega ao frontend como:
+
+```json
+{ "code": "connection_not_active", "key": "error.connection_not_active", "message": "Connection 'id' is not connected" }
+```
+
+- `code` é a categoria estável: `invalid_input`, `connection_not_found`, `connection_not_active`,
+  `operation_error`, `github_error`, `backend_error` ou `filesystem_error`.
+- `key`, quando presente, é uma chave estável dos catálogos em `frontend/dist/locales`; o
+  frontend traduz por ela (`errorMessage` em `i18n.js`). Hoje carregam chave: conexão não
+  encontrada/inativa, falha genérica de operação, falha não-PostgreSQL do core e seletor de
+  arquivos indisponível.
+- `message` é o texto em inglês, usado como fallback. Diagnósticos do PostgreSQL nunca recebem
+  `key` e são exibidos sem tradução; mensagens de validação (`invalid_input`) ainda não têm chave.
+
 ## Bridge implementada
 
 O shell inicial em `src-tauri` expõe:
