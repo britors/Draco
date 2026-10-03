@@ -3,15 +3,95 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Draco Postgres</title>
-  <meta name="description" content="Draco Postgres: cliente desktop PostgreSQL livre do ecossistema Lyra OS — explorador de schemas, editor SQL, administração, ERD, backup e Assistente de IA somente leitura.">
+  <title>Draco Postgres — cliente PostgreSQL gratuito para Linux e Windows</title>
+  <meta name="description" content="Draco Postgres é um cliente PostgreSQL gratuito e de código aberto para Linux e Windows: editor SQL com autocomplete, explorador de schemas, diagrama ER, administração, backup e Assistente de IA.">
+  <meta name="keywords" content="cliente PostgreSQL, PostgreSQL GUI, editor SQL, gerenciador de banco de dados, Postgres Linux, alternativa ao pgAdmin, DBeaver, openSUSE, Fedora, Ubuntu">
+  <meta name="author" content="Rodrigo Brito">
+  <meta name="robots" content="index, follow, max-image-preview:large">
   <meta name="theme-color" content="#0b0b0d">
-  <meta property="og:title" content="Draco Postgres">
-  <meta property="og:description" content="Cliente desktop PostgreSQL livre, rápido e seguro para Linux e Windows.">
   <link rel="canonical" href="https://dracodb.com.br/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:site_name" content="Draco Postgres">
+  <meta property="og:title" content="Draco Postgres — cliente PostgreSQL gratuito para Linux e Windows">
+  <meta property="og:description" content="Editor SQL, explorador de schemas, diagrama ER, administração e backup do PostgreSQL em um app nativo, livre e seguro.">
   <meta property="og:url" content="https://dracodb.com.br/">
-  <meta property="og:image" content="https://dracodb.com.br/assets/draco-logo.png">
-  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <meta property="og:image" content="https://dracodb.com.br/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Draco Postgres — cliente PostgreSQL para Linux e Windows">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Draco Postgres — cliente PostgreSQL gratuito para Linux e Windows">
+  <meta name="twitter:description" content="Editor SQL, explorador de schemas, diagrama ER, administração e backup do PostgreSQL em um app nativo, livre e seguro.">
+  <meta name="twitter:image" content="https://dracodb.com.br/assets/og-image.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://dracodb.com.br/#app",
+        "name": "Draco Postgres",
+        "alternateName": ["Draco", "postgres-draco"],
+        "description": "Cliente desktop PostgreSQL gratuito e de código aberto com editor SQL, explorador de schemas, diagrama ER, administração, backup e Assistente de IA somente leitura.",
+        "url": "https://dracodb.com.br/",
+        "image": "https://dracodb.com.br/assets/draco-logo.png",
+        "applicationCategory": "DeveloperApplication",
+        "applicationSubCategory": "Database client",
+        "operatingSystem": "Linux, Windows",
+        "softwareVersion": "2.1.4",
+        "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+        "downloadUrl": "https://github.com/britors/Draco/releases",
+        "codeRepository": "https://github.com/britors/Draco",
+        "inLanguage": "pt-BR",
+        "author": { "@type": "Person", "name": "Rodrigo Brito", "url": "https://github.com/britors" },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://dracodb.com.br/#site",
+        "name": "Draco Postgres",
+        "url": "https://dracodb.com.br/",
+        "inLanguage": "pt-BR"
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "O Draco Postgres é gratuito?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Sim. O Draco Postgres é software livre, licenciado sob GPL-3.0-or-later, e pode ser usado sem custo inclusive em ambientes comerciais." }
+          },
+          {
+            "@type": "Question",
+            "name": "Em quais sistemas operacionais o Draco Postgres funciona?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Há pacotes nativos para Ubuntu (.deb), Fedora e openSUSE (.rpm) e um instalador para Windows. Também é possível compilar a partir do código-fonte em qualquer distribuição Linux moderna." }
+          },
+          {
+            "@type": "Question",
+            "name": "Preciso instalar o psql para usar o Draco Postgres?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Não. As queries usam um driver PostgreSQL nativo. Somente backup e restauração usam as ferramentas oficiais pg_dump, pg_restore e psql." }
+          },
+          {
+            "@type": "Question",
+            "name": "Onde ficam minhas senhas?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No cofre de credenciais do sistema operacional, como GNOME Keyring, KWallet ou Windows Credential Manager. O Draco Postgres nunca grava senhas em arquivos de configuração." }
+          },
+          {
+            "@type": "Question",
+            "name": "O Assistente de IA pode alterar meu banco de dados?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Não. O Assistente só inspeciona o banco com ferramentas somente leitura. Qualquer sugestão de SQL é apresentada como texto para revisão manual." }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/draco-logo.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -27,6 +107,7 @@
         <a href="#recursos">Recursos</a>
         <a href="#seguranca">Segurança</a>
         <a href="#download">Download</a>
+        <a href="#faq">FAQ</a>
         <a class="nav-cta" href="https://github.com/britors/Draco">GitHub</a>
       </nav>
     </div>
@@ -36,12 +117,12 @@
     <section class="hero" id="topo">
       <div class="container hero-inner">
         <div class="hero-copy">
-          <p class="eyebrow">Ecossistema Lyra OS · versão 2.1.4</p>
+          <p class="eyebrow">Cliente PostgreSQL gratuito · versão 2.1.4</p>
           <h1>Draco <span class="gold">Postgres</span></h1>
           <p class="lead">
-            O cliente desktop PostgreSQL que une explorador de schemas, editor SQL e
-            ferramentas de administração em um app nativo, leve e livre — sem
-            depender de <code>psql</code> para o dia a dia.
+            O cliente PostgreSQL de código aberto para Linux e Windows que une
+            explorador de schemas, editor SQL e ferramentas de administração em
+            um app nativo, leve e livre — sem depender de <code>psql</code> para o dia a dia.
           </p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#download">Baixar o Draco Postgres</a>
@@ -55,7 +136,7 @@
         </div>
 
         <div class="hero-visual" aria-hidden="true">
-          <img class="hero-logo" src="assets/draco-logo.png" alt="" width="220" height="220">
+          <img class="hero-logo" src="assets/draco-logo.png" alt="" width="220" height="220" fetchpriority="high">
           <div class="mock-window">
             <div class="mock-bar">
               <span></span><span></span><span></span>
@@ -218,6 +299,34 @@ cargo build --locked --release -p draco-tauri
           </div>
         </div>
         <p class="all-releases"><a href="https://github.com/britors/Draco/releases">Ver todas as versões e notas de release →</a></p>
+      </div>
+    </section>
+    <section class="section section-alt" id="faq" aria-labelledby="faq-titulo">
+      <div class="container">
+        <p class="eyebrow">Perguntas frequentes</p>
+        <h2 id="faq-titulo">Dúvidas sobre o Draco Postgres</h2>
+        <div class="faq-list">
+          <details>
+            <summary>O Draco Postgres é gratuito?</summary>
+            <p>Sim. O Draco Postgres é software livre, licenciado sob GPL-3.0-or-later, e pode ser usado sem custo inclusive em ambientes comerciais.</p>
+          </details>
+          <details>
+            <summary>Em quais sistemas operacionais o Draco Postgres funciona?</summary>
+            <p>Há pacotes nativos para Ubuntu (.deb), Fedora e openSUSE (.rpm) e um instalador para Windows. Também é possível compilar a partir do código-fonte em qualquer distribuição Linux moderna.</p>
+          </details>
+          <details>
+            <summary>Preciso instalar o psql para usar o Draco Postgres?</summary>
+            <p>Não. As queries usam um driver PostgreSQL nativo. Somente backup e restauração usam as ferramentas oficiais <code>pg_dump</code>, <code>pg_restore</code> e <code>psql</code>.</p>
+          </details>
+          <details>
+            <summary>Onde ficam minhas senhas?</summary>
+            <p>No cofre de credenciais do sistema operacional, como GNOME Keyring, KWallet ou Windows Credential Manager. O Draco Postgres nunca grava senhas em arquivos de configuração.</p>
+          </details>
+          <details>
+            <summary>O Assistente de IA pode alterar meu banco de dados?</summary>
+            <p>Não. O Assistente só inspeciona o banco com ferramentas somente leitura. Qualquer sugestão de SQL é apresentada como texto para revisão manual.</p>
+          </details>
+        </div>
       </div>
     </section>
   </main>
