@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import en from '../dist/locales/en.js';
 
 const index = await readFile(new URL('../dist/index.html', import.meta.url), 'utf8');
 const app = await readFile(new URL('../dist/app.js', import.meta.url), 'utf8');
@@ -117,7 +118,7 @@ test('Explorer exposes local object creators and validated definition editors', 
   assert.match(app, /function editSequenceDefinition/);
   assert.match(app, /function editIndexDefinition/);
   assert.match(app, /function explorerFolder/);
-  assert.match(app, /explorerFolder\(children, 'Programming'\)/);
+  assert.match(app, /explorerFolder\(children, t\('nav\.programming'\)\)/);
   assert.match(app, /CREATE OR REPLACE TRIGGER/);
   assert.match(app, /result\.destructive/);
   assert.match(app, /References must use schema\.table\.column/);
@@ -204,7 +205,7 @@ test('query tabs can be renamed and closed, and always leave at least one tab op
   assert.match(app, /function renameQueryTab/);
   assert.match(app, /function closeQueryTab/);
   assert.match(app, /className = 'query-tab-close'/);
-  assert.match(app, /showPrompt\('Choose a name for this query tab\.', 'Rename tab', 'Tab name', '', tab\.label\)/);
+  assert.match(app, /showPrompt\(t\('query\.renameTabMessage'\), t\('query\.renameTabTitle'\), t\('query\.tabName'\), '', tab\.label\)/);
   assert.match(app, /if \(state\.queryTabs\.length === 1\) \{/);
   assert.match(style, /\.query-tab-wrap \{/);
   assert.match(style, /\.query-tab-close \{/);
@@ -300,17 +301,18 @@ test('dark visual system is local and has explicit loading/error/empty surfaces'
   assert.match(app, /function renderExplorerRetry/);
   assert.match(app, /retry\.addEventListener\('click', \(\) => void openExplorer\(id\)\)/);
   assert.match(app, /group\.dataset\.loadState === 'loading'/);
-  assert.match(app, /Click the schema to retry/);
+  assert.match(app, /t\('explorer\.objectsFailedHint'\)/);
   assert.match(app, /request !== state\.explorerConnectionRequest/);
   assert.match(app, /invoke\('list_tables', \{ id, schema: schemaName \}\)/);
   assert.match(app, /invoke\('list_schema_objects', \{ id, schema: schemaName \}\)/);
-  assert.match(app, /explorerFolder\(children, 'Programming'\)/);
-  assert.match(app, /Sequences/);
+  assert.match(app, /explorerFolder\(children, t\('nav\.programming'\)\)/);
+  assert.match(app, /explorerSection\(children, t\('explorer\.sequences'\)\)/);
   assert.match(app, /groupSchemaObjects\(objects\)/);
   assert.match(app, /function openSchemaObject/);
   assert.match(app, /function advanceSequence/);
   assert.match(app, /function resetSequence/);
-  assert.match(app, /Existing table values are not checked/);
+  assert.match(app, /t\('sequence\.resetConfirm'/);
+  assert.match(en['sequence.resetConfirm'], /Existing table values are not checked/);
   assert.match(app, /function renderExplorerExtensions/);
   assert.match(app, /openSqlInNewTab\(sql, id, object\.name\)/);
   assert.match(app, /item\.addEventListener\('click', \(\) => openSchemaObject\(id, schemaName, object\)\)/);
@@ -342,8 +344,10 @@ test('dark visual system is local and has explicit loading/error/empty surfaces'
   assert.match(app, /event\.key\.toLowerCase\(\) === 't'/);
   assert.match(app, /event\.key\.toLowerCase\(\) === 's'/);
   assert.match(app, /function saveCurrentSnippet/);
-  assert.match(app, /Rename snippet/);
-  assert.match(app, /Delete the snippet/);
+  assert.match(app, /t\('snippets\.renameTitle'\)/);
+  assert.match(en['snippets.renameTitle'], /Rename snippet/);
+  assert.match(app, /t\('snippets\.deleteConfirm'/);
+  assert.match(en['snippets.deleteConfirm'], /Delete the snippet/);
   assert.match(app, /renderErdCanvas/);
   assert.match(app, /erd-node/);
   assert.match(app, /erd-relations-panel/);
