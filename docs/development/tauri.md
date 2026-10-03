@@ -52,6 +52,14 @@ entre os metadados publicados. A versão `2.1.4` corrige a identidade da janela 
 `2.0.4` foi a primeira a publicar os quatro formatos
 nativos no GitHub, além do RPM no OBS.
 
+## Site oficial
+
+O site em <https://dracodb.com.br> vive em `site/` e é publicado pelo workflow `Site` (GitHub
+Pages). Ao publicar, o workflow troca a versão citada em `site/index.html` pela release mais
+recente do GitHub e falha se essa release não tiver os quatro pacotes linkados. O job `publish`
+do `release.yml` dispara o `Site` ao final, então os links de download acompanham cada tag sem
+editar o HTML.
+
 ## Rollback
 
 O rollback suportado é instalar o pacote de uma release Tauri anterior; a configuração XDG e o
