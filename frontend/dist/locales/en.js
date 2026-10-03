@@ -252,6 +252,16 @@ export default Object.freeze({
   'snippets.deleteFailed': 'Could not delete snippet',
   'snippets.notDeleted': 'Snippet not deleted',
 
+  'results.details': 'Details',
+  'results.detailsFor': 'View details for row {row}',
+  'results.rowNumber': 'Row {row}',
+  'autocomplete.keyword': 'keyword',
+  'autocomplete.schema': 'schema',
+  'autocomplete.table': 'table',
+  'autocomplete.view': 'view',
+  'autocomplete.function': 'function',
+  'autocomplete.column': 'column',
+
   'dialog.notice': 'Notice',
   'dialog.confirmTitle': 'Confirm action',
   'dialog.promptTitle': 'Enter a value',

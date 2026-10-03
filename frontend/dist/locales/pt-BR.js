@@ -252,6 +252,16 @@ export default Object.freeze({
   'snippets.deleteFailed': 'Não foi possível excluir o snippet',
   'snippets.notDeleted': 'Snippet não excluído',
 
+  'results.details': 'Detalhes',
+  'results.detailsFor': 'Ver detalhes da linha {row}',
+  'results.rowNumber': 'Linha {row}',
+  'autocomplete.keyword': 'palavra-chave',
+  'autocomplete.schema': 'schema',
+  'autocomplete.table': 'tabela',
+  'autocomplete.view': 'view',
+  'autocomplete.function': 'função',
+  'autocomplete.column': 'coluna',
+
   'dialog.notice': 'Aviso',
   'dialog.confirmTitle': 'Confirmar ação',
   'dialog.promptTitle': 'Informe um valor',

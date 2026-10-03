@@ -486,7 +486,7 @@ function renderAutocomplete(items, position, editor, popup) {
     label.textContent = item.label;
     const detail = document.createElement('span');
     detail.className = 'sql-suggestion-detail';
-    detail.textContent = item.detail;
+    detail.textContent = [item.detail, t(`autocomplete.${item.kind}`)].filter(Boolean).join(' · ');
     option.append(label, detail);
     option.addEventListener('mousedown', (event) => { event.preventDefault(); acceptSuggestion(index); });
     popup.append(option);
@@ -3243,10 +3243,10 @@ function buildResultRow(result, rowIndex) {
   const detail = document.createElement('button');
   detail.className = 'button small row-detail-action';
   detail.type = 'button';
-  detail.textContent = 'Details';
-  detail.setAttribute('aria-label', `View details for row ${rowIndex + 1}`);
+  detail.textContent = t('results.details');
+  detail.setAttribute('aria-label', t('results.detailsFor', { row: rowIndex + 1 }));
   detail.addEventListener('click', () => {
-    void showAlert(resultRowToText(row, result.columns), `Row ${rowIndex + 1}`);
+    void showAlert(resultRowToText(row, result.columns), t('results.rowNumber', { row: rowIndex + 1 }));
   });
   actionCell.append(detail);
   tr.append(actionCell);

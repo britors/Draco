@@ -4,9 +4,10 @@
 
 import { KEYWORDS } from './sql-highlight.js';
 
+// `detail` holds only context (schema or table); the UI adds the translated `kind` label.
 const KEYWORD_ITEMS = [...KEYWORDS].map((word) => ({
   label: word.toUpperCase(),
-  detail: 'keyword',
+  detail: '',
   kind: 'keyword',
   insertText: word.toUpperCase(),
 }));
@@ -21,12 +22,12 @@ export function buildCompletionIndex(data) {
     seen.add(key);
     items.push({ label, detail, kind, insertText });
   };
-  for (const schema of data?.schemas || []) push('schema', schema, 'schema');
+  for (const schema of data?.schemas || []) push('schema', schema, '');
   for (const table of data?.tables || []) push(table.kind === 'view' ? 'view' : 'table', table.name, `${table.schema}.${table.name}`);
-  for (const fn of data?.functions || []) push('function', fn.name, `${fn.schema} function`, `${fn.name}(`);
+  for (const fn of data?.functions || []) push('function', fn.name, fn.schema, `${fn.name}(`);
   const columnsByTable = new Map();
   for (const column of data?.columns || []) {
-    push('column', column.name, `${column.table} column`);
+    push('column', column.name, column.table);
     const list = columnsByTable.get(column.table.toLowerCase()) || [];
     list.push(column);
     columnsByTable.set(column.table.toLowerCase(), list);
@@ -75,7 +76,7 @@ export function suggest(index, text, caret, { limit = 20, minLength = 1 } = {}) 
   if (qualifier) {
     const scoped = index.columnsByTable.get(qualifier.toLowerCase());
     if (scoped?.length) {
-      const items = scoped.map((column) => ({ label: column.name, detail: `${column.table} column`, kind: 'column', insertText: column.name }));
+      const items = scoped.map((column) => ({ label: column.name, detail: column.table, kind: 'column', insertText: column.name }));
       return rank(items, word).slice(0, limit);
     }
   }
