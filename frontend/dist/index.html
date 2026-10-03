@@ -4,40 +4,40 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
-    <title>Draco — PostgreSQL Workbench</title>
+    <title data-i18n="app.title">Draco — PostgreSQL Workbench</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar" aria-label="Main navigation">
+      <aside class="sidebar" aria-label="Main navigation" data-i18n-aria-label="app.mainNavigation">
         <div class="brand">
           <div class="brand-identity"><span class="brand-mark">D</span><span class="brand-name">Draco</span></div>
-          <button class="sidebar-toggle" id="sidebar-toggle" type="button" title="Hide sidebar" aria-label="Hide sidebar" aria-expanded="true">
+          <button class="sidebar-toggle" id="sidebar-toggle" type="button" title="Hide sidebar" aria-label="Hide sidebar" data-i18n-title="sidebar.hide" data-i18n-aria-label="sidebar.hide" aria-expanded="true">
             <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m15 18-6-6 6-6" /></svg>
           </button>
         </div>
         <nav>
-          <button class="nav-item active" data-icon="↔" data-view="connections" aria-current="page" title="Connections" type="button">Connections</button>
-          <button class="nav-item" data-icon="▦" data-view="dashboard" title="Dashboard" type="button">Dashboard</button>
-          <button class="nav-item" data-icon="◈" data-view="explorer" title="Explorer" type="button">Explorer</button>
-          <button class="nav-item" data-icon="ƒ" data-view="programming" title="Programming" type="button">Programming</button>
-          <button class="nav-item" data-icon="⚙" data-view="admin" title="Administration" type="button">Administration</button>
-          <button class="nav-item" data-icon="✦" data-view="assistant" title="Assistant" type="button">Assistant</button>
-          <button class="nav-item" data-icon="⌘" data-view="query" title="SQL Editor" type="button">SQL Editor</button>
-          <button class="nav-item" data-icon="◉" data-view="preferences" title="Preferences" type="button">Preferences</button>
+          <button class="nav-item active" data-icon="↔" data-view="connections" aria-current="page" title="Connections" type="button" data-i18n="nav.connections" data-i18n-title="nav.connections">Connections</button>
+          <button class="nav-item" data-icon="▦" data-view="dashboard" title="Dashboard" type="button" data-i18n="nav.dashboard" data-i18n-title="nav.dashboard">Dashboard</button>
+          <button class="nav-item" data-icon="◈" data-view="explorer" title="Explorer" type="button" data-i18n="nav.explorer" data-i18n-title="nav.explorer">Explorer</button>
+          <button class="nav-item" data-icon="ƒ" data-view="programming" title="Programming" type="button" data-i18n="nav.programming" data-i18n-title="nav.programming">Programming</button>
+          <button class="nav-item" data-icon="⚙" data-view="admin" title="Administration" type="button" data-i18n="nav.admin" data-i18n-title="nav.admin">Administration</button>
+          <button class="nav-item" data-icon="✦" data-view="assistant" title="Assistant" type="button" data-i18n="nav.assistant" data-i18n-title="nav.assistant">Assistant</button>
+          <button class="nav-item" data-icon="⌘" data-view="query" title="SQL Editor" type="button" data-i18n="nav.query" data-i18n-title="nav.query">SQL Editor</button>
+          <button class="nav-item" data-icon="◉" data-view="preferences" title="Preferences" type="button" data-i18n="nav.preferences" data-i18n-title="nav.preferences">Preferences</button>
         </nav>
-        <div class="sidebar-footer"><span class="status-dot"></span><span id="health-label">Starting backend…</span></div>
+        <div class="sidebar-footer"><span class="status-dot"></span><span id="health-label" data-i18n="health.starting">Starting backend…</span></div>
       </aside>
       <main class="workspace">
         <header class="topbar" data-tauri-drag-region>
-          <div><span class="eyebrow">POSTGRESQL WORKBENCH</span><h1 id="page-title">Connections</h1></div>
+          <div><span class="eyebrow" data-i18n="app.eyebrow">POSTGRESQL WORKBENCH</span><h1 id="page-title" data-i18n="nav.connections">Connections</h1></div>
           <div class="topbar-actions">
             <span class="badge" id="connection-count">0 connections</span>
-            <button class="button small" id="open-command-palette" type="button" aria-haspopup="dialog">⌘K Search</button>
-            <div class="window-controls" aria-label="Window controls">
-              <button class="window-control" id="window-minimize" type="button" title="Minimize" aria-label="Minimize">−</button>
-              <button class="window-control" id="window-maximize" type="button" title="Maximize" aria-label="Maximize">□</button>
-              <button class="window-control close" id="window-close" type="button" title="Close" aria-label="Close">×</button>
+            <button class="button small" id="open-command-palette" type="button" aria-haspopup="dialog" data-i18n="app.search">⌘K Search</button>
+            <div class="window-controls" aria-label="Window controls" data-i18n-aria-label="app.windowControls">
+              <button class="window-control" id="window-minimize" type="button" title="Minimize" aria-label="Minimize" data-i18n-title="window.minimize" data-i18n-aria-label="window.minimize">−</button>
+              <button class="window-control" id="window-maximize" type="button" title="Maximize" aria-label="Maximize" data-i18n-title="window.maximize" data-i18n-aria-label="window.maximize">□</button>
+              <button class="window-control close" id="window-close" type="button" title="Close" aria-label="Close" data-i18n-title="window.close" data-i18n-aria-label="window.close">×</button>
             </div>
           </div>
         </header>
@@ -45,47 +45,47 @@
         <section id="view-connections" class="view active">
           <section class="hero-panel">
             <div>
-              <span class="eyebrow">TAURI SHELL</span>
-              <h2>A safer home for your database work.</h2>
-              <p>Credentials stay in the system Secret Service. The frontend receives only typed connection metadata and explicit status.</p>
+              <span class="eyebrow" data-i18n="connections.heroEyebrow">TAURI SHELL</span>
+              <h2 data-i18n="connections.heroTitle">A safer home for your database work.</h2>
+              <p data-i18n="connections.heroBody">Credentials stay in the system Secret Service. The frontend receives only typed connection metadata and explicit status.</p>
             </div>
-            <div class="health-card"><span class="status-dot"></span><strong id="health-value">Checking health</strong><small>Rust ↔ frontend bridge</small></div>
+            <div class="health-card"><span class="status-dot"></span><strong id="health-value" data-i18n="health.checking">Checking health</strong><small data-i18n="health.bridge">Rust ↔ frontend bridge</small></div>
           </section>
           <section class="panel">
-            <div class="panel-heading"><div><span class="eyebrow">SAVED CONNECTIONS</span><h2>Connections</h2></div><button class="button primary" id="new-connection" type="button">New connection</button></div>
+            <div class="panel-heading"><div><span class="eyebrow" data-i18n="connections.savedEyebrow">SAVED CONNECTIONS</span><h2 data-i18n="connections.title">Connections</h2></div><button class="button primary" id="new-connection" type="button" data-i18n="connections.new">New connection</button></div>
             <div id="connection-list" class="connection-list"></div>
           </section>
           <form id="connection-form" class="panel form-panel" hidden>
-            <div class="panel-heading"><div><span class="eyebrow">CONNECTION SETUP</span><h2 id="form-title">New connection</h2></div><button class="button" id="cancel-connection" type="button">Cancel</button></div>
+            <div class="panel-heading"><div><span class="eyebrow" data-i18n="connectionForm.eyebrow">CONNECTION SETUP</span><h2 id="form-title" data-i18n="connectionForm.newTitle">New connection</h2></div><button class="button" id="cancel-connection" type="button" data-i18n="connectionForm.cancel">Cancel</button></div>
             <input id="connection-id" type="hidden" />
             <div class="form-grid">
-              <label>Label<input id="label" required autocomplete="off" /></label>
-              <label>Host<input id="host" required value="localhost" autocomplete="off" /></label>
-              <label>Port<input id="port" required type="number" min="1" max="65535" value="5432" /></label>
-              <label>Database<input id="database" required autocomplete="off" /></label>
-              <label>User<input id="user" required autocomplete="username" /></label>
-              <label>Password<input id="password" type="password" autocomplete="current-password" /></label>
+              <label><span data-i18n="connectionForm.label">Label</span><input id="label" required autocomplete="off" /></label>
+              <label><span data-i18n="connectionForm.host">Host</span><input id="host" required value="localhost" autocomplete="off" /></label>
+              <label><span data-i18n="connectionForm.port">Port</span><input id="port" required type="number" min="1" max="65535" value="5432" /></label>
+              <label><span data-i18n="connectionForm.database">Database</span><input id="database" required autocomplete="off" /></label>
+              <label><span data-i18n="connectionForm.user">User</span><input id="user" required autocomplete="username" /></label>
+              <label><span data-i18n="connectionForm.password">Password</span><input id="password" type="password" autocomplete="current-password" /></label>
             </div>
-            <label class="check-row"><input id="ssl" type="checkbox" /> Use TLS</label>
-            <label class="check-row"><input id="favorite" type="checkbox" /> Favorite connection</label>
+            <label class="check-row"><input id="ssl" type="checkbox" /> <span data-i18n="connectionForm.tls">Use TLS</span></label>
+            <label class="check-row"><input id="favorite" type="checkbox" /> <span data-i18n="connectionForm.favorite">Favorite connection</span></label>
             <details>
-              <summary>SSH tunnel and jump host</summary>
+              <summary data-i18n="connectionForm.sshSection">SSH tunnel and jump host</summary>
               <div class="form-grid">
-                <label class="check-row"><input id="ssh-enabled" type="checkbox" /> Enable SSH tunnel</label>
-                <label>SSH host<input id="ssh-host" autocomplete="off" /></label>
-                <label>SSH port<input id="ssh-port" type="number" min="1" max="65535" value="22" /></label>
-                <label>SSH user<input id="ssh-user" autocomplete="off" /></label>
-                <label>SSH key path<input id="ssh-key-path" autocomplete="off" /></label>
-                <label>SSH password<input id="ssh-password" type="password" autocomplete="off" /></label>
-                <label>Jump host<input id="jump-host" autocomplete="off" /></label>
-                <label>Jump port<input id="jump-port" type="number" min="1" max="65535" value="22" /></label>
-                <label>Jump user<input id="jump-user" autocomplete="off" /></label>
-                <label>Jump key path<input id="jump-key-path" autocomplete="off" /></label>
-                <label>Jump password<input id="jump-password" type="password" autocomplete="off" /></label>
+                <label class="check-row"><input id="ssh-enabled" type="checkbox" /> <span data-i18n="connectionForm.sshEnabled">Enable SSH tunnel</span></label>
+                <label><span data-i18n="connectionForm.sshHost">SSH host</span><input id="ssh-host" autocomplete="off" /></label>
+                <label><span data-i18n="connectionForm.sshPort">SSH port</span><input id="ssh-port" type="number" min="1" max="65535" value="22" /></label>
+                <label><span data-i18n="connectionForm.sshUser">SSH user</span><input id="ssh-user" autocomplete="off" /></label>
+                <label><span data-i18n="connectionForm.sshKeyPath">SSH key path</span><input id="ssh-key-path" autocomplete="off" /></label>
+                <label><span data-i18n="connectionForm.sshPassword">SSH password</span><input id="ssh-password" type="password" autocomplete="off" /></label>
+                <label><span data-i18n="connectionForm.jumpHost">Jump host</span><input id="jump-host" autocomplete="off" /></label>
+                <label><span data-i18n="connectionForm.jumpPort">Jump port</span><input id="jump-port" type="number" min="1" max="65535" value="22" /></label>
+                <label><span data-i18n="connectionForm.jumpUser">Jump user</span><input id="jump-user" autocomplete="off" /></label>
+                <label><span data-i18n="connectionForm.jumpKeyPath">Jump key path</span><input id="jump-key-path" autocomplete="off" /></label>
+                <label><span data-i18n="connectionForm.jumpPassword">Jump password</span><input id="jump-password" type="password" autocomplete="off" /></label>
               </div>
             </details>
             <div id="form-status" class="form-status" role="status"></div>
-            <div class="form-actions"><button class="button" id="test-connection" type="button">Test connection</button><button class="button primary" type="submit">Save connection</button></div>
+            <div class="form-actions"><button class="button" id="test-connection" type="button" data-i18n="connectionForm.test">Test connection</button><button class="button primary" type="submit" data-i18n="connectionForm.save">Save connection</button></div>
           </form>
         </section>
         <section id="view-explorer" class="view" hidden>
@@ -371,7 +371,7 @@
         <div class="app-dialog-heading"><div><span class="eyebrow" id="app-dialog-eyebrow">DRACO</span><h2 id="app-dialog-title">Confirm action</h2></div></div>
         <p id="app-dialog-message"></p>
         <label id="app-dialog-input-wrap" class="app-dialog-input-wrap" hidden><span id="app-dialog-input-label">Value</span><input id="app-dialog-input" autocomplete="off" /></label>
-        <div class="app-dialog-actions"><button class="button" id="app-dialog-cancel" type="button">Cancel</button><button class="button primary" id="app-dialog-confirm" type="button">Confirm</button></div>
+        <div class="app-dialog-actions"><button class="button" id="app-dialog-cancel" type="button" data-i18n="dialog.cancel">Cancel</button><button class="button primary" id="app-dialog-confirm" type="button">Confirm</button></div>
       </div>
     </section>
     <section id="ai-review-dialog" class="ai-review-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="ai-review-title" aria-describedby="ai-review-description">

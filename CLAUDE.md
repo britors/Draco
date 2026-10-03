@@ -98,6 +98,9 @@ Antes de ampliar uma superfície, conferir o contrato em
   escolhidos pelo usuário.
 - Conteúdo fornecido pelo usuário vai ao DOM com `textContent`/DOM APIs, nunca
   como HTML não confiável.
+- Texto da interface passa por `t()`/`data-i18n` com chaves nos dois catálogos de
+  `frontend/dist/locales` (en e pt-BR); SQL, identificadores, resultados e mensagens
+  do PostgreSQL nunca são traduzidos. Detalhes em `docs/development/i18n.md`.
 - A capability Tauri é restrita à janela `main`; a CSP permite apenas assets
   locais/data e IPC. Não adicionar plugin genérico de shell ou filesystem.
 - Mutações destrutivas exigem confirmação explícita e, quando aplicável,

@@ -390,7 +390,7 @@ test('dark visual system is local and has explicit loading/error/empty surfaces'
   assert.match(app, /Only active queries can be cancelled/);
   assert.match(app, /'Cancel active query', true, 'Cancel query'/);
   assert.match(app, /function showDangerPrompt/);
-  assert.match(app, /function showPrompt[\s\S]{0,300}String\(accepted\)\.trim\(\)/);
+  assert.match(app, /function showPrompt[\s\S]{0,400}String\(accepted\)\.trim\(\)/);
   assert.match(app, /confirmation !== role\.name/);
   assert.match(app, /role\.name\.toLowerCase\(\)\.startsWith\('pg_'\)/);
   assert.match(style, /\.roles-panel \{ grid-column: 1 \/ -1;/);

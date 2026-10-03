@@ -25,13 +25,20 @@
       visual com GNOME e Lyra.
     </p>
     <p>Features:</p>
+    <p xml:lang="pt-BR">Recursos:</p>
     <ul>
       <li>Schema explorer with tables, views, functions, sequences and extensions</li>
+      <li xml:lang="pt-BR">Explorador de esquemas com tabelas, views, funções, sequences e extensões</li>
       <li>SQL editor with local editing, scripts and result export</li>
+      <li xml:lang="pt-BR">Editor SQL com edição local, scripts e exportação de resultados</li>
       <li>DDL, index, constraint and foreign-key inspection</li>
+      <li xml:lang="pt-BR">Inspeção de DDL, índices, constraints e chaves estrangeiras</li>
       <li>Connections over SSH tunnels, including jump hosts</li>
+      <li xml:lang="pt-BR">Conexões por túnel SSH, inclusive com jump host</li>
       <li>No password or passphrase is stored by Draco itself — handled by the
       Secret Service / GNOME Keyring already integrated into the system</li>
+      <li xml:lang="pt-BR">O Draco não armazena senhas nem passphrases — elas ficam no
+      Secret Service / GNOME Keyring já integrado ao sistema</li>
     </ul>
   </description>
 

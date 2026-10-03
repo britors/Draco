@@ -12,4 +12,5 @@ Terminal=false
 StartupWMClass=org.lyraos.Draco
 Categories=Development;Database;
 Keywords=postgres;postgresql;sql;database;db;query;lyra;
+Keywords[pt_BR]=postgres;postgresql;sql;banco de dados;bd;consulta;lyra;
 StartupNotify=true

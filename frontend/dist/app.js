@@ -6,6 +6,7 @@ import { groupSchemaObjects, schemaObjectSql } from './explorer-navigation.js';
 import { clampResultColumnWidth } from './result-columns.js';
 import { AI_QUERY_REVIEW_FOCUSES, buildAiQueryReviewMessage } from './ai-query-review.js';
 import { assembleFunctionDdl, formatFunctionParameters, parseFunctionParameters, sliceFunctionDdl } from './function-ddl.js';
+import { applyTranslations, createTranslator, errorMessage, resolveLocale } from './i18n.js';
 
 const invoke = window.__TAURI__?.core?.invoke;
 const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
@@ -35,6 +36,11 @@ const byId = (id) => document.getElementById(id);
 const value = (id) => byId(id).value.trim();
 const optional = (id) => value(id) || null;
 const numberOrNull = (id) => value(id) ? Number(value(id)) : null;
+
+// The interface follows the system locale reported by the webview; English is the fallback.
+const t = createTranslator(resolveLocale(navigator.languages?.length ? navigator.languages : [navigator.language]));
+document.documentElement.lang = t.locale;
+applyTranslations(document, t);
 
 function applyAppearance(preferences) {
   const root = document.documentElement;
@@ -692,14 +698,14 @@ function clearCredentials() {
 function renderConnections() {
   const list = byId('connection-list');
   list.replaceChildren();
-  byId('connection-count').textContent = `${state.connections.length} connection${state.connections.length === 1 ? '' : 's'}`;
+  byId('connection-count').textContent = t('connections.count', { count: state.connections.length });
   if (!state.connections.length) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
     const title = document.createElement('strong');
-    title.textContent = 'No saved connections';
+    title.textContent = t('connections.emptyTitle');
     const hint = document.createElement('span');
-    hint.textContent = 'Add a connection to start exploring PostgreSQL.';
+    hint.textContent = t('connections.emptyHint');
     empty.append(title, hint);
     list.append(empty);
     return;
@@ -715,13 +721,14 @@ function renderConnections() {
     const title = document.createElement('strong');
     title.textContent = connection.label;
     const status = document.createElement('small');
-    status.textContent = connection.state;
+    status.textContent = t(`connections.state.${connection.state}`);
+    card.dataset.state = connection.state;
     if (connection.favorite) {
       const favorite = document.createElement('span');
       favorite.className = 'favorite-mark';
       favorite.textContent = '★';
-      favorite.title = 'Favorite connection';
-      favorite.setAttribute('aria-label', 'Favorite connection');
+      favorite.title = t('connections.favorite');
+      favorite.setAttribute('aria-label', t('connections.favorite'));
       meta.append(dot, title, favorite, status);
     } else {
       meta.append(dot, title, status);
@@ -734,17 +741,17 @@ function renderConnections() {
     const connectButton = document.createElement('button');
     connectButton.className = `button small ${connection.state === 'connected' ? 'disconnect-action' : 'connect-action'}`;
     connectButton.type = 'button';
-    connectButton.textContent = connection.state === 'connected' ? 'Disconnect' : 'Connect';
+    connectButton.textContent = connection.state === 'connected' ? t('connections.disconnect') : t('connections.connect');
     connectButton.addEventListener('click', () => connection.state === 'connected' ? disconnect(connection.id) : connect(connection.id));
     const edit = document.createElement('button');
     edit.className = 'button small';
     edit.type = 'button';
-    edit.textContent = 'Edit';
+    edit.textContent = t('connections.edit');
     edit.addEventListener('click', () => showForm(connection));
     const remove = document.createElement('button');
     remove.className = 'button small danger';
     remove.type = 'button';
-    remove.textContent = 'Delete';
+    remove.textContent = t('connections.delete');
     remove.addEventListener('click', () => deleteConnection(connection.id));
     actions.append(connectButton, edit, remove);
     card.append(meta, actions, detail);
@@ -754,7 +761,7 @@ function renderConnections() {
 
 function showForm(connection = null) {
   byId('connection-form').hidden = false;
-  byId('form-title').textContent = connection ? 'Edit connection' : 'New connection';
+  byId('form-title').textContent = connection ? t('connectionForm.editTitle') : t('connectionForm.newTitle');
   byId('connection-id').value = connection?.id ?? '';
   byId('label').value = connection?.label ?? '';
   byId('host').value = connection?.host ?? 'localhost';
@@ -773,7 +780,7 @@ function showForm(connection = null) {
   byId('jump-user').value = connection?.ssh_jump_user ?? '';
   byId('jump-key-path').value = connection?.ssh_jump_key_path ?? '';
   clearCredentials();
-  setStatus(connection ? 'Existing credentials stay in the Secret Service when left blank.' : 'Test the connection before saving.', '');
+  setStatus(connection ? t('connectionForm.hintExisting') : t('connectionForm.hintNew'), '');
   byId('label').focus();
 }
 
@@ -819,33 +826,33 @@ async function disconnect(id) {
     await invoke('disconnect', { id });
     await refreshConnections();
   } catch (error) {
-    setStatus('Could not disconnect the connection.', 'error');
+    setStatus(error?.key ? errorMessage(error, t) : t('connections.disconnectFailed'), 'error');
   }
 }
 
 async function deleteConnection(id) {
-  if (!await showConfirm('Delete this connection and its stored credentials?', 'Delete connection', true)) return;
+  if (!await showConfirm(t('connections.deleteConfirm'), t('connections.deleteTitle'), true)) return;
   try {
     await invoke('delete_connection', { id });
     if (state.selectedConnectionId === id) state.selectedConnectionId = null;
     await refreshConnections();
   } catch (error) {
-    setStatus('Could not delete the connection.', 'error');
+    setStatus(error?.key ? errorMessage(error, t) : t('connections.deleteFailed'), 'error');
   }
 }
 
 async function testCurrentConnection() {
   const request = connectionRequest();
-  setStatus('Testing connection…');
+  setStatus(t('connectionForm.testing'));
   byId('test-connection').disabled = true;
   try {
     await invoke('test_connection', { request });
     state.lastTested = JSON.stringify(request.input);
-    setStatus('Connection successful.', 'success');
+    setStatus(t('connectionForm.testSuccess'), 'success');
     return true;
   } catch (error) {
     state.lastTested = null;
-    setStatus('Connection failed. Check the fields and credentials.', 'error');
+    setStatus(t('connectionForm.testFailed'), 'error');
     return false;
   } finally {
     byId('test-connection').disabled = false;
@@ -856,13 +863,13 @@ async function saveCurrentConnection(event) {
   event.preventDefault();
   const request = connectionRequest();
   if (!(await testCurrentConnection())) return;
-  setStatus('Saving connection…');
+  setStatus(t('connectionForm.saving'));
   try {
     await invoke('save_connection', { request });
     hideForm();
     await refreshConnections();
   } catch (error) {
-    setStatus('Could not save the connection.', 'error');
+    setStatus(t('connectionForm.saveFailed'), 'error');
   }
 }
 
@@ -1056,12 +1063,12 @@ async function runBackup(restore = false) {
 
 async function chooseBackupOutput() {
   try { const path = await invoke('choose_backup_output', { format: byId('backup-format').value }); if (path) byId('backup-output').value = path; }
-  catch { byId('backup-status').textContent = 'Could not open the native file picker.'; }
+  catch (error) { byId('backup-status').textContent = errorMessage(error, t, 'error.file_picker_unavailable'); }
 }
 
 async function chooseRestoreInput() {
   try { const path = await invoke('choose_restore_input'); if (path) byId('restore-input').value = path; }
-  catch { byId('backup-status').textContent = 'Could not open the native file picker.'; }
+  catch (error) { byId('backup-status').textContent = errorMessage(error, t, 'error.file_picker_unavailable'); }
 }
 
 async function cancelOperation() { if (!state.currentOperationId) return; byId('backup-status').textContent = 'Cancelling…'; try { await invoke('cancel_operation', { operationId: state.currentOperationId }); } catch (error) {} }
@@ -3844,7 +3851,7 @@ function switchView(name) {
     if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   }
   for (const view of ['connections', 'explorer', 'programming', 'dashboard', 'admin', 'assistant', 'query', 'preferences', 'table-detail', 'erd']) byId(`view-${view}`).hidden = view !== name;
-  byId('page-title').textContent = name === 'preferences' ? 'Preferences' : name[0].toUpperCase() + name.slice(1);
+  byId('page-title').textContent = t(`nav.${name}`);
   if (name === 'explorer') renderExplorerConnections();
   if (name === 'programming') openProgramming();
   if (name === 'dashboard') loadDashboard(byId('dashboard-connection').value);
@@ -3939,7 +3946,7 @@ function finishDialog(result) {
   resolver?.(result);
 }
 
-function showDialog({ title, message, eyebrow = 'DRACO', kind = 'confirm', confirmLabel = 'Confirm', cancelLabel = 'Cancel', inputLabel = 'Value', placeholder = '', inputValue = '' }) {
+function showDialog({ title, message, eyebrow = 'DRACO', kind = 'confirm', confirmLabel = t('dialog.confirm'), cancelLabel = t('dialog.cancel'), inputLabel = t('dialog.value'), placeholder = '', inputValue = '' }) {
   if (dialogResolver) finishDialog(null);
   const dialog = byId('app-dialog');
   const inputWrap = byId('app-dialog-input-wrap');
@@ -3963,20 +3970,20 @@ function showDialog({ title, message, eyebrow = 'DRACO', kind = 'confirm', confi
   return result;
 }
 
-function showAlert(message, title = 'Notice') {
-  return showDialog({ title, message, kind: 'alert', confirmLabel: 'OK' });
+function showAlert(message, title = t('dialog.notice')) {
+  return showDialog({ title, message, kind: 'alert', confirmLabel: t('dialog.ok') });
 }
 
-function showConfirm(message, title = 'Confirm action', danger = false, confirmLabel = danger ? 'Delete' : 'Confirm') {
+function showConfirm(message, title = t('dialog.confirmTitle'), danger = false, confirmLabel = danger ? t('dialog.delete') : t('dialog.confirm')) {
   return showDialog({ title, message, kind: danger ? 'confirm-danger' : 'confirm', confirmLabel });
 }
 
-function showPrompt(message, title = 'Enter a value', inputLabel = 'Value', placeholder = '', inputValue = '') {
-  return showDialog({ title, message, kind: 'prompt', confirmLabel: 'Save', inputLabel, placeholder, inputValue }).then((accepted) => accepted === null || accepted === false ? null : String(accepted).trim());
+function showPrompt(message, title = t('dialog.promptTitle'), inputLabel = t('dialog.value'), placeholder = '', inputValue = '') {
+  return showDialog({ title, message, kind: 'prompt', confirmLabel: t('dialog.save'), inputLabel, placeholder, inputValue }).then((accepted) => accepted === null || accepted === false ? null : String(accepted).trim());
 }
 
 function showDangerPrompt(message, title, inputLabel, placeholder = '') {
-  return showDialog({ title, message, kind: 'prompt-danger', confirmLabel: 'Delete', inputLabel, placeholder }).then((accepted) => accepted === null || accepted === false ? null : String(accepted).trim());
+  return showDialog({ title, message, kind: 'prompt-danger', confirmLabel: t('dialog.delete'), inputLabel, placeholder }).then((accepted) => accepted === null || accepted === false ? null : String(accepted).trim());
 }
 
 function bindAppDialog() {
@@ -3995,8 +4002,8 @@ function setMaximizeControl(maximized) {
   const button = byId('window-maximize');
   if (!button) return;
   button.textContent = maximized ? '❐' : '□';
-  button.title = maximized ? 'Restore' : 'Maximize';
-  button.setAttribute('aria-label', maximized ? 'Restore' : 'Maximize');
+  button.title = maximized ? t('window.restore') : t('window.maximize');
+  button.setAttribute('aria-label', button.title);
 }
 
 async function syncWindowState() {
@@ -4034,8 +4041,8 @@ function bindSidebarToggle() {
   toggle.addEventListener('click', () => {
     const collapsed = sidebar.classList.toggle('collapsed');
     toggle.setAttribute('aria-expanded', String(!collapsed));
-    toggle.setAttribute('aria-label', collapsed ? 'Show sidebar' : 'Hide sidebar');
-    toggle.title = collapsed ? 'Show sidebar' : 'Hide sidebar';
+    toggle.setAttribute('aria-label', collapsed ? t('sidebar.show') : t('sidebar.hide'));
+    toggle.title = collapsed ? t('sidebar.show') : t('sidebar.hide');
   });
 }
 
@@ -4044,13 +4051,13 @@ async function boot() {
   try {
     if (!invoke) throw new Error('Tauri IPC is unavailable');
     const health = await invoke('health');
-    byId('health-label').textContent = health.ready ? 'Backend ready' : 'Backend unavailable';
-    byId('health-value').textContent = health.ready ? 'Bridge online' : 'Bridge offline';
+    byId('health-label').textContent = health.ready ? t('health.ready') : t('health.unavailable');
+    byId('health-value').textContent = health.ready ? t('health.bridgeOnline') : t('health.bridgeOffline');
     await refreshConnections();
     if (preferences.check_updates_on_startup) void checkForUpdates(false);
   } catch (error) {
-    byId('health-label').textContent = 'Backend error';
-    byId('health-value').textContent = 'Bridge unavailable';
+    byId('health-label').textContent = t('health.error');
+    byId('health-value').textContent = t('health.bridgeUnavailable');
   }
 }
 
