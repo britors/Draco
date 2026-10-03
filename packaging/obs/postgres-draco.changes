@@ -1,18 +1,18 @@
 -------------------------------------------------------------------
-Sun Aug 09 12:30:00 UTC 2026 - rodrigo@w3ti.com.br
+Sun Aug 09 12:30:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.1.4: corrigida a associação da janela com o lançador no GNOME.
 - Habilitado o GTK app-id org.lyraos.Draco no Tauri para sessões Wayland.
 - Alinhados o desktop-id, StartupWMClass e ícones hicolor nos pacotes DEB e RPM.
 
 -------------------------------------------------------------------
-Fri Aug 07 14:30:00 UTC 2026 - rodrigo@w3ti.com.br
+Fri Aug 07 14:30:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.1.3: workspace Programming com arquivos SQL locais, seleção de
   repositório/branch, fluxo separado de commit/push, New view e feedback de execução.
 
 -------------------------------------------------------------------
-Thu Aug 06 18:32:22 UTC 2026 - rodrigo@w3ti.com.br
+Thu Aug 06 18:32:22 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.1.2: concluído o gerenciamento de functions, procedures e triggers
   na bancada Programming, com criação, execução e exclusão protegida para
@@ -23,13 +23,13 @@ Thu Aug 06 18:32:22 UTC 2026 - rodrigo@w3ti.com.br
   dependências antes da exclusão.
 
 -------------------------------------------------------------------
-Thu Aug 06 16:36:54 UTC 2026 - rodrigo@w3ti.com.br
+Thu Aug 06 16:36:54 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.1.1: correções de formatação de código (cargo fmt), sem mudanças
   funcionais.
 
 -------------------------------------------------------------------
-Wed Aug 05 17:35:57 UTC 2026 - rodrigo@w3ti.com.br
+Wed Aug 05 17:35:57 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.1.0: adicionada a área Programming com editor SQL dedicado para
   views, functions, procedures e triggers.
@@ -40,7 +40,7 @@ Wed Aug 05 17:35:57 UTC 2026 - rodrigo@w3ti.com.br
   transacional de índices comuns.
 
 -------------------------------------------------------------------
-Wed Aug 05 14:08:49 UTC 2026 - rodrigo@w3ti.com.br
+Wed Aug 05 14:08:49 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.0.5: corrigido o ícone ausente no desktop Linux.
 - Instalados ícones coloridos em tamanhos padrão do tema hicolor (32, 128,
@@ -49,7 +49,7 @@ Wed Aug 05 14:08:49 UTC 2026 - rodrigo@w3ti.com.br
   com uma entrada desktop inconsistente.
 
 -------------------------------------------------------------------
-Wed Aug 05 12:45:00 UTC 2026 - rodrigo@w3ti.com.br
+Wed Aug 05 12:45:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.0.4: removido o frontend GTK legado e suas dependências.
 - Corrigido o pacote para instalar apenas o logo colorido canônico, evitando
@@ -58,7 +58,7 @@ Wed Aug 05 12:45:00 UTC 2026 - rodrigo@w3ti.com.br
   openSUSE.
 
 -------------------------------------------------------------------
-Tue Aug 04 17:20:00 UTC 2026 - rodrigo@w3ti.com.br
+Tue Aug 04 17:20:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.0.3: migração completa do frontend para Tauri 2, com Explorer,
   editor SQL, resultados virtualizados, administração, ERD, backup/restore e
@@ -69,32 +69,32 @@ Tue Aug 04 17:20:00 UTC 2026 - rodrigo@w3ti.com.br
 - Deduplicados os ícones instalados e removidos scriptlets vazios do RPM.
 
 -------------------------------------------------------------------
-Mon Aug 03 14:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Mon Aug 03 14:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 1.1.3: pacote oficial atualizado para o binário Tauri 2, sem
   dependências GTK4, libadwaita ou GtkSourceView5; mantido o frontend GTK
   apenas como fallback durante a estabilização.
 
 -------------------------------------------------------------------
-Mon Aug 03 13:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Mon Aug 03 13:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 1.1.3: unificado o ícone da janela Sobre com o ícone canônico
   do aplicativo para manter painel, desktop e Sobre consistentes.
 
 -------------------------------------------------------------------
-Mon Aug 03 13:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Mon Aug 03 13:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 1.1.2: alinhada a identidade visual do aplicativo e dos pacotes
   para usar o novo logo dourado do Draco em todos os ícones principais.
 
 -------------------------------------------------------------------
-Sun Aug 02 21:17:50 UTC 2026 - rodrigo@w3ti.com.br
+Sun Aug 02 21:17:50 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 1.1.1: corrigido o ícone do desktop para usar o logo oficial
   do cilindro do Draco.
 
 -------------------------------------------------------------------
-Sun Aug 02 18:30:00 UTC 2026 - rodrigo@w3ti.com.br
+Sun Aug 02 18:30:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 1.1.0: novo símbolo dourado de dragão aplicado ao aplicativo,
   à janela Sobre, ao ícone do desktop e aos artefatos de documentação.
@@ -102,13 +102,13 @@ Sun Aug 02 18:30:00 UTC 2026 - rodrigo@w3ti.com.br
   sem reutilizar o ícone azul legado do tema do sistema.
 
 -------------------------------------------------------------------
-Sun Aug 02 18:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Sun Aug 02 18:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Novo logo do Draco baseado em um olho de dragão com escamas azuis,
   integrado no app, no diálogo Sobre e no ícone do desktop.
 
 -------------------------------------------------------------------
-Thu Jul 30 17:42:31 UTC 2026 - rodrigo@w3ti.com.br
+Thu Jul 30 17:42:31 UTC 2026 - rodrigo@dracodb.com.br
 
 - Corrigido o ícone de conectar/desconectar na barra lateral de conexões:
   os ícones "idle"/"offline" estavam trocados em relação ao indicador de
@@ -119,7 +119,7 @@ Thu Jul 30 17:42:31 UTC 2026 - rodrigo@w3ti.com.br
   salvar edição de conexão), mesmo com o driver ainda ativo no backend.
 
 -------------------------------------------------------------------
-Thu Jul 30 13:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Thu Jul 30 13:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 1.0.0: primeiro release considerado estável do Draco em
   Rust/GTK4, cobrindo a paridade ampla planejada com a versão anterior
@@ -133,7 +133,7 @@ Thu Jul 30 13:00:00 UTC 2026 - rodrigo@w3ti.com.br
   schemas, extensões) consolidado na função `quote_ident` já existente.
 
 -------------------------------------------------------------------
-Thu Jul 30 12:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Thu Jul 30 12:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Nova aba "Query Stats" no Admin, baseada em pg_stat_statements: top
   queries por tempo total, reset de contadores, detecção/instalação da
@@ -151,7 +151,7 @@ Thu Jul 30 12:00:00 UTC 2026 - rodrigo@w3ti.com.br
   para ícones simbólicos com melhor suporte no tema.
 
 -------------------------------------------------------------------
-Thu Jul 30 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Thu Jul 30 00:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Corrigido o autoscroll da transcrição do Assistente de IA: a rolagem
   pro fim agora é adiada até o GTK terminar de recalcular o layout do
@@ -159,7 +159,7 @@ Thu Jul 30 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
   respostas mais longas.
 
 -------------------------------------------------------------------
-Wed Jul 29 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Wed Jul 29 00:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Novo Assistente de IA por conexão: consultor de tuning somente leitura
   para PostgreSQL (Anthropic/OpenAI/Gemini), com ferramentas de
@@ -177,7 +177,7 @@ Wed Jul 29 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
   Conectar/Desconectar e o botão de menu.
 
 -------------------------------------------------------------------
-Wed Jul 29 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Wed Jul 29 00:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Novo menu principal (Configurações/Sobre), no mesmo padrão do Vega e
   do Beam. A tela de Configurações agora controla o tempo limite de
@@ -185,13 +185,13 @@ Wed Jul 29 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
   linhas.
 
 -------------------------------------------------------------------
-Wed Jul 29 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Wed Jul 29 00:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Atualizada a versão para 0.1.1 para que o Zypper reconheça a nova
   revisão do pacote.
 
 -------------------------------------------------------------------
-Tue Jul 28 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Tue Jul 28 00:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Renomeado o pacote de "draco" para "postgres-draco": o nome "draco"
   já é usado pelo projeto "graphics" (biblioteca de compressão 3D do
@@ -200,7 +200,7 @@ Tue Jul 28 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
   inalterados.
 
 -------------------------------------------------------------------
-Mon Jul 27 00:00:00 UTC 2026 - rodrigo@w3ti.com.br
+Mon Jul 27 00:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Reescrita completa em Rust + GTK4/libadwaita, substituindo a
   implementação anterior em Electron/TypeScript. Empacotamento passa
