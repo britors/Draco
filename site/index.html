@@ -197,8 +197,15 @@
         <div class="install-notes">
           <div class="note">
             <h3>openSUSE via OBS</h3>
-            <p>O RPM oficial também está no Open Build Service, no projeto
-              <code>home:rodrigosbrito:lyra</code>, pacote <code>postgres-draco</code>.</p>
+            <p>O RPM oficial está no Open Build Service, no projeto
+              <code>home:rodrigosbrito:lyra</code>. Com o repositório adicionado, o
+              Zypper entrega as atualizações automaticamente.</p>
+<pre class="shell"><code>sudo zypper addrepo https://download.opensuse.org/repositories/home:/rodrigosbrito:/lyra/openSUSE_Leap_16.1/home:rodrigosbrito:lyra.repo
+sudo zypper refresh
+sudo zypper install postgres-draco</code></pre>
+            <p>O pacote se chama <code>postgres-draco</code> porque <code>draco</code> já
+              existe no openSUSE; o aplicativo instalado continua sendo o Draco.
+              <a href="https://software.opensuse.org/download.html?project=home%3Arodrigosbrito%3Alyra&amp;package=postgres-draco">Página do pacote no OBS →</a></p>
           </div>
           <div class="note">
             <h3>Compilar do código-fonte</h3>
