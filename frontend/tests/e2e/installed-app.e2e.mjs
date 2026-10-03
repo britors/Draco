@@ -102,7 +102,8 @@ test('installed app connects, browses the schema and runs a query', async (t) =>
     `, CONNECTION_LABEL);
     const state = await session.waitFor('the connected state', `
       const card = (function () { ${FIND_CARD} }).apply(null, arguments);
-      const status = card?.querySelector('small')?.textContent;
+      // data-state carries the raw state; the visible status text is translated.
+      const status = card?.dataset.state || card?.querySelector('small')?.textContent;
       return status === 'connected' || status === 'error' ? status : null;
     `, CONNECTION_LABEL);
     assert.equal(state, 'connected');
