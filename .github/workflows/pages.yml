@@ -6,6 +6,10 @@ on:
     paths:
       - "site/**"
       - ".github/workflows/pages.yml"
+  # Releases created from the UI. Releases published by release.yml use GITHUB_TOKEN, which does
+  # not trigger other workflows, so that workflow dispatches this one explicitly.
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -27,9 +31,35 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
+      # site/index.html is written against a known release so it previews locally. At publish time
+      # every mention of that version is replaced by the latest GitHub Release, after checking that
+      # the release really has the four packages the download cards link to.
+      - name: Point downloads at the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release view --json tagName --jq .tagName)"
+          version="${tag#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "unexpected release tag: $tag" >&2; exit 1; }
+          assets="$(gh release view "$tag" --json assets --jq '.assets[].name')"
+          for asset in \
+            "draco_${version}_ubuntu24.04_amd64.deb" \
+            "draco_${version}_fedora43_x86_64.rpm" \
+            "draco_${version}_opensuse-leap16.0_x86_64.rpm" \
+            "Draco_${version}_windows_x64-setup.exe"; do
+            grep -qxF "$asset" <<<"$assets" || { echo "release $tag is missing $asset" >&2; exit 1; }
+          done
+          current="$(grep -oP '"softwareVersion": "\K[0-9]+\.[0-9]+\.[0-9]+' site/index.html)"
+          if [[ "$current" != "$version" ]]; then
+            sed -i "s/${current//./\\.}/${version}/g" site/index.html
+          fi
+          grep -c "$version" site/index.html
+          echo "Site points to Draco $version"
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:
           path: site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
