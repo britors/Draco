@@ -105,6 +105,14 @@ Dependências: o pacote a testar, `tauri-driver` (`cargo install tauri-driver --
 e `pg_isready`. O teste fica em `frontend/tests/e2e/` e não é executado por `npm test`, porque
 precisa de display, do app instalado e de um PostgreSQL real.
 
+Na CI, o job `installed-app-e2e` de `.github/workflows/ci.yml` roda o mesmo teste no
+Ubuntu 24.04 contra o binário oficial `target/release/draco`, por meio de
+`scripts/ci-installed-app-e2e.sh` sob `dbus-run-session` e `xvfb-run`. O wrapper inicia um
+gnome-keyring sem interface, gera uma senha aleatória, cria a role e o banco `draco_e2e` no
+PostgreSQL pré-instalado do runner e grava a senha no Secret Service com os atributos usados pelo
+crate `keyring` (`service=draco`, `username=password:draco-e2e-ci`). A senha passa só por stdin e
+por uma variável de shell não exportada; nunca pelo ambiente, pela linha de comando ou pelos logs.
+
 Cliques e digitação são disparados por eventos do DOM, porque o `WebKitWebDriver` recusa entrada
 nativa de ponteiro e teclado em sessões Wayland ("unsupported operation"). Os listeners do próprio
 app tratam cada ação; o que o teste não exercita é o roteamento de entrada do compositor.
