@@ -80,6 +80,30 @@ class Session {
   }
 }
 
+// Unique per run, so the fixture never collides with application data or an interrupted run.
+const FIXTURE_SCHEMA = `draco_e2e_${Date.now()}`;
+const FIXTURE_TABLE = 'e2e_items';
+
+// Runs SQL from the editor (`run-query` or `run-script`) and resolves once the app has rendered
+// the outcome: `{ rows }` from the raw row count, or `{ error }` with the visible message.
+async function runSql(session, button, sql) {
+  await session.click('[data-view="query"]');
+  await session.click('[data-query-workspace="editor"]');
+  await session.type('#sql-editor', sql);
+  await session.run(`
+    document.getElementById('result-summary').removeAttribute('data-rows');
+    document.getElementById('result-error').textContent = '';
+  `);
+  await session.click(`#${button}`);
+  return session.waitFor(`the outcome of ${button}`, `
+    if (document.getElementById('run-query').disabled) return null;
+    const error = document.getElementById('result-error').textContent.trim();
+    if (error) return { error };
+    const rows = document.getElementById('result-summary').dataset.rows;
+    return rows === undefined ? null : { rows: Number(rows) };
+  `);
+}
+
 // Returns the card of the E2E connection, located by its label rendered with textContent.
 const FIND_CARD = `
   const [label] = arguments;
@@ -87,9 +111,16 @@ const FIND_CARD = `
     .find((card) => card.querySelector('strong')?.textContent === label) || null;
 `;
 
-test('installed app connects, browses the schema and runs a query', async (t) => {
+test('installed app connects, browses the schema, runs queries and inspects a table', async (t) => {
   const session = await Session.start();
-  t.after(() => session.quit());
+  let fixtureCreated = false;
+  t.after(async () => {
+    // Best effort: a failed cleanup must not hide the assertion that actually failed.
+    if (fixtureCreated) {
+      await runSql(session, 'run-script', `DROP SCHEMA IF EXISTS ${FIXTURE_SCHEMA} CASCADE`).catch(() => {});
+    }
+    await session.quit();
+  });
 
   await t.test('lists the stored connection', async () => {
     await session.waitFor('the connection card', `return Boolean((function () { ${FIND_CARD} }).apply(null, arguments));`, CONNECTION_LABEL);
@@ -153,5 +184,81 @@ test('installed app connects, browses the schema and runs a query', async (t) =>
     assert.match(grid, /answer/);
     assert.match(grid, /42/);
     assert.match(grid, /draco/);
+  });
+
+  await t.test('runs a script that creates an isolated fixture', async () => {
+    fixtureCreated = true;
+    const created = await runSql(session, 'run-script', [
+      `CREATE SCHEMA ${FIXTURE_SCHEMA};`,
+      `CREATE TABLE ${FIXTURE_SCHEMA}.${FIXTURE_TABLE} (id integer PRIMARY KEY, name text NOT NULL);`,
+      `INSERT INTO ${FIXTURE_SCHEMA}.${FIXTURE_TABLE} VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma');`,
+    ].join('\n'));
+    assert.equal(created.error, undefined);
+    const counted = await runSql(session, 'run-query', `SELECT count(*) AS total FROM ${FIXTURE_SCHEMA}.${FIXTURE_TABLE}`);
+    assert.deepEqual(counted, { rows: 1 });
+    assert.match(await session.run(`return document.getElementById('result-grid').textContent;`), /3/);
+  });
+
+  await t.test('reports a SQL error and recovers on the next query', async () => {
+    const failed = await runSql(session, 'run-query', `SELECT * FROM ${FIXTURE_SCHEMA}.missing_table`);
+    assert.ok(failed.error, 'expected the editor to show an error');
+    const recovered = await runSql(session, 'run-query', 'SELECT 1 AS one');
+    assert.deepEqual(recovered, { rows: 1 });
+  });
+
+  await t.test('opens the table detail from the Explorer', async () => {
+    await session.click('[data-view="explorer"]');
+    // Reopening the connection reloads the schema list, which now includes the fixture.
+    await session.waitFor('the Explorer connection', `
+      const [label] = arguments;
+      const item = [...document.querySelectorAll('#explorer-connections button')]
+        .find((button) => button.textContent === label);
+      if (!item) return false;
+      item.click();
+      return true;
+    `, CONNECTION_LABEL);
+    await session.waitFor('the fixture schema', `
+      const button = document.querySelector('.tree-group[data-schema="' + arguments[0] + '"] > .tree-item');
+      if (!button) return false;
+      button.click();
+      return true;
+    `, FIXTURE_SCHEMA);
+    await session.waitFor('the fixture table', `
+      const [schema, table] = arguments;
+      const group = document.querySelector('.tree-group[data-schema="' + schema + '"]');
+      const item = [...(group?.querySelectorAll('.tree-children .tree-item') || [])]
+        .find((button) => button.querySelector('.tree-item-label')?.textContent.endsWith(' ' + table));
+      if (!item) return false;
+      item.click();
+      return true;
+    `, FIXTURE_SCHEMA, FIXTURE_TABLE);
+    const detail = await session.waitFor('the table detail', `
+      if (document.getElementById('view-table-detail').hidden) return null;
+      const text = document.getElementById('detail-content').textContent;
+      return text.includes('CREATE TABLE') ? text : null;
+    `);
+    assert.equal(await session.run(`return document.getElementById('detail-title').textContent;`), FIXTURE_TABLE);
+    assert.match(detail, /integer · NOT NULL · PK/);
+    assert.match(detail, /text · NOT NULL/);
+  });
+
+  await t.test('browses the table rows by primary key', async () => {
+    const rows = await session.waitFor('the table data grid', `
+      const cells = [...document.querySelectorAll('.table-data-grid tbody tr')]
+        .map((row) => [...row.querySelectorAll('td')].slice(0, 2).map((cell) => cell.textContent.trim()));
+      return cells.length ? cells : null;
+    `);
+    assert.deepEqual(rows, [['1', 'alpha'], ['2', 'beta'], ['3', 'gamma']]);
+  });
+
+  await t.test('records executed queries in the history', async () => {
+    await session.click('[data-view="query"]');
+    await session.click('[data-query-workspace="history"]');
+    const entries = await session.waitFor('the history list', `
+      const items = [...document.querySelectorAll('#history-list .history-item code')].map((code) => code.textContent);
+      return items.length ? items : null;
+    `);
+    assert.ok(entries.some((sql) => sql.includes(`count(*) AS total FROM ${FIXTURE_SCHEMA}`)), 'the fixture count query is missing from history');
+    await session.click('[data-query-workspace="editor"]');
   });
 });
