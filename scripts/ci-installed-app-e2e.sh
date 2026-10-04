@@ -23,8 +23,10 @@ done
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# An empty login password creates and unlocks the default collection on a fresh runner.
-printf '' | gnome-keyring-daemon --unlock --components=secrets >/dev/null
+# A fresh runner has no login keyring; unlocking creates it as the default collection. An empty
+# password would make gnome-keyring ask, through a display-less prompter, to store secrets
+# unencrypted, so the keyring gets its own random password.
+openssl rand -hex 24 | tr -d '\n' | gnome-keyring-daemon --unlock --components=secrets >/dev/null
 
 password="$(openssl rand -hex 24)"
 sudo -u postgres psql --quiet -v ON_ERROR_STOP=1 >/dev/null <<SQL
