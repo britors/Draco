@@ -74,8 +74,9 @@ test result: ok. 1 passed; 0 failed
 O cenário da aplicação inclui o comando de `EXPLAIN` puro, rejeição de autenticação inválida,
 desconexão/reconexão e o ciclo administrativo de role consumidos pelo frontend Tauri. Essa
 execução valida o backend e a fronteira `draco-app`; a webview Tauri é coberta pelos contratos
-locais e pelo smoke do app instalado descrito abaixo. Cenários que exigem endpoints SSH e chaves reais de IA permanecem
-condicionados à disponibilidade desses serviços externos.
+locais e pelo smoke do app instalado descrito abaixo. O túnel SSH e o jump host têm um teste
+próprio, descrito em "Túnel SSH e jump host"; as chaves reais de IA permanecem condicionadas à
+disponibilidade desses serviços externos.
 
 ## App instalado via WebDriver
 
@@ -133,7 +134,43 @@ Resultado mais recente em 03/10/2026: pacote `postgres-draco` 2.1.4 do OBS no op
 Com um `DRACO_TEST_CONN_ID` sem senha no credential store, o teste falha na etapa de conexão
 (estado `error`), como esperado.
 
-Ainda fora da cobertura: SSH/jump host real, as APIs de IA e a execução na CI.
+Ainda fora da cobertura: as APIs de IA.
+
+## Túnel SSH e jump host
+
+`draco-core/tests/live_ssh.rs` (ignorado por padrão) abre o túnel `russh` contra servidores
+`sshd` reais e executa uma query no PostgreSQL por ele:
+
+1. túnel direto autenticado por senha;
+2. túnel direto com chave ed25519 protegida por passphrase;
+3. túnel por jump host (senha no bastion, chave no destino);
+4. recusa de senha SSH incorreta;
+5. recusa de host key diferente da registrada em `~/.ssh/known_hosts`.
+
+As senhas vêm do credential store sob `DRACO_TEST_CONN_ID`, nos tipos `password`, `ssh` (senha
+ou passphrase da chave) e `jump`, os mesmos que o app usa. As host keys novas são aprendidas por
+trust-on-first-use, como no app; por isso o teste grava em `~/.ssh/known_hosts` e deve rodar em
+um ambiente descartável ou com servidores já conhecidos.
+
+Na CI, o job `ssh-tunnel` executa `scripts/ci-ssh-tunnel.sh` sob `dbus-run-session`. O script
+sobe três `sshd` em loopback:
+
+| Servidor | Porta | Autenticação | `PermitOpen` |
+|---|---|---|---|
+| bastion | 2222 | só senha | `127.0.0.1:2223` (o destino) |
+| destino | 2223 | senha ou chave | `127.0.0.1:5432` (PostgreSQL) |
+| decoy | 2224 | como o destino | `127.0.0.1:5432`, com host key diferente da registrada |
+
+Todas as senhas e a passphrase são geradas no job e chegam ao PostgreSQL, ao `chpasswd`, ao
+`ssh-keygen` (via askpass) e ao Secret Service só por stdin ou por um arquivo 0600 temporário.
+Depois dos testes, o script confere nos logs do `sshd` que o bastion e o destino autenticaram os
+usuários de teste e que o decoy nunca autenticou ninguém.
+
+Para rodar localmente contra servidores próprios, defina as variáveis listadas no topo de
+`live_ssh.rs` e use `--test-threads=1`, porque os testes compartilham o `known_hosts`.
+
+Resultado mais recente em 04/10/2026 na CI (Ubuntu 24.04, OpenSSH do sistema, PostgreSQL do
+runner): 5 testes passaram.
 
 ## Checklist transversal
 
@@ -141,7 +178,7 @@ Ainda fora da cobertura: SSH/jump host real, as APIs de IA e a execução na CI.
 |---|---|
 | Nominal contra Postgres real | core e `draco-app` passaram em 04/08/2026 contra PostgreSQL 18.4 |
 | Conexão ausente/perdida | fronteira Tauri recusa operação desconectada e volta a executar após reconexão; recuperação após erro SQL também coberta |
-| SSH/jump host | suporte permanece coberto pelo `PostgresDriver`; não executado porque o ambiente E2E não possui endpoint SSH configurado |
+| SSH/jump host | `live_ssh` passou na CI em 04/10/2026: senha, chave com passphrase, jump host, senha incorreta e host key alterada |
 | Loading, vazio e erro | estados cobertos pelos contratos frontend; vazio de `pg_cron`, activity e locks observado no teste real |
 | Operação longa sem bloquear a UI | comandos Tauri são `async`; queries, scripts, `EXPLAIN`, backup e restore registram `operationId` cancelável |
 | Mutação perigosa | teste usa schema isolado; UI mantém confirmações para operações destrutivas |
