@@ -1,4 +1,12 @@
 -------------------------------------------------------------------
+Mon Oct 05 18:00:00 UTC 2026 - rodrigo@dracodb.com.br
+
+- Versão 2.1.6: o Assistente de IA mostra o motivo das falhas (chave ausente
+  ou recusada, limite de requisições, status HTTP, rede) em pt-BR e inglês.
+- Histórico do Assistente exibe só a saída das ferramentas, sem o invólucro
+  do prompt enviado ao modelo.
+
+-------------------------------------------------------------------
 Mon Oct 05 12:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.1.5: interface traduzida para português do Brasil e inglês,
