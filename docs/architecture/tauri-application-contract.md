@@ -37,7 +37,12 @@ Esse contrato é deliberadamente pequeno para ser usado pelo smoke test do shell
 ## Contrato de query
 
 `execute_query(connection_id, sql)` executa uma única query preparada. Para múltiplas instruções,
-o frontend deve chamar `execute_script(connection_id, sql)`. O resultado tem uma forma estável:
+o frontend deve chamar `execute_script(connection_id, sql)`. A instrução é preparada antes
+(protocolo estendido, que rejeita instruções extras e fornece as colunas mesmo sem linhas) e então
+executada pelo protocolo simples, para que todo tipo chegue no formato de texto do próprio
+PostgreSQL. `bool`, inteiros e floats finitos viram valores JSON nativos; `numeric`, datas,
+`uuid`, `json`, arrays e os demais tipos chegam como string, sem perda de precisão; `NULL` vira
+`null`. O resultado tem uma forma estável:
 
 ```json
 {

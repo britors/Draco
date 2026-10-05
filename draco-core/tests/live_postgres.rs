@@ -108,6 +108,49 @@ async fn connects_and_introspects_the_real_database() {
     assert_eq!(result.rows.len(), 1);
     assert_eq!(result.rows[0].get("label").and_then(|v| v.as_str()), Some("draco"));
 
+    // Types the binary protocol can't decode into Rust values must still reach the editor, in
+    // PostgreSQL's own text form, instead of turning into NULL.
+    let typed = queries::execute_query(
+        &driver,
+        "SELECT 12345678901234567890.0123::numeric AS amount, \
+                timestamptz '2026-03-01 12:30:00+00' AT TIME ZONE 'UTC' AS at, \
+                date '2026-10-05' AS day, \
+                'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid AS id, \
+                '{\"k\": [1, 2]}'::jsonb AS doc, \
+                interval '1 day 02:00' AS span, \
+                ARRAY[1, 2, 3] AS list, \
+                'NaN'::float8 AS not_a_number, \
+                true AS flag, 7::int8 AS big, NULL::numeric AS missing",
+    )
+    .await
+    .expect("execute_query with non-native types");
+    let row = &typed.rows[0];
+    for (column, expected) in [
+        ("amount", "12345678901234567890.0123"),
+        ("at", "2026-03-01 12:30:00"),
+        ("day", "2026-10-05"),
+        ("id", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
+        ("doc", "{\"k\": [1, 2]}"),
+        ("span", "1 day 02:00:00"),
+        ("list", "{1,2,3}"),
+        ("not_a_number", "NaN"),
+    ] {
+        assert_eq!(row.get(column).and_then(|v| v.as_str()), Some(expected), "{column}");
+    }
+    assert_eq!(row.get("flag"), Some(&serde_json::json!(true)));
+    assert_eq!(row.get("big"), Some(&serde_json::json!(7)));
+    assert_eq!(row.get("missing"), Some(&serde_json::Value::Null));
+
+    let empty = queries::execute_query(&driver, "SELECT 1 AS one, 'x' AS two WHERE false")
+        .await
+        .expect("empty result");
+    assert_eq!(empty.columns, vec!["one".to_string(), "two".to_string()], "columns survive an empty result");
+    assert!(empty.rows.is_empty());
+
+    // The statement is prepared before it runs, so a second statement smuggled into the editor
+    // or the Assistant's read-only tool is rejected and the first one never executes.
+    assert!(queries::execute_query(&driver, "SELECT 1; SELECT 2").await.is_err());
+
     if let Some(table) = tables.first() {
         let columns = queries::get_columns(&driver, "public", &table.name).await.expect("get_columns");
         assert!(!columns.is_empty(), "a real table should have at least one column");

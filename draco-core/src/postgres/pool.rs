@@ -1,8 +1,9 @@
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
+use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::watch;
-use tokio_postgres::types::ToSql;
-use tokio_postgres::{NoTls, Row};
+use tokio_postgres::types::{ToSql, Type};
+use tokio_postgres::{NoTls, Row, SimpleQueryMessage};
 
 use crate::connection::DbConnection;
 use crate::error::Result;
@@ -16,6 +17,40 @@ pub struct PostgresDriver {
     tunnel: Option<Arc<SshTunnel>>,
     external_host: String,
     external_port: u16,
+}
+
+/// Result of `query_text`: the statement's columns with their types and every row as text
+/// (`None` for SQL `NULL`).
+#[derive(Debug, Clone, Default)]
+pub struct TextQueryResult {
+    pub columns: Vec<(String, Type)>,
+    pub rows: Vec<Vec<Option<String>>>,
+}
+
+async fn text_query(
+    client: &tokio_postgres::Client,
+    sql: &str,
+) -> std::result::Result<TextQueryResult, tokio_postgres::Error> {
+    let statement = client.prepare(sql).await?;
+    let columns: Vec<(String, Type)> = statement
+        .columns()
+        .iter()
+        .map(|column| (column.name().to_string(), column.type_().clone()))
+        .collect();
+    let rows = client
+        .simple_query(sql)
+        .await?
+        .into_iter()
+        .filter_map(|message| match message {
+            SimpleQueryMessage::Row(row) => Some(
+                (0..row.len())
+                    .map(|index| row.get(index).map(str::to_string))
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .collect();
+    Ok(TextQueryResult { columns, rows })
 }
 
 #[derive(Debug, Clone)]
@@ -127,56 +162,73 @@ impl PostgresDriver {
         Ok(client.simple_query(sql).await?)
     }
 
+    /// Runs a single statement and returns its rows as PostgreSQL's own text output, the same
+    /// representation `psql` shows. The binary protocol used by `query` only decodes the Rust
+    /// types tokio-postgres knows, so `numeric`, timestamps, `uuid`, `json`, arrays and the like
+    /// would come back empty. The statement is prepared first: that yields the column types even
+    /// for an empty result and keeps the extended protocol's guarantee that hidden extra
+    /// statements are rejected before anything runs.
+    pub async fn query_text(&self, sql: &str) -> Result<TextQueryResult> {
+        let client = self.pool.get().await?;
+        Ok(text_query(&client, sql).await?)
+    }
+
+    /// Cancelable counterpart to `query_text`, used by the query editor.
+    pub async fn query_text_cancelable(
+        &self,
+        sql: &str,
+        cancel_rx: watch::Receiver<bool>,
+    ) -> Result<TextQueryResult> {
+        let client = self.pool.get().await?;
+        let backend_pid = client
+            .query_one("SELECT pg_backend_pid()", &[])
+            .await?
+            .get::<_, i32>(0);
+        self.cancelable(backend_pid, text_query(&client, sql), cancel_rx)
+            .await
+    }
+
     /// Runs a query on one pooled backend and cancels that backend if the operation receiver is
     /// signalled. This keeps concurrent queries on the same application connection isolated.
     pub async fn query_cancelable(
         &self,
         sql: &str,
         params: &[&(dyn ToSql + Sync)],
-        mut cancel_rx: watch::Receiver<bool>,
+        cancel_rx: watch::Receiver<bool>,
     ) -> Result<Vec<Row>> {
         let client = self.pool.get().await?;
         let backend_pid = client
             .query_one("SELECT pg_backend_pid()", &[])
             .await?
             .get::<_, i32>(0);
-        let query = client.query(sql, params);
-        tokio::pin!(query);
-        let cancellation = async {
-            loop {
-                if *cancel_rx.borrow() {
-                    break true;
-                }
-                if cancel_rx.changed().await.is_err() {
-                    break false;
-                }
-            }
-        };
-        tokio::pin!(cancellation);
-        tokio::select! {
-            result = &mut query => Ok(result?),
-            cancelled = &mut cancellation => {
-                if cancelled {
-                    self.cancel_backend(backend_pid).await?;
-                }
-                Ok(query.await?)
-            }
-        }
+        self.cancelable(backend_pid, client.query(sql, params), cancel_rx)
+            .await
     }
 
     /// Simple-query counterpart to `query_cancelable`, used by multi-statement scripts.
     pub async fn simple_query_cancelable(
         &self,
         sql: &str,
-        mut cancel_rx: watch::Receiver<bool>,
+        cancel_rx: watch::Receiver<bool>,
     ) -> Result<Vec<tokio_postgres::SimpleQueryMessage>> {
         let client = self.pool.get().await?;
         let backend_pid = client
             .query_one("SELECT pg_backend_pid()", &[])
             .await?
             .get::<_, i32>(0);
-        let query = client.simple_query(sql);
-        tokio::pin!(query);
+        self.cancelable(backend_pid, client.simple_query(sql), cancel_rx)
+            .await
+    }
+
+    /// Drives `operation` to completion, cancelling `backend_pid` if the receiver is signalled
+    /// first. The operation still runs to its end so the server's cancellation error surfaces.
+    async fn cancelable<T>(
+        &self,
+        backend_pid: i32,
+        operation: impl Future<Output = std::result::Result<T, tokio_postgres::Error>>,
+        mut cancel_rx: watch::Receiver<bool>,
+    ) -> Result<T> {
+        tokio::pin!(operation);
         let cancellation = async {
             loop {
                 if *cancel_rx.borrow() {
@@ -189,12 +241,12 @@ impl PostgresDriver {
         };
         tokio::pin!(cancellation);
         tokio::select! {
-            result = &mut query => Ok(result?),
+            result = &mut operation => Ok(result?),
             cancelled = &mut cancellation => {
                 if cancelled {
                     self.cancel_backend(backend_pid).await?;
                 }
-                Ok(query.await?)
+                Ok(operation.await?)
             }
         }
     }

@@ -2,7 +2,7 @@ use serde::Serialize;
 
 use super::helpers::*;
 use crate::error::Result;
-use crate::postgres::pool::PostgresDriver;
+use crate::postgres::pool::{PostgresDriver, TextQueryResult};
 use tokio::sync::watch;
 
 #[derive(Debug, Clone, Serialize)]
@@ -176,15 +176,7 @@ pub async fn call_routine(
 pub type QueryResult = FunctionTestResult;
 
 pub async fn execute_query(driver: &PostgresDriver, sql: &str) -> Result<QueryResult> {
-    let rows = driver.query(sql, &[]).await?;
-    let columns = rows
-        .first()
-        .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
-        .unwrap_or_default();
-    Ok(QueryResult {
-        columns,
-        rows: rows.iter().map(row_to_json_map).collect(),
-    })
+    Ok(text_query_result(driver.query_text(sql).await?))
 }
 
 pub async fn execute_query_cancelable(
@@ -192,15 +184,24 @@ pub async fn execute_query_cancelable(
     sql: &str,
     cancel_rx: watch::Receiver<bool>,
 ) -> Result<QueryResult> {
-    let rows = driver.query_cancelable(sql, &[], cancel_rx).await?;
-    let columns = rows
-        .first()
-        .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
-        .unwrap_or_default();
-    Ok(QueryResult {
-        columns,
-        rows: rows.iter().map(row_to_json_map).collect(),
-    })
+    Ok(text_query_result(
+        driver.query_text_cancelable(sql, cancel_rx).await?,
+    ))
+}
+
+fn text_query_result(result: TextQueryResult) -> QueryResult {
+    QueryResult {
+        columns: result
+            .columns
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect(),
+        rows: result
+            .rows
+            .iter()
+            .map(|row| text_row_to_json_map(&result.columns, row))
+            .collect(),
+    }
 }
 
 /// Runs `sql` as a multi-statement script via the simple query protocol (`simple_query`,

@@ -1,5 +1,6 @@
 //! Row-decoding and SQL-identifier helpers shared by every `queries` submodule.
 
+use tokio_postgres::types::Type;
 use tokio_postgres::Row;
 
 pub(super) fn get_str(row: &Row, col: &str) -> String {
@@ -34,8 +35,45 @@ pub(super) fn row_to_json_map(row: &Row) -> serde_json::Map<String, serde_json::
     map
 }
 
+/// Builds the editor's row map from `PostgresDriver::query_text` output. Booleans and integer
+/// and float columns keep their JSON types, as with `row_to_json_map`; every other type keeps
+/// PostgreSQL's text form, so `numeric` precision and timestamp offsets reach the UI unchanged.
+pub(super) fn text_row_to_json_map(
+    columns: &[(String, Type)],
+    row: &[Option<String>],
+) -> serde_json::Map<String, serde_json::Value> {
+    columns
+        .iter()
+        .zip(row)
+        .map(|((name, ty), value)| (name.clone(), text_value_to_json(ty, value.as_deref())))
+        .collect()
+}
+
+fn text_value_to_json(ty: &Type, value: Option<&str>) -> serde_json::Value {
+    let Some(text) = value else {
+        return serde_json::Value::Null;
+    };
+    let typed = match *ty {
+        Type::BOOL => match text {
+            "t" => Some(serde_json::Value::Bool(true)),
+            "f" => Some(serde_json::Value::Bool(false)),
+            _ => None,
+        },
+        Type::INT2 | Type::INT4 | Type::INT8 => {
+            text.parse::<i64>().ok().map(|v| serde_json::json!(v))
+        }
+        // NaN and ±Infinity have no JSON number, so they stay as PostgreSQL spells them.
+        Type::FLOAT4 | Type::FLOAT8 => text
+            .parse::<f64>()
+            .ok()
+            .filter(|v| v.is_finite())
+            .map(|v| serde_json::json!(v)),
+        _ => None,
+    };
+    typed.unwrap_or_else(|| serde_json::Value::String(text.to_string()))
+}
+
 fn pg_value_to_json(row: &Row, idx: usize) -> serde_json::Value {
-    use tokio_postgres::types::Type;
     let ty = row.columns()[idx].type_();
     match *ty {
         Type::BOOL => row
@@ -80,5 +118,44 @@ fn pg_value_to_json(row: &Row, idx: usize) -> serde_json::Value {
             .flatten()
             .map(serde_json::Value::String)
             .unwrap_or(serde_json::Value::Null),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{json, Value};
+
+    #[test]
+    fn text_values_keep_native_json_types_only_where_lossless() {
+        assert_eq!(text_value_to_json(&Type::BOOL, Some("t")), json!(true));
+        assert_eq!(text_value_to_json(&Type::BOOL, Some("f")), json!(false));
+        assert_eq!(text_value_to_json(&Type::INT4, Some("-42")), json!(-42));
+        assert_eq!(text_value_to_json(&Type::FLOAT8, Some("1.5")), json!(1.5));
+        assert_eq!(text_value_to_json(&Type::FLOAT8, Some("NaN")), json!("NaN"));
+        assert_eq!(
+            text_value_to_json(&Type::FLOAT4, Some("-Infinity")),
+            json!("-Infinity")
+        );
+        assert_eq!(
+            text_value_to_json(&Type::NUMERIC, Some("12345678901234567890.0123")),
+            json!("12345678901234567890.0123")
+        );
+        assert_eq!(
+            text_value_to_json(&Type::TIMESTAMPTZ, Some("2026-03-01 09:30:00-03")),
+            json!("2026-03-01 09:30:00-03")
+        );
+        assert_eq!(text_value_to_json(&Type::NUMERIC, None), Value::Null);
+    }
+
+    #[test]
+    fn text_rows_map_by_column_name() {
+        let columns = vec![
+            ("id".to_string(), Type::INT8),
+            ("total".to_string(), Type::NUMERIC),
+        ];
+        let row = text_row_to_json_map(&columns, &[Some("7".into()), None]);
+        assert_eq!(row.get("id"), Some(&json!(7)));
+        assert_eq!(row.get("total"), Some(&Value::Null));
     }
 }
