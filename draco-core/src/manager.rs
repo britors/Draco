@@ -116,7 +116,9 @@ impl ConnectionManager {
     }
 
     pub async fn disconnect(&mut self, id: &str) {
-        let Some(managed) = self.map.get_mut(id) else { return };
+        let Some(managed) = self.map.get_mut(id) else {
+            return;
+        };
         let driver = managed.driver.take();
         if let Some(driver) = driver {
             driver.disconnect().await;
@@ -126,7 +128,10 @@ impl ConnectionManager {
     }
 
     pub fn get_statuses(&self) -> HashMap<String, ConnectionStatus> {
-        self.map.iter().map(|(id, m)| (id.clone(), m.status)).collect()
+        self.map
+            .iter()
+            .map(|(id, m)| (id.clone(), m.status))
+            .collect()
     }
 }
 
@@ -227,7 +232,11 @@ mod tests {
     #[test]
     fn returns_correct_statuses_for_multiple_connections() {
         let mut mgr = ConnectionManager::new();
-        mgr.sync_connections(vec![make_conn("a", "a"), make_conn("b", "b"), make_conn("c", "c")]);
+        mgr.sync_connections(vec![
+            make_conn("a", "a"),
+            make_conn("b", "b"),
+            make_conn("c", "c"),
+        ]);
         let s = mgr.get_statuses();
         assert_eq!(s.len(), 3);
         assert!(s.values().all(|v| *v == ConnectionStatus::Disconnected));

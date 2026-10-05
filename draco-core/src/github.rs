@@ -248,7 +248,11 @@ pub async fn connect_token(token: &str) -> Result<GithubConnection> {
     let client = client()?;
     let login = authenticated_user(&client, token).await?;
     save_token(token).await?;
-    Ok(connection_view(crate::store::get_github_settings(), true, Some(login)))
+    Ok(connection_view(
+        crate::store::get_github_settings(),
+        true,
+        Some(login),
+    ))
 }
 
 pub async fn status() -> Result<GithubConnection> {
@@ -299,7 +303,9 @@ pub fn select_repository(owner: &str, repository: &str) -> Result<GithubConnecti
                 .all(|character| character.is_ascii_alphanumeric() || "-_".contains(character))
     };
     if !valid(owner) || !valid(repository) {
-        return Err(GithubError::Message("Choose a valid GitHub repository.".into()));
+        return Err(GithubError::Message(
+            "Choose a valid GitHub repository.".into(),
+        ));
     }
     settings.owner = owner.trim().to_owned();
     settings.repository = repository.trim().to_owned();

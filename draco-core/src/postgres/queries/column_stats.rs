@@ -1,7 +1,7 @@
-use serde::Serialize;
+use super::helpers::*;
 use crate::error::Result;
 use crate::postgres::pool::PostgresDriver;
-use super::helpers::*;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ColumnStat {
@@ -12,7 +12,11 @@ pub struct ColumnStat {
     pub histogram_bounds: Option<String>,
 }
 
-pub async fn get_column_stats(driver: &PostgresDriver, schema: &str, table: &str) -> Result<Vec<ColumnStat>> {
+pub async fn get_column_stats(
+    driver: &PostgresDriver,
+    schema: &str,
+    table: &str,
+) -> Result<Vec<ColumnStat>> {
     let rows = driver
         .query(
             "SELECT attname AS column, null_frac, n_distinct, \
@@ -52,7 +56,11 @@ pub async fn import_table_rows(
     }
     let q_schema = quote_ident(schema);
     let q_table = quote_ident(table);
-    let col_list = columns.iter().map(|c| quote_ident(c)).collect::<Vec<_>>().join(", ");
+    let col_list = columns
+        .iter()
+        .map(|c| quote_ident(c))
+        .collect::<Vec<_>>()
+        .join(", ");
     let mut inserted = 0usize;
     const CHUNK: usize = 500;
     for chunk in rows.chunks(CHUNK) {
@@ -60,16 +68,23 @@ pub async fn import_table_rows(
             .iter()
             .enumerate()
             .map(|(ri, _)| {
-                let cols = (0..columns.len()).map(|ci| format!("${}", ri * columns.len() + ci + 1)).collect::<Vec<_>>();
+                let cols = (0..columns.len())
+                    .map(|ci| format!("${}", ri * columns.len() + ci + 1))
+                    .collect::<Vec<_>>();
                 format!("({})", cols.join(", "))
             })
             .collect::<Vec<_>>()
             .join(", ");
         let flat: Vec<&Option<String>> = chunk.iter().flatten().collect();
-        let params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
-            flat.iter().map(|v| *v as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
+        let params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = flat
+            .iter()
+            .map(|v| *v as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
         driver
-            .query(&format!("INSERT INTO {q_schema}.{q_table} ({col_list}) VALUES {placeholders}"), &params)
+            .query(
+                &format!("INSERT INTO {q_schema}.{q_table} ({col_list}) VALUES {placeholders}"),
+                &params,
+            )
             .await?;
         inserted += chunk.len();
     }

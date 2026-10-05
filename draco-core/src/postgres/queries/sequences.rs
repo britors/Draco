@@ -1,7 +1,7 @@
-use serde::Serialize;
+use super::helpers::*;
 use crate::error::Result;
 use crate::postgres::pool::PostgresDriver;
-use super::helpers::*;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SequenceInfo {
@@ -51,9 +51,15 @@ pub async fn get_sequences(driver: &PostgresDriver, schema: &str) -> Result<Vec<
 pub async fn create_sequence(driver: &PostgresDriver, schema: &str, name: &str) -> Result<()> {
     let name = name.trim();
     if name.is_empty() {
-        return Err(crate::error::CoreError::Other("sequence name is required".to_string()));
+        return Err(crate::error::CoreError::Other(
+            "sequence name is required".to_string(),
+        ));
     }
-    let sql = format!("CREATE SEQUENCE {}.{}", quote_ident(schema), quote_ident(name));
+    let sql = format!(
+        "CREATE SEQUENCE {}.{}",
+        quote_ident(schema),
+        quote_ident(name)
+    );
     driver.query(&sql, &[]).await?;
     Ok(())
 }
@@ -116,7 +122,9 @@ pub async fn create_trigger(
 
     let timing = timing.trim().to_ascii_uppercase();
     if !matches!(timing.as_str(), "BEFORE" | "AFTER" | "INSTEAD OF") {
-        return Err(crate::error::CoreError::Other("invalid trigger timing".to_string()));
+        return Err(crate::error::CoreError::Other(
+            "invalid trigger timing".to_string(),
+        ));
     }
 
     let mut event_list = Vec::new();
@@ -126,14 +134,18 @@ pub async fn create_trigger(
         }
         let event = event.to_ascii_uppercase();
         if !matches!(event.as_str(), "INSERT" | "UPDATE" | "DELETE" | "TRUNCATE") {
-            return Err(crate::error::CoreError::Other(format!("invalid trigger event: {event}")));
+            return Err(crate::error::CoreError::Other(format!(
+                "invalid trigger event: {event}"
+            )));
         }
         if !event_list.contains(&event) {
             event_list.push(event);
         }
     }
     if event_list.is_empty() {
-        return Err(crate::error::CoreError::Other("at least one trigger event is required".to_string()));
+        return Err(crate::error::CoreError::Other(
+            "at least one trigger event is required".to_string(),
+        ));
     }
 
     let function_name = function
@@ -142,7 +154,9 @@ pub async fn create_trigger(
         .map(|part| quote_ident(part.trim()))
         .collect::<Vec<_>>();
     if function_name.is_empty() {
-        return Err(crate::error::CoreError::Other("trigger function is required".to_string()));
+        return Err(crate::error::CoreError::Other(
+            "trigger function is required".to_string(),
+        ));
     }
     let sql = format!(
         "CREATE TRIGGER {} {} {} ON {}.{} FOR EACH ROW EXECUTE FUNCTION {}()",
@@ -181,7 +195,12 @@ async fn extension_owning_trigger(
     Ok(rows.first().map(|r| get_str(r, "extname")))
 }
 
-pub async fn drop_trigger(driver: &PostgresDriver, schema: &str, table: &str, name: &str) -> Result<()> {
+pub async fn drop_trigger(
+    driver: &PostgresDriver,
+    schema: &str,
+    table: &str,
+    name: &str,
+) -> Result<()> {
     if let Some(extname) = extension_owning_trigger(driver, schema, table, name).await? {
         return Err(crate::error::CoreError::Other(format!(
             "\"{name}\" was installed by the \"{extname}\" extension and can't be dropped directly. Drop or alter the extension instead."
@@ -199,12 +218,27 @@ pub async fn drop_trigger(driver: &PostgresDriver, schema: &str, table: &str, na
 
 pub async fn seq_next_val(driver: &PostgresDriver, schema: &str, name: &str) -> Result<String> {
     let qualified = format!("{}.{}", quote_ident(schema), quote_ident(name));
-    let rows = driver.query("SELECT nextval($1::text::regclass)::text AS v", &[&qualified]).await?;
+    let rows = driver
+        .query(
+            "SELECT nextval($1::text::regclass)::text AS v",
+            &[&qualified],
+        )
+        .await?;
     Ok(rows.first().map(|r| get_str(r, "v")).unwrap_or_default())
 }
 
-pub async fn seq_set_val(driver: &PostgresDriver, schema: &str, name: &str, value: i64) -> Result<()> {
+pub async fn seq_set_val(
+    driver: &PostgresDriver,
+    schema: &str,
+    name: &str,
+    value: i64,
+) -> Result<()> {
     let qualified = format!("{}.{}", quote_ident(schema), quote_ident(name));
-    driver.query("SELECT setval($1::text::regclass, $2)", &[&qualified, &value]).await?;
+    driver
+        .query(
+            "SELECT setval($1::text::regclass, $2)",
+            &[&qualified, &value],
+        )
+        .await?;
     Ok(())
 }

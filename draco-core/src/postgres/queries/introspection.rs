@@ -1,7 +1,7 @@
-use serde::Serialize;
+use super::helpers::*;
 use crate::error::Result;
 use crate::postgres::pool::PostgresDriver;
-use super::helpers::*;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SchemaInfo {
@@ -17,11 +17,21 @@ pub async fn get_schemas(driver: &PostgresDriver) -> Result<Vec<SchemaInfo>> {
             &[],
         )
         .await?;
-    Ok(rows.iter().map(|r| SchemaInfo { name: get_str(r, "schema_name") }).collect())
+    Ok(rows
+        .iter()
+        .map(|r| SchemaInfo {
+            name: get_str(r, "schema_name"),
+        })
+        .collect())
 }
 
 pub async fn create_schema(driver: &PostgresDriver, schema_name: &str) -> Result<()> {
-    driver.query(&format!("CREATE SCHEMA IF NOT EXISTS {}", quote_ident(schema_name)), &[]).await?;
+    driver
+        .query(
+            &format!("CREATE SCHEMA IF NOT EXISTS {}", quote_ident(schema_name)),
+            &[],
+        )
+        .await?;
     Ok(())
 }
 
@@ -51,7 +61,11 @@ pub async fn get_tables(driver: &PostgresDriver, schema: &str) -> Result<Vec<Tab
         .iter()
         .map(|r| TableInfo {
             name: get_str(r, "table_name"),
-            kind: if get_str(r, "table_type") == "VIEW" { TableKind::View } else { TableKind::Table },
+            kind: if get_str(r, "table_type") == "VIEW" {
+                TableKind::View
+            } else {
+                TableKind::Table
+            },
         })
         .collect())
 }
@@ -91,8 +105,14 @@ const COLUMNS_WITH_KEYS_SQL: &str = "
      WHERE c.table_schema = $1 AND c.table_name = $2
      ORDER BY c.ordinal_position";
 
-pub async fn get_columns(driver: &PostgresDriver, schema: &str, table: &str) -> Result<Vec<ColumnInfo>> {
-    let rows = driver.query(COLUMNS_WITH_KEYS_SQL, &[&schema, &table]).await?;
+pub async fn get_columns(
+    driver: &PostgresDriver,
+    schema: &str,
+    table: &str,
+) -> Result<Vec<ColumnInfo>> {
+    let rows = driver
+        .query(COLUMNS_WITH_KEYS_SQL, &[&schema, &table])
+        .await?;
     Ok(rows
         .iter()
         .map(|r| ColumnInfo {
@@ -147,7 +167,11 @@ pub async fn get_functions(driver: &PostgresDriver, schema: &str) -> Result<Vec<
         .iter()
         .map(|r| FunctionInfo {
             name: get_str(r, "routine_name"),
-            kind: if get_str(r, "routine_type") == "PROCEDURE" { RoutineKind::Procedure } else { RoutineKind::Function },
+            kind: if get_str(r, "routine_type") == "PROCEDURE" {
+                RoutineKind::Procedure
+            } else {
+                RoutineKind::Function
+            },
             return_type: get_str(r, "data_type"),
             specific_name: get_str(r, "specific_name"),
             identity_arguments: get_str(r, "identity_arguments"),
@@ -259,7 +283,11 @@ pub async fn get_completion_data(driver: &PostgresDriver) -> Result<CompletionDa
             .map(|r| CompletionTable {
                 schema: get_str(r, "schema"),
                 name: get_str(r, "name"),
-                kind: if get_str(r, "table_type") == "VIEW" { TableKind::View } else { TableKind::Table },
+                kind: if get_str(r, "table_type") == "VIEW" {
+                    TableKind::View
+                } else {
+                    TableKind::Table
+                },
             })
             .collect(),
         columns: columns
@@ -272,12 +300,18 @@ pub async fn get_completion_data(driver: &PostgresDriver) -> Result<CompletionDa
             .collect(),
         functions: functions
             .iter()
-            .map(|r| CompletionFunction { schema: get_str(r, "schema"), name: get_str(r, "name") })
+            .map(|r| CompletionFunction {
+                schema: get_str(r, "schema"),
+                name: get_str(r, "name"),
+            })
             .collect(),
     })
 }
 
-pub async fn get_table_estimates(driver: &PostgresDriver, schema: &str) -> Result<Vec<(String, i64)>> {
+pub async fn get_table_estimates(
+    driver: &PostgresDriver,
+    schema: &str,
+) -> Result<Vec<(String, i64)>> {
     let rows = driver
         .query(
             "SELECT c.relname, c.reltuples::bigint AS estimate \
@@ -286,7 +320,10 @@ pub async fn get_table_estimates(driver: &PostgresDriver, schema: &str) -> Resul
             &[&schema],
         )
         .await?;
-    Ok(rows.iter().map(|r| (get_str(r, "relname"), get_i64(r, "estimate"))).collect())
+    Ok(rows
+        .iter()
+        .map(|r| (get_str(r, "relname"), get_i64(r, "estimate")))
+        .collect())
 }
 
 pub async fn get_table_ddl(driver: &PostgresDriver, schema: &str, table: &str) -> Result<String> {
@@ -307,7 +344,10 @@ pub async fn get_table_ddl(driver: &PostgresDriver, schema: &str, table: &str) -
 
     if relkind == "v" {
         let rows = driver
-            .query("SELECT pg_get_viewdef($1::oid, true) AS definition", &[&oid])
+            .query(
+                "SELECT pg_get_viewdef($1::oid, true) AS definition",
+                &[&oid],
+            )
             .await?;
         let definition = rows
             .first()
@@ -352,12 +392,17 @@ pub async fn get_table_ddl(driver: &PostgresDriver, schema: &str, table: &str) -
             line
         })
         .collect();
-    lines.extend(
-        constraints
-            .iter()
-            .map(|c| format!("  CONSTRAINT \"{}\" {}", get_str(c, "conname"), get_str(c, "condef"))),
-    );
-    Ok(format!("CREATE TABLE {q_schema}.{q_table} (\n{}\n);", lines.join(",\n")))
+    lines.extend(constraints.iter().map(|c| {
+        format!(
+            "  CONSTRAINT \"{}\" {}",
+            get_str(c, "conname"),
+            get_str(c, "condef")
+        )
+    }));
+    Ok(format!(
+        "CREATE TABLE {q_schema}.{q_table} (\n{}\n);",
+        lines.join(",\n")
+    ))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -370,7 +415,11 @@ pub struct IndexInfo {
     pub constraint_name: Option<String>,
 }
 
-pub async fn get_indexes(driver: &PostgresDriver, schema: &str, table: &str) -> Result<Vec<IndexInfo>> {
+pub async fn get_indexes(
+    driver: &PostgresDriver,
+    schema: &str,
+    table: &str,
+) -> Result<Vec<IndexInfo>> {
     let rows = driver
         .query(
             "SELECT i.relname AS index_name, pg_get_indexdef(ix.indexrelid) AS index_def, \
@@ -419,8 +468,14 @@ async fn table_oid(driver: &PostgresDriver, schema: &str, table: &str) -> Result
     Ok(rows.first().and_then(|r| r.try_get::<_, u32>("oid").ok()))
 }
 
-pub async fn get_constraints(driver: &PostgresDriver, schema: &str, table: &str) -> Result<Vec<ConstraintInfo>> {
-    let Some(oid) = table_oid(driver, schema, table).await? else { return Ok(vec![]) };
+pub async fn get_constraints(
+    driver: &PostgresDriver,
+    schema: &str,
+    table: &str,
+) -> Result<Vec<ConstraintInfo>> {
+    let Some(oid) = table_oid(driver, schema, table).await? else {
+        return Ok(vec![]);
+    };
     let rows = driver
         .query(
             "SELECT conname AS name, \
@@ -434,7 +489,11 @@ pub async fn get_constraints(driver: &PostgresDriver, schema: &str, table: &str)
         .await?;
     Ok(rows
         .iter()
-        .map(|r| ConstraintInfo { name: get_str(r, "name"), kind: get_str(r, "type"), definition: get_str(r, "definition") })
+        .map(|r| ConstraintInfo {
+            name: get_str(r, "name"),
+            kind: get_str(r, "type"),
+            definition: get_str(r, "definition"),
+        })
         .collect())
 }
 
@@ -455,7 +514,11 @@ pub struct FkMapEntry {
     pub foreign_column: String,
 }
 
-pub async fn get_fk_map(driver: &PostgresDriver, schema: &str, table: &str) -> Result<Vec<FkMapEntry>> {
+pub async fn get_fk_map(
+    driver: &PostgresDriver,
+    schema: &str,
+    table: &str,
+) -> Result<Vec<FkMapEntry>> {
     let out = driver
         .query(
             "SELECT kcu.constraint_name, kcu.column_name, \
@@ -524,7 +587,11 @@ pub struct TableDetail {
     pub row_estimate: i64,
 }
 
-pub async fn get_table_detail(driver: &PostgresDriver, schema: &str, table: &str) -> Result<TableDetail> {
+pub async fn get_table_detail(
+    driver: &PostgresDriver,
+    schema: &str,
+    table: &str,
+) -> Result<TableDetail> {
     let raw_cols = driver
         .query(
             "SELECT
@@ -610,6 +677,9 @@ pub async fn get_table_detail(driver: &PostgresDriver, schema: &str, table: &str
         constraints,
         indexes,
         fk_map,
-        row_estimate: est_rows.first().map(|r| get_i64(r, "estimate")).unwrap_or(0),
+        row_estimate: est_rows
+            .first()
+            .map(|r| get_i64(r, "estimate"))
+            .unwrap_or(0),
     })
 }

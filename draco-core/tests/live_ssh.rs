@@ -25,7 +25,9 @@ fn env(name: &str) -> String {
 }
 
 fn port(name: &str) -> u16 {
-    env(name).parse().unwrap_or_else(|_| panic!("{name} must be a port number"))
+    env(name)
+        .parse()
+        .unwrap_or_else(|_| panic!("{name} must be a port number"))
 }
 
 fn ssh_host() -> String {
@@ -137,7 +139,10 @@ async fn rejects_wrong_ssh_password() {
         None,
     )
     .await;
-    assert!(result.is_err(), "a wrong SSH password unexpectedly opened a tunnel");
+    assert!(
+        result.is_err(),
+        "a wrong SSH password unexpectedly opened a tunnel"
+    );
 }
 
 #[tokio::test]

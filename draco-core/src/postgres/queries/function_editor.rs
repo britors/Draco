@@ -1,8 +1,8 @@
 use serde::Serialize;
 
+use super::helpers::*;
 use crate::error::Result;
 use crate::postgres::pool::PostgresDriver;
-use super::helpers::*;
 use tokio::sync::watch;
 
 #[derive(Debug, Clone, Serialize)]
@@ -12,7 +12,11 @@ pub struct FunctionOverload {
     pub oid: String,
 }
 
-pub async fn get_function_ddl(driver: &PostgresDriver, schema: &str, func_name: &str) -> Result<Vec<FunctionOverload>> {
+pub async fn get_function_ddl(
+    driver: &PostgresDriver,
+    schema: &str,
+    func_name: &str,
+) -> Result<Vec<FunctionOverload>> {
     let rows = driver
         .query(
             "SELECT pg_get_functiondef(p.oid) AS ddl, pg_get_function_identity_arguments(p.oid) AS args, p.oid::text AS oid \
@@ -21,7 +25,14 @@ pub async fn get_function_ddl(driver: &PostgresDriver, schema: &str, func_name: 
             &[&schema, &func_name],
         )
         .await?;
-    Ok(rows.iter().map(|r| FunctionOverload { ddl: get_str(r, "ddl"), args: get_str(r, "args"), oid: get_str(r, "oid") }).collect())
+    Ok(rows
+        .iter()
+        .map(|r| FunctionOverload {
+            ddl: get_str(r, "ddl"),
+            args: get_str(r, "args"),
+            oid: get_str(r, "oid"),
+        })
+        .collect())
 }
 
 pub async fn save_function(driver: &PostgresDriver, ddl: &str) -> Result<()> {
@@ -58,7 +69,9 @@ fn validate_type_list(value: &str) -> Result<()> {
         || value.contains("*/")
         || value.chars().any(char::is_control)
     {
-        return Err(crate::error::CoreError::Other("Argument type list is invalid".to_string()));
+        return Err(crate::error::CoreError::Other(
+            "Argument type list is invalid".to_string(),
+        ));
     }
     Ok(())
 }
@@ -74,7 +87,12 @@ async fn extension_owning_routine(
     name: &str,
     identity_arguments: &str,
 ) -> Result<Option<String>> {
-    let qualified = format!("{}.{}({})", quote_ident(schema), quote_ident(name), identity_arguments);
+    let qualified = format!(
+        "{}.{}({})",
+        quote_ident(schema),
+        quote_ident(name),
+        identity_arguments
+    );
     // `to_regprocedure($1)` rather than `$1::regprocedure`: a direct cast on the parameter makes
     // Postgres infer $1's type as `regprocedure` (an OID type) itself, which tokio-postgres can't
     // encode a Rust `String` into ("error serializing parameter 0"). Calling the function instead
@@ -101,8 +119,14 @@ pub async fn drop_routine(
     is_procedure: bool,
 ) -> Result<()> {
     validate_type_list(identity_arguments)?;
-    let kind = if is_procedure { "PROCEDURE" } else { "FUNCTION" };
-    if let Some(extname) = extension_owning_routine(driver, schema, name, identity_arguments).await? {
+    let kind = if is_procedure {
+        "PROCEDURE"
+    } else {
+        "FUNCTION"
+    };
+    if let Some(extname) =
+        extension_owning_routine(driver, schema, name, identity_arguments).await?
+    {
         return Err(crate::error::CoreError::Other(format!(
             "\"{name}\" was installed by the \"{extname}\" extension and can't be dropped directly. Drop or alter the extension instead."
         )));
@@ -132,11 +156,19 @@ pub async fn call_routine(
     } else {
         format!("SELECT * FROM {}({})", qualified, placeholders.join(", "))
     };
-    let values: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
-        params.iter().map(|value| value as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
+    let values: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params
+        .iter()
+        .map(|value| value as &(dyn tokio_postgres::types::ToSql + Sync))
+        .collect();
     let rows = driver.query(&sql, &values).await?;
-    let columns = rows.first().map(|r| r.columns().iter().map(|c| c.name().to_string()).collect()).unwrap_or_default();
-    Ok(FunctionTestResult { columns, rows: rows.iter().map(row_to_json_map).collect() })
+    let columns = rows
+        .first()
+        .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
+        .unwrap_or_default();
+    Ok(FunctionTestResult {
+        columns,
+        rows: rows.iter().map(row_to_json_map).collect(),
+    })
 }
 
 /// Result shape shared by the SQL query editor and the function tester — same "run arbitrary
@@ -145,8 +177,14 @@ pub type QueryResult = FunctionTestResult;
 
 pub async fn execute_query(driver: &PostgresDriver, sql: &str) -> Result<QueryResult> {
     let rows = driver.query(sql, &[]).await?;
-    let columns = rows.first().map(|r| r.columns().iter().map(|c| c.name().to_string()).collect()).unwrap_or_default();
-    Ok(QueryResult { columns, rows: rows.iter().map(row_to_json_map).collect() })
+    let columns = rows
+        .first()
+        .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
+        .unwrap_or_default();
+    Ok(QueryResult {
+        columns,
+        rows: rows.iter().map(row_to_json_map).collect(),
+    })
 }
 
 pub async fn execute_query_cancelable(
@@ -155,8 +193,14 @@ pub async fn execute_query_cancelable(
     cancel_rx: watch::Receiver<bool>,
 ) -> Result<QueryResult> {
     let rows = driver.query_cancelable(sql, &[], cancel_rx).await?;
-    let columns = rows.first().map(|r| r.columns().iter().map(|c| c.name().to_string()).collect()).unwrap_or_default();
-    Ok(QueryResult { columns, rows: rows.iter().map(row_to_json_map).collect() })
+    let columns = rows
+        .first()
+        .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
+        .unwrap_or_default();
+    Ok(QueryResult {
+        columns,
+        rows: rows.iter().map(row_to_json_map).collect(),
+    })
 }
 
 /// Runs `sql` as a multi-statement script via the simple query protocol (`simple_query`,
@@ -187,7 +231,10 @@ pub async fn execute_script(driver: &PostgresDriver, sql: &str) -> Result<QueryR
             tokio_postgres::SimpleQueryMessage::Row(row) => {
                 let mut map = serde_json::Map::new();
                 for (i, col) in row.columns().iter().enumerate() {
-                    let value = row.get(i).map(|v| serde_json::Value::String(v.to_string())).unwrap_or(serde_json::Value::Null);
+                    let value = row
+                        .get(i)
+                        .map(|v| serde_json::Value::String(v.to_string()))
+                        .unwrap_or(serde_json::Value::Null);
                     map.insert(col.name().to_string(), value);
                 }
                 current_rows.push(map);
@@ -213,11 +260,17 @@ pub async fn execute_script(driver: &PostgresDriver, sql: &str) -> Result<QueryR
     if final_columns.is_empty() {
         final_columns = vec!["rows_affected".to_string()];
         let mut map = serde_json::Map::new();
-        map.insert("rows_affected".to_string(), serde_json::Value::from(final_affected.unwrap_or(0)));
+        map.insert(
+            "rows_affected".to_string(),
+            serde_json::Value::from(final_affected.unwrap_or(0)),
+        );
         final_rows = vec![map];
     }
 
-    Ok(QueryResult { columns: final_columns, rows: final_rows })
+    Ok(QueryResult {
+        columns: final_columns,
+        rows: final_rows,
+    })
 }
 
 pub async fn execute_script_cancelable(
@@ -242,7 +295,10 @@ pub async fn execute_script_cancelable(
             tokio_postgres::SimpleQueryMessage::Row(row) => {
                 let mut map = serde_json::Map::new();
                 for (i, col) in row.columns().iter().enumerate() {
-                    let value = row.get(i).map(|v| serde_json::Value::String(v.to_string())).unwrap_or(serde_json::Value::Null);
+                    let value = row
+                        .get(i)
+                        .map(|v| serde_json::Value::String(v.to_string()))
+                        .unwrap_or(serde_json::Value::Null);
                     map.insert(col.name().to_string(), value);
                 }
                 current_rows.push(map);
@@ -265,9 +321,15 @@ pub async fn execute_script_cancelable(
     if final_columns.is_empty() {
         final_columns = vec!["rows_affected".to_string()];
         let mut map = serde_json::Map::new();
-        map.insert("rows_affected".to_string(), serde_json::Value::from(final_affected.unwrap_or(0)));
+        map.insert(
+            "rows_affected".to_string(),
+            serde_json::Value::from(final_affected.unwrap_or(0)),
+        );
         final_rows = vec![map];
     }
 
-    Ok(QueryResult { columns: final_columns, rows: final_rows })
+    Ok(QueryResult {
+        columns: final_columns,
+        rows: final_rows,
+    })
 }

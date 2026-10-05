@@ -12,13 +12,13 @@
 use std::time::Duration;
 
 use keyring::Entry;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 pub use crate::store::{AiMessage, AiProvider as Provider, AiRole, AiSettings as Settings};
 
+use crate::legacy_secrets;
 use crate::postgres::pool::PostgresDriver;
 use crate::postgres::queries;
-use crate::legacy_secrets;
 use crate::store;
 
 #[derive(Debug, Clone)]
@@ -96,13 +96,17 @@ fn key_entry(provider: Provider) -> Result<Entry, keyring::Error> {
 }
 
 pub async fn keyring_available() -> bool {
-    tokio::task::spawn_blocking(|| Entry::store_status().is_ok()).await.unwrap_or(false)
+    tokio::task::spawn_blocking(|| Entry::store_status().is_ok())
+        .await
+        .unwrap_or(false)
 }
 
 pub async fn save_key(provider: Provider, key: &str) -> Result<(), AssistantError> {
     let key = key.trim();
     if key.is_empty() {
-        return Err(AssistantError::Message("A chave de API não pode estar vazia.".into()));
+        return Err(AssistantError::Message(
+            "A chave de API não pode estar vazia.".into(),
+        ));
     }
     let key = key.to_string();
     tokio::task::spawn_blocking(move || {
@@ -164,7 +168,11 @@ fn tool(name: &str, description: &str, parameters: Value) -> Value {
 
 pub fn tool_declarations() -> Vec<Value> {
     vec![
-        tool("list_schemas", "Lista os schemas do banco conectado.", json!({"type": "object", "properties": {}})),
+        tool(
+            "list_schemas",
+            "Lista os schemas do banco conectado.",
+            json!({"type": "object", "properties": {}}),
+        ),
         tool(
             "list_tables",
             "Lista tabelas e views de um schema.",
@@ -215,28 +223,46 @@ pub fn is_read_only_select(sql: &str) -> bool {
         return false;
     }
     let lower = trimmed.to_ascii_lowercase();
-    let starts_ok = lower.starts_with("select") || lower.starts_with("with") || lower.starts_with("table ") || lower.starts_with("values");
+    let starts_ok = lower.starts_with("select")
+        || lower.starts_with("with")
+        || lower.starts_with("table ")
+        || lower.starts_with("values");
     if !starts_ok {
         return false;
     }
-    const BANNED: [&str; 5] = [" into ", " for update", " for share", " for no key update", " for key share"];
+    const BANNED: [&str; 5] = [
+        " into ",
+        " for update",
+        " for share",
+        " for no key update",
+        " for key share",
+    ];
     !BANNED.iter().any(|needle| lower.contains(needle))
 }
 
 const MAX_TOOL_ROWS: usize = 50;
 
 fn tool_str(value: &Value, key: &str) -> String {
-    value.get(key).and_then(Value::as_str).unwrap_or_default().trim().to_string()
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string()
 }
 
 /// Dispatches a tool call against an already-connected driver (the caller resolves the connection
 /// via `ConnectionManager`/`connection_runtime::ensure_connected` first, same as every other view).
 pub async fn run_tool(driver: &PostgresDriver, call: &ToolCall) -> Result<String, AssistantError> {
     match call.name.as_str() {
-        "list_schemas" => Ok(serde_json::to_string_pretty(&queries::get_schemas(driver).await?)?),
+        "list_schemas" => Ok(serde_json::to_string_pretty(
+            &queries::get_schemas(driver).await?,
+        )?),
         "list_tables" => {
             let schema = tool_str(&call.input, "schema");
-            Ok(serde_json::to_string_pretty(&queries::get_tables(driver, &schema).await?)?)
+            Ok(serde_json::to_string_pretty(
+                &queries::get_tables(driver, &schema).await?,
+            )?)
         }
         "describe_table" => {
             let schema = tool_str(&call.input, "schema");
@@ -244,7 +270,9 @@ pub async fn run_tool(driver: &PostgresDriver, call: &ToolCall) -> Result<String
             let ddl = queries::get_table_ddl(driver, &schema, &table).await?;
             let columns = queries::get_columns(driver, &schema, &table).await?;
             let indexes = queries::get_indexes(driver, &schema, &table).await?;
-            Ok(serde_json::to_string_pretty(&json!({"ddl": ddl, "columns": columns, "indexes": indexes}))?)
+            Ok(serde_json::to_string_pretty(
+                &json!({"ddl": ddl, "columns": columns, "indexes": indexes}),
+            )?)
         }
         "explain_query" => {
             let sql = tool_str(&call.input, "sql");
@@ -253,7 +281,9 @@ pub async fn run_tool(driver: &PostgresDriver, call: &ToolCall) -> Result<String
                     "Só é possível fazer EXPLAIN de um único SELECT somente leitura.".into(),
                 ));
             }
-            Ok(serde_json::to_string_pretty(&queries::execute_explain(driver, &sql).await?)?)
+            Ok(serde_json::to_string_pretty(
+                &queries::execute_explain(driver, &sql).await?,
+            )?)
         }
         "run_select" => {
             let sql = tool_str(&call.input, "sql");
@@ -291,7 +321,9 @@ pub async fn run_tool(driver: &PostgresDriver, call: &ToolCall) -> Result<String
                 "sequential_scan_hot_spots": stats.seq_scans,
             }))?)
         }
-        other => Err(AssistantError::Message(format!("Ferramenta desconhecida recusada: {other}"))),
+        other => Err(AssistantError::Message(format!(
+            "Ferramenta desconhecida recusada: {other}"
+        ))),
     }
 }
 
@@ -301,22 +333,36 @@ pub async fn send(settings: &Settings, history: &[AiMessage]) -> Result<Reply, A
     send_round(settings, history, true).await
 }
 
-pub async fn continue_after_tool(settings: &Settings, history: &[AiMessage]) -> Result<Reply, AssistantError> {
+pub async fn continue_after_tool(
+    settings: &Settings,
+    history: &[AiMessage],
+) -> Result<Reply, AssistantError> {
     send_round(settings, history, false).await
 }
 
-async fn send_round(settings: &Settings, history: &[AiMessage], count_usage: bool) -> Result<Reply, AssistantError> {
+async fn send_round(
+    settings: &Settings,
+    history: &[AiMessage],
+    count_usage: bool,
+) -> Result<Reply, AssistantError> {
     if count_usage {
         store::consume_ai_usage(settings.max_messages_per_day)?;
     }
     let key = load_key(settings.provider).await?;
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(90)).build()?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(90))
+        .build()?;
     let mut reply = match settings.provider {
         Provider::OpenAi => send_openai(&client, &key, settings.model(), history).await?,
         Provider::Anthropic => send_anthropic(&client, &key, settings.model(), history).await?,
         Provider::Gemini => send_gemini(&client, &key, settings.model(), history).await?,
     };
-    reply.estimated_cost_usd = estimate_cost(settings.provider, settings.model(), reply.input_tokens, reply.output_tokens);
+    reply.estimated_cost_usd = estimate_cost(
+        settings.provider,
+        settings.model(),
+        reply.input_tokens,
+        reply.output_tokens,
+    );
     Ok(reply)
 }
 
@@ -333,16 +379,33 @@ async fn response_json(response: reqwest::Response) -> Result<Value, AssistantEr
     if status.is_success() {
         Ok(value)
     } else {
-        let detail = value.pointer("/error/message").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| "erro sem detalhes".to_string());
-        Err(AssistantError::Message(format!("O provedor recusou a solicitação ({status}): {detail}")))
+        let detail = value
+            .pointer("/error/message")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| "erro sem detalhes".to_string());
+        Err(AssistantError::Message(format!(
+            "O provedor recusou a solicitação ({status}): {detail}"
+        )))
     }
 }
 
 pub async fn list_models(provider: Provider) -> Result<Vec<String>, AssistantError> {
     let key = load_key(provider).await?;
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(45)).build()?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(45))
+        .build()?;
     let value = match provider {
-        Provider::OpenAi => response_json(client.get("https://api.openai.com/v1/models").bearer_auth(&key).send().await?).await?,
+        Provider::OpenAi => {
+            response_json(
+                client
+                    .get("https://api.openai.com/v1/models")
+                    .bearer_auth(&key)
+                    .send()
+                    .await?,
+            )
+            .await?
+        }
         Provider::Anthropic => {
             response_json(
                 client
@@ -397,7 +460,9 @@ pub async fn list_models(provider: Provider) -> Result<Vec<String>, AssistantErr
             .into_iter()
             .flatten()
             .filter(|item| {
-                item.get("supportedGenerationMethods").and_then(Value::as_array).is_some_and(|methods| methods.iter().any(|method| method == "generateContent"))
+                item.get("supportedGenerationMethods")
+                    .and_then(Value::as_array)
+                    .is_some_and(|methods| methods.iter().any(|method| method == "generateContent"))
             })
             .filter_map(|item| item.get("name").and_then(Value::as_str))
             .filter(|name| name.contains("gemini"))
@@ -407,16 +472,30 @@ pub async fn list_models(provider: Provider) -> Result<Vec<String>, AssistantErr
     models.sort();
     models.dedup();
     if models.is_empty() {
-        Err(AssistantError::Message("O provedor não retornou modelos compatíveis.".into()))
+        Err(AssistantError::Message(
+            "O provedor não retornou modelos compatíveis.".into(),
+        ))
     } else {
         Ok(models)
     }
 }
 
-async fn send_openai(client: &reqwest::Client, key: &str, model: &str, history: &[AiMessage]) -> Result<Reply, AssistantError> {
+async fn send_openai(
+    client: &reqwest::Client,
+    key: &str,
+    model: &str,
+    history: &[AiMessage],
+) -> Result<Reply, AssistantError> {
     let mut messages = vec![json!({"role": "system", "content": system_prompt()})];
-    messages.extend(history.iter().map(|m| json!({"role": role_str(m.role), "content": m.content})));
-    let tools = tool_declarations().into_iter().map(|function| json!({"type": "function", "function": function})).collect::<Vec<_>>();
+    messages.extend(
+        history
+            .iter()
+            .map(|m| json!({"role": role_str(m.role), "content": m.content})),
+    );
+    let tools = tool_declarations()
+        .into_iter()
+        .map(|function| json!({"type": "function", "function": function}))
+        .collect::<Vec<_>>();
     let value = response_json(
         client
             .post("https://api.openai.com/v1/chat/completions")
@@ -433,25 +512,50 @@ async fn send_openai(client: &reqwest::Client, key: &str, model: &str, history: 
         .flatten()
         .filter_map(|call| {
             let name = call.pointer("/function/name")?.as_str()?.to_owned();
-            let input = serde_json::from_str(call.pointer("/function/arguments").and_then(Value::as_str).unwrap_or("{}")).unwrap_or_else(|_| json!({}));
+            let input = serde_json::from_str(
+                call.pointer("/function/arguments")
+                    .and_then(Value::as_str)
+                    .unwrap_or("{}"),
+            )
+            .unwrap_or_else(|_| json!({}));
             Some(ToolCall { name, input })
         })
         .collect();
     Ok(Reply {
-        text: value.pointer("/choices/0/message/content").and_then(Value::as_str).unwrap_or_default().into(),
-        input_tokens: value.pointer("/usage/prompt_tokens").and_then(Value::as_u64).unwrap_or(0),
-        output_tokens: value.pointer("/usage/completion_tokens").and_then(Value::as_u64).unwrap_or(0),
+        text: value
+            .pointer("/choices/0/message/content")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .into(),
+        input_tokens: value
+            .pointer("/usage/prompt_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        output_tokens: value
+            .pointer("/usage/completion_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
         tool_calls,
         estimated_cost_usd: None,
     })
 }
 
-async fn send_anthropic(client: &reqwest::Client, key: &str, model: &str, history: &[AiMessage]) -> Result<Reply, AssistantError> {
+async fn send_anthropic(
+    client: &reqwest::Client,
+    key: &str,
+    model: &str,
+    history: &[AiMessage],
+) -> Result<Reply, AssistantError> {
     let tools = tool_declarations()
         .into_iter()
         .map(|item| json!({"name": item["name"], "description": item["description"], "input_schema": item["parameters"]}))
         .collect::<Vec<_>>();
-    let messages = history.iter().map(|m| json!({"role": role_str(m.role), "content": [{"type": "text", "text": m.content}]})).collect::<Vec<_>>();
+    let messages = history
+        .iter()
+        .map(
+            |m| json!({"role": role_str(m.role), "content": [{"type": "text", "text": m.content}]}),
+        )
+        .collect::<Vec<_>>();
     let value = response_json(
         client
             .post("https://api.anthropic.com/v1/messages")
@@ -462,7 +566,11 @@ async fn send_anthropic(client: &reqwest::Client, key: &str, model: &str, histor
             .await?,
     )
     .await?;
-    let content = value.get("content").and_then(Value::as_array).cloned().unwrap_or_default();
+    let content = value
+        .get("content")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let text = content
         .iter()
         .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
@@ -472,23 +580,40 @@ async fn send_anthropic(client: &reqwest::Client, key: &str, model: &str, histor
     let tool_calls = content
         .iter()
         .filter(|block| block.get("type").and_then(Value::as_str) == Some("tool_use"))
-        .filter_map(|block| Some(ToolCall { name: block.get("name")?.as_str()?.to_owned(), input: block.get("input").cloned().unwrap_or_else(|| json!({})) }))
+        .filter_map(|block| {
+            Some(ToolCall {
+                name: block.get("name")?.as_str()?.to_owned(),
+                input: block.get("input").cloned().unwrap_or_else(|| json!({})),
+            })
+        })
         .collect();
     Ok(Reply {
         text,
-        input_tokens: value.pointer("/usage/input_tokens").and_then(Value::as_u64).unwrap_or(0),
-        output_tokens: value.pointer("/usage/output_tokens").and_then(Value::as_u64).unwrap_or(0),
+        input_tokens: value
+            .pointer("/usage/input_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        output_tokens: value
+            .pointer("/usage/output_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
         tool_calls,
         estimated_cost_usd: None,
     })
 }
 
-async fn send_gemini(client: &reqwest::Client, key: &str, model: &str, history: &[AiMessage]) -> Result<Reply, AssistantError> {
+async fn send_gemini(
+    client: &reqwest::Client,
+    key: &str,
+    model: &str,
+    history: &[AiMessage],
+) -> Result<Reply, AssistantError> {
     let contents = history
         .iter()
         .map(|m| json!({"role": if m.role == AiRole::Assistant { "model" } else { "user" }, "parts": [{"text": m.content}]}))
         .collect::<Vec<_>>();
-    let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
+    let url =
+        format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
     let declarations = tool_declarations()
         .into_iter()
         .map(|item| json!({"name": item["name"], "description": item["description"], "parametersJsonSchema": item["parameters"]}))
@@ -506,17 +631,36 @@ async fn send_gemini(client: &reqwest::Client, key: &str, model: &str, history: 
             .await?,
     )
     .await?;
-    let parts = value.pointer("/candidates/0/content/parts").and_then(Value::as_array).cloned().unwrap_or_default();
-    let text = parts.iter().filter_map(|part| part.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("");
+    let parts = value
+        .pointer("/candidates/0/content/parts")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let text = parts
+        .iter()
+        .filter_map(|part| part.get("text").and_then(Value::as_str))
+        .collect::<Vec<_>>()
+        .join("");
     let tool_calls = parts
         .iter()
         .filter_map(|part| part.get("functionCall"))
-        .filter_map(|call| Some(ToolCall { name: call.get("name")?.as_str()?.to_owned(), input: call.get("args").cloned().unwrap_or_else(|| json!({})) }))
+        .filter_map(|call| {
+            Some(ToolCall {
+                name: call.get("name")?.as_str()?.to_owned(),
+                input: call.get("args").cloned().unwrap_or_else(|| json!({})),
+            })
+        })
         .collect();
     Ok(Reply {
         text,
-        input_tokens: value.pointer("/usageMetadata/promptTokenCount").and_then(Value::as_u64).unwrap_or(0),
-        output_tokens: value.pointer("/usageMetadata/candidatesTokenCount").and_then(Value::as_u64).unwrap_or(0),
+        input_tokens: value
+            .pointer("/usageMetadata/promptTokenCount")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        output_tokens: value
+            .pointer("/usageMetadata/candidatesTokenCount")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
         tool_calls,
         estimated_cost_usd: None,
     })
@@ -542,7 +686,9 @@ mod tests {
     fn read_only_guard_accepts_plain_selects_and_ctes() {
         assert!(is_read_only_select("select * from users"));
         assert!(is_read_only_select("  SELECT id FROM t;  "));
-        assert!(is_read_only_select("with recent as (select 1) select * from recent"));
+        assert!(is_read_only_select(
+            "with recent as (select 1) select * from recent"
+        ));
     }
 
     #[test]
@@ -557,7 +703,10 @@ mod tests {
 
     #[test]
     fn settings_keep_a_model_per_provider() {
-        let mut settings = Settings { provider: Provider::OpenAi, ..Settings::default() };
+        let mut settings = Settings {
+            provider: Provider::OpenAi,
+            ..Settings::default()
+        };
         settings.set_model("gpt-test".into());
         assert_eq!(settings.model(), "gpt-test");
     }

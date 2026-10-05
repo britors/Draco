@@ -1,8 +1,8 @@
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use std::sync::Arc;
+use tokio::sync::watch;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::{NoTls, Row};
-use tokio::sync::watch;
 
 use crate::connection::DbConnection;
 use crate::error::Result;
@@ -35,7 +35,9 @@ impl PostgresDriver {
         jump_password: Option<&str>,
     ) -> Result<Self> {
         let tunnel = if conn.ssh_enabled {
-            Some(Arc::new(SshTunnel::open(conn, ssh_password, jump_password).await?))
+            Some(Arc::new(
+                SshTunnel::open(conn, ssh_password, jump_password).await?,
+            ))
         } else {
             None
         };
@@ -199,11 +201,8 @@ impl PostgresDriver {
 
     /// Cancels exactly one backend PID, unlike the legacy application-name based fallback.
     pub async fn cancel_backend(&self, backend_pid: i32) -> Result<()> {
-        self.query(
-            "SELECT pg_cancel_backend($1)",
-            &[&backend_pid],
-        )
-        .await?;
+        self.query("SELECT pg_cancel_backend($1)", &[&backend_pid])
+            .await?;
         Ok(())
     }
 
@@ -249,7 +248,15 @@ pub async fn test_connection_with_ssh(
     ssh_password: Option<&str>,
     jump_password: Option<&str>,
 ) -> Result<()> {
-    let driver = PostgresDriver::connect(conn, password, 30_000, "draco-test", ssh_password, jump_password).await?;
+    let driver = PostgresDriver::connect(
+        conn,
+        password,
+        30_000,
+        "draco-test",
+        ssh_password,
+        jump_password,
+    )
+    .await?;
     driver.disconnect().await;
     Ok(())
 }

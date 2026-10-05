@@ -38,12 +38,42 @@ fn pg_value_to_json(row: &Row, idx: usize) -> serde_json::Value {
     use tokio_postgres::types::Type;
     let ty = row.columns()[idx].type_();
     match *ty {
-        Type::BOOL => row.try_get::<_, Option<bool>>(idx).ok().flatten().map(serde_json::Value::Bool).unwrap_or(serde_json::Value::Null),
-        Type::INT2 => row.try_get::<_, Option<i16>>(idx).ok().flatten().map(|v| serde_json::json!(v)).unwrap_or(serde_json::Value::Null),
-        Type::INT4 => row.try_get::<_, Option<i32>>(idx).ok().flatten().map(|v| serde_json::json!(v)).unwrap_or(serde_json::Value::Null),
-        Type::INT8 => row.try_get::<_, Option<i64>>(idx).ok().flatten().map(|v| serde_json::json!(v)).unwrap_or(serde_json::Value::Null),
-        Type::FLOAT4 => row.try_get::<_, Option<f32>>(idx).ok().flatten().map(|v| serde_json::json!(v)).unwrap_or(serde_json::Value::Null),
-        Type::FLOAT8 => row.try_get::<_, Option<f64>>(idx).ok().flatten().map(|v| serde_json::json!(v)).unwrap_or(serde_json::Value::Null),
+        Type::BOOL => row
+            .try_get::<_, Option<bool>>(idx)
+            .ok()
+            .flatten()
+            .map(serde_json::Value::Bool)
+            .unwrap_or(serde_json::Value::Null),
+        Type::INT2 => row
+            .try_get::<_, Option<i16>>(idx)
+            .ok()
+            .flatten()
+            .map(|v| serde_json::json!(v))
+            .unwrap_or(serde_json::Value::Null),
+        Type::INT4 => row
+            .try_get::<_, Option<i32>>(idx)
+            .ok()
+            .flatten()
+            .map(|v| serde_json::json!(v))
+            .unwrap_or(serde_json::Value::Null),
+        Type::INT8 => row
+            .try_get::<_, Option<i64>>(idx)
+            .ok()
+            .flatten()
+            .map(|v| serde_json::json!(v))
+            .unwrap_or(serde_json::Value::Null),
+        Type::FLOAT4 => row
+            .try_get::<_, Option<f32>>(idx)
+            .ok()
+            .flatten()
+            .map(|v| serde_json::json!(v))
+            .unwrap_or(serde_json::Value::Null),
+        Type::FLOAT8 => row
+            .try_get::<_, Option<f64>>(idx)
+            .ok()
+            .flatten()
+            .map(|v| serde_json::json!(v))
+            .unwrap_or(serde_json::Value::Null),
         _ => row
             .try_get::<_, Option<String>>(idx)
             .ok()

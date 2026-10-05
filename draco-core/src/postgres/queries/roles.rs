@@ -1,7 +1,7 @@
-use serde::Serialize;
+use super::helpers::*;
 use crate::error::Result;
 use crate::postgres::pool::PostgresDriver;
-use super::helpers::*;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RoleInfo {
@@ -51,25 +51,53 @@ pub struct NewRole {
 
 pub async fn create_role(driver: &PostgresDriver, role: &NewRole) -> Result<()> {
     let safe_name = quote_ident(&role.name);
-    let mut parts = role_attributes_sql(role.login, role.createdb, role.createrole, role.superuser, role.conn_limit, role.valid_until.as_deref());
+    let mut parts = role_attributes_sql(
+        role.login,
+        role.createdb,
+        role.createrole,
+        role.superuser,
+        role.conn_limit,
+        role.valid_until.as_deref(),
+    );
     if let Some(pw) = &role.password {
         if !pw.is_empty() {
             parts.push(format!("PASSWORD '{}'", pw.replace('\'', "''")));
         }
     }
-    driver.query(&format!("CREATE ROLE {safe_name} {}", parts.join(" ")), &[]).await?;
+    driver
+        .query(&format!("CREATE ROLE {safe_name} {}", parts.join(" ")), &[])
+        .await?;
     Ok(())
 }
 
-fn role_attributes_sql(login: bool, createdb: bool, createrole: bool, superuser: bool, conn_limit: i32, valid_until: Option<&str>) -> Vec<String> {
+fn role_attributes_sql(
+    login: bool,
+    createdb: bool,
+    createrole: bool,
+    superuser: bool,
+    conn_limit: i32,
+    valid_until: Option<&str>,
+) -> Vec<String> {
     let mut parts = vec![
         if login { "LOGIN" } else { "NOLOGIN" }.to_string(),
         if createdb { "CREATEDB" } else { "NOCREATEDB" }.to_string(),
-        if createrole { "CREATEROLE" } else { "NOCREATEROLE" }.to_string(),
-        if superuser { "SUPERUSER" } else { "NOSUPERUSER" }.to_string(),
+        if createrole {
+            "CREATEROLE"
+        } else {
+            "NOCREATEROLE"
+        }
+        .to_string(),
+        if superuser {
+            "SUPERUSER"
+        } else {
+            "NOSUPERUSER"
+        }
+        .to_string(),
         format!("CONNECTION LIMIT {}", conn_limit.max(-1)),
     ];
-    let valid_until = valid_until.filter(|value| !value.trim().is_empty()).unwrap_or("infinity");
+    let valid_until = valid_until
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("infinity");
     parts.push(format!("VALID UNTIL '{}'", valid_until.replace('\'', "''")));
     parts
 }
@@ -87,16 +115,30 @@ pub async fn update_role(
     password: Option<&str>,
 ) -> Result<()> {
     let safe_name = quote_ident(name);
-    let mut parts = role_attributes_sql(login, createdb, createrole, superuser, conn_limit, valid_until);
+    let mut parts = role_attributes_sql(
+        login,
+        createdb,
+        createrole,
+        superuser,
+        conn_limit,
+        valid_until,
+    );
     if let Some(password) = password.filter(|value| !value.is_empty()) {
         parts.push(format!("PASSWORD '{}'", password.replace('\'', "''")));
     }
-    driver.query(&format!("ALTER ROLE {safe_name} WITH {}", parts.join(" ")), &[]).await?;
+    driver
+        .query(
+            &format!("ALTER ROLE {safe_name} WITH {}", parts.join(" ")),
+            &[],
+        )
+        .await?;
     Ok(())
 }
 
 pub async fn drop_role(driver: &PostgresDriver, name: &str) -> Result<()> {
     let safe_name = quote_ident(name);
-    driver.query(&format!("DROP ROLE IF EXISTS {safe_name}"), &[]).await?;
+    driver
+        .query(&format!("DROP ROLE IF EXISTS {safe_name}"), &[])
+        .await?;
     Ok(())
 }
