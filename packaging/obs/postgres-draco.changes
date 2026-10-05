@@ -1,4 +1,14 @@
 -------------------------------------------------------------------
+Mon Oct 05 19:00:00 UTC 2026 - rodrigo@dracodb.com.br
+
+- Versão 2.1.7: o editor SQL e o Assistente de IA mostram os valores de
+  numeric, timestamp, date, uuid, json, interval e arrays em vez de NULL.
+- Corrigida a edição de sequences, que gerava ALTER SEQUENCE inválido.
+- Tema claro: destaque de sintaxe no editor SQL, tabela de dados e ERD com
+  contraste correto; o aviso "Loading rows…" some após o carregamento.
+- AppStream com capturas de tela.
+
+-------------------------------------------------------------------
 Mon Oct 05 18:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.1.6: o Assistente de IA mostra o motivo das falhas (chave ausente
