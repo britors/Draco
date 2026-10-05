@@ -45,6 +45,34 @@
 
   <launchable type="desktop-id">org.lyraos.Draco.desktop</launchable>
 
+  <screenshots>
+    <screenshot type="default">
+      <caption>SQL editor with syntax highlighting and the result grid</caption>
+      <caption xml:lang="pt-BR">Editor SQL com destaque de sintaxe e a grade de resultados</caption>
+      <image type="source" width="1600" height="900">https://dracodb.com.br/assets/screenshots/01-sql-editor.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Table detail with paginated, editable rows and maintenance actions</caption>
+      <caption xml:lang="pt-BR">Detalhe da tabela com linhas paginadas e editáveis e ações de manutenção</caption>
+      <image type="source" width="1600" height="900">https://dracodb.com.br/assets/screenshots/02-table-detail.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Entity-relationship diagram of a schema</caption>
+      <caption xml:lang="pt-BR">Diagrama entidade-relacionamento de um schema</caption>
+      <image type="source" width="1600" height="900">https://dracodb.com.br/assets/screenshots/03-erd.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Dashboard with database health and the largest tables</caption>
+      <caption xml:lang="pt-BR">Dashboard com a saúde do banco e as maiores tabelas</caption>
+      <image type="source" width="1600" height="900">https://dracodb.com.br/assets/screenshots/04-dashboard.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Programming workspace editing a PL/pgSQL function</caption>
+      <caption xml:lang="pt-BR">Área Programming editando uma função PL/pgSQL</caption>
+      <image type="source" width="1600" height="900">https://dracodb.com.br/assets/screenshots/05-programming.png</image>
+    </screenshot>
+  </screenshots>
+
   <url type="homepage">https://github.com/britors/Draco</url>
   <url type="bugtracker">https://github.com/britors/Draco/issues</url>
 

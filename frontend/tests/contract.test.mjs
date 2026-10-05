@@ -248,6 +248,15 @@ test('SQL editor overlays local syntax highlighting without introducing untruste
   assert.match(app, /syncEditorHighlight\(\); void updateAutocomplete\(\)/);
   assert.match(app, /byId\('sql-editor'\)\.addEventListener\('scroll'/);
   assert.doesNotMatch(app, /byId\('sql-editor'\)\.value = (?!text;)/, 'every sql-editor.value write must go through setEditorValue so the overlay never drifts out of sync');
+  // A theme rule that paints the textarea text or background hides the overlay underneath it.
+  for (const rule of style.matchAll(/([^{}]*#(?:sql|programming)-editor[^{}]*)\{([^}]*)\}/g)) {
+    if (rule[1].includes('::selection')) continue;
+    for (const declaration of rule[2].split(';')) {
+      const [property, value] = declaration.split(':').map((part) => part?.trim());
+      if (property === 'color' || property === 'background') assert.equal(value, 'transparent', `${rule[1].trim()} covers the highlight overlay`);
+    }
+  }
+  assert.match(style, /html\[data-theme="light"\] \.sql-editor-highlight \.sql-tok-keyword/);
 });
 
 test('the result grid renders only the rows in view instead of the whole dataset at once', () => {

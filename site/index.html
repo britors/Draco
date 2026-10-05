@@ -105,6 +105,7 @@
       </a>
       <nav class="site-nav" aria-label="Navegação principal">
         <a href="#recursos">Recursos</a>
+        <a href="#telas">Telas</a>
         <a href="#seguranca">Segurança</a>
         <a href="#download">Download</a>
         <a href="#faq">FAQ</a>
@@ -228,7 +229,38 @@
       </div>
     </section>
 
-    <section class="section section-alt" id="seguranca" aria-labelledby="seguranca-titulo">
+    <section class="section section-alt" id="telas" aria-labelledby="telas-titulo">
+      <div class="container">
+        <p class="eyebrow">Telas</p>
+        <h2 id="telas-titulo">Veja o Draco Postgres em uso</h2>
+        <p class="section-lead">Capturas do app com um banco de exemplo fictício.</p>
+
+        <div class="shot-gallery">
+          <figure class="shot shot-main">
+            <img src="assets/screenshots/01-sql-editor.png" alt="Editor SQL do Draco Postgres com uma consulta destacada e a grade de resultados" width="1600" height="900" loading="lazy">
+            <figcaption>Editor SQL com destaque de sintaxe e grade de resultados</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="assets/screenshots/02-table-detail.png" alt="Detalhe de uma tabela com linhas paginadas e ações de manutenção" width="1600" height="900" loading="lazy">
+            <figcaption>Detalhe da tabela com linhas editáveis</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="assets/screenshots/03-erd.png" alt="Diagrama entidade-relacionamento de um schema" width="1600" height="900" loading="lazy">
+            <figcaption>Diagrama entidade-relacionamento</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="assets/screenshots/04-dashboard.png" alt="Dashboard com indicadores do banco e as maiores tabelas" width="1600" height="900" loading="lazy">
+            <figcaption>Dashboard com a saúde do banco</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="assets/screenshots/05-programming.png" alt="Área Programming editando uma função PL/pgSQL" width="1600" height="900" loading="lazy">
+            <figcaption>Programming: funções, procedures e triggers</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="seguranca" aria-labelledby="seguranca-titulo">
       <div class="container split">
         <div>
           <p class="eyebrow">Segurança por padrão</p>
@@ -248,7 +280,7 @@
       </div>
     </section>
 
-    <section class="section" id="download" aria-labelledby="download-titulo">
+    <section class="section section-alt" id="download" aria-labelledby="download-titulo">
       <div class="container">
         <p class="eyebrow">Download</p>
         <h2 id="download-titulo">Instale o Draco Postgres</h2>
@@ -301,7 +333,7 @@ cargo build --locked --release -p draco-tauri
         <p class="all-releases"><a href="https://github.com/britors/Draco/releases">Ver todas as versões e notas de release →</a></p>
       </div>
     </section>
-    <section class="section section-alt" id="faq" aria-labelledby="faq-titulo">
+    <section class="section" id="faq" aria-labelledby="faq-titulo">
       <div class="container">
         <p class="eyebrow">Perguntas frequentes</p>
         <h2 id="faq-titulo">Dúvidas sobre o Draco Postgres</h2>

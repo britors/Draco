@@ -2542,6 +2542,7 @@ function tableDataPanel(id, schema, table) {
       summary.textContent = `${t('table.pageRange', { first, last, total: result.total })}${primaryKeys.length ? ` · ${t('table.keyColumns', { columns: primaryKeys.join(', ') })}` : t('table.readOnlyWithoutAPrimary')}`;
       canPrevious = offset > 0;
       canNext = offset + rows.length < result.total;
+      status.textContent = '';
       grid.replaceChildren();
       if (!rows.length) { grid.append(errorState(t('table.noRows'), t('table.insertARowOrRefresh'))); return; }
       const tableElement = document.createElement('table');

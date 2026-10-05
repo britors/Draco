@@ -111,3 +111,19 @@ test('official RPM contains Tauri runtime dependencies without legacy GTK fronte
     assert.doesNotMatch(spec, new RegExp(`pkgconfig\\(${legacyDependency}`));
   }
 });
+
+test('AppStream screenshots are served by the site from files kept in the repository', async () => {
+  const screenshots = [...metainfo.matchAll(/<screenshot(?: type="(\w+)")?>([\s\S]*?)<\/screenshot>/g)];
+  assert.ok(screenshots.length >= 4, 'software centers and Flathub expect several screenshots');
+  assert.equal(screenshots.filter(([, type]) => type === 'default').length, 1);
+  for (const [, , body] of screenshots) {
+    assert.match(body, /<caption>[^<]+<\/caption>/);
+    assert.match(body, /<caption xml:lang="pt-BR">[^<]+<\/caption>/);
+    const image = body.match(/<image type="source" width="(\d+)" height="(\d+)">https:\/\/dracodb\.com\.br\/(assets\/screenshots\/[\w-]+\.png)<\/image>/);
+    assert.ok(image, `unexpected screenshot image: ${body.trim()}`);
+    const [, width, height, path] = image;
+    const png = await readFile(new URL(`../../site/${path}`, import.meta.url));
+    // PNG IHDR: width and height are big-endian u32 at offsets 16 and 20.
+    assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [Number(width), Number(height)], path);
+  }
+});

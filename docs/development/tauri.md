@@ -60,6 +60,25 @@ recente do GitHub e falha se essa release não tiver os quatro pacotes linkados.
 do `release.yml` dispara o `Site` ao final, então os links de download acompanham cada tag sem
 editar o HTML.
 
+## Capturas de tela
+
+As capturas em `site/assets/screenshots/` servem ao AppStream (`<screenshots>` em
+`data/org.lyraos.Draco.metainfo.xml`, por URL estável em `https://dracodb.com.br/assets/…`), ao site
+e ao README. Elas são geradas pelo app real via WebDriver:
+
+```sh
+cargo build --locked --release -p draco-tauri
+DRACO_E2E_APP="$PWD/target/release/draco" DRACO_TEST_CONN_ID=… DRACO_TEST_DB=… DRACO_TEST_USER=… \
+  ./scripts/capture-screenshots.sh
+```
+
+O script tem os mesmos requisitos e a mesma regra de credenciais do `test-installed-app.sh`. Ele usa
+uma configuração XDG temporária (tema claro, interface em inglês, janela de 1600×900), cria o
+schema fictício `store` pela própria conexão e o remove no final. Por isso, a role usada precisa
+poder criar schemas no banco. Revise as imagens antes de commitar: o nome do banco, o usuário e
+o host da conexão aparecem nelas. Ao mudar a interface de forma visível, regenere as capturas;
+como as URLs do AppStream apontam para o site, elas passam a valer depois do deploy do `main`.
+
 ## Rollback
 
 O rollback suportado é instalar o pacote de uma release Tauri anterior; a configuração XDG e o

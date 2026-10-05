@@ -594,7 +594,15 @@ html[data-theme="light"] .nav-item { color: #65615c; }
 html[data-theme="light"] .nav-item.active { color: var(--color-action); background: #ebe6e2; }
 html[data-theme="light"] .panel, html[data-theme="light"] .hero-panel { border-color: var(--color-border); background: rgba(255, 255, 255, .88); }
 html[data-theme="light"] .health-card, html[data-theme="light"] .connection-card, html[data-theme="light"] .history-item, html[data-theme="light"] .snippet-item, html[data-theme="light"] .metric-card, html[data-theme="light"] .data-panel, html[data-theme="light"] .assistant-message, html[data-theme="light"] .command-dialog, html[data-theme="light"] .app-dialog-panel, html[data-theme="light"] .ai-review-panel, html[data-theme="light"] .object-dialog-panel { border-color: var(--color-border); color: var(--color-text); background: var(--color-surface); }
-html[data-theme="light"] input, html[data-theme="light"] textarea, html[data-theme="light"] #sql-editor, html[data-theme="light"] #assistant-message, html[data-theme="light"] .ddl-code, html[data-theme="light"] .operation-log, html[data-theme="light"] .object-sql-preview { border-color: var(--color-border-strong); color: var(--color-text); background: var(--color-surface-input); }
+html[data-theme="light"] input, html[data-theme="light"] textarea, html[data-theme="light"] #assistant-message, html[data-theme="light"] .ddl-code, html[data-theme="light"] .operation-log, html[data-theme="light"] .object-sql-preview { border-color: var(--color-border-strong); color: var(--color-text); background: var(--color-surface-input); }
+/* The editors stay transparent so the highlight overlay underneath shows through. */
+html[data-theme="light"] #sql-editor, html[data-theme="light"] #programming-editor { border-color: var(--color-border-strong); }
+html[data-theme="light"] #sql-editor:focus, html[data-theme="light"] #programming-editor:focus { border-color: var(--color-action); }
+html[data-theme="light"] .sql-editor-highlight .sql-tok-keyword { color: var(--color-action); }
+html[data-theme="light"] .sql-editor-highlight .sql-tok-type { color: #3d63b8; }
+html[data-theme="light"] .sql-editor-highlight .sql-tok-string { color: #2c7a50; }
+html[data-theme="light"] .sql-editor-highlight .sql-tok-number, html[data-theme="light"] .sql-editor-highlight .sql-tok-param { color: #9a6200; }
+html[data-theme="light"] .sql-editor-highlight .sql-tok-function { color: #7247bf; }
 html[data-theme="light"] .column-editor-row { border-color: var(--color-border); background: #f8f6f2; }
 html[data-theme="light"] select {
   border-color: var(--color-border-strong);
@@ -607,6 +615,13 @@ html[data-theme="light"] .result-grid { border-color: var(--color-border); }
 html[data-theme="light"] .result-grid table, html[data-theme="light"] .history-item code, html[data-theme="light"] .snippet-item code, html[data-theme="light"] .query-stat-item code, html[data-theme="light"] .data-panel h3, html[data-theme="light"] .data-row strong { color: var(--color-text); }
 html[data-theme="light"] .result-grid th { background: #eeeae5; }
 html[data-theme="light"] .result-grid tr.result-row-alt td { background: #f8f6f2; }
+html[data-theme="light"] .table-data-grid { border-color: var(--color-border); }
+html[data-theme="light"] .table-data-grid table, html[data-theme="light"] .erd-node-column, html[data-theme="light"] .fk-map-row strong { color: var(--color-text); }
+html[data-theme="light"] .table-data-grid th { border-color: var(--color-border); color: var(--color-text-muted); background: #eeeae5; }
+html[data-theme="light"] .table-data-grid td { border-color: var(--color-border); background: var(--color-surface); }
+html[data-theme="light"] .table-data-grid tbody tr:hover td { background: #f8f6f2; }
+html[data-theme="light"] .erd-node-column small, html[data-theme="light"] .fk-map-row small { color: var(--color-text-subtle); }
+html[data-theme="light"] .fk-map-row { border-color: var(--color-border); }
 html[data-theme="light"] .assistant-message.user { border-color: var(--color-border-strong); color: #332c29; background: #f1e8e4; }
 html[data-theme="light"] .erd-node { border-color: var(--color-border); background: #fff; box-shadow: 0 12px 30px rgba(60, 52, 45, .12); }
 html[data-theme="light"] .erd-node-header { border-color: var(--color-border); background: #f2efeb; }
