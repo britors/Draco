@@ -51,6 +51,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="2.1.5" date="2026-10-05">
+      <description>
+        <p>Interface traduzida para português do Brasil e inglês, escolhida pelo idioma do sistema, incluindo as mensagens de validação. O detalhe de tabela passa a mostrar o tipo declarado das colunas (por exemplo, integer em vez de int4(32,0)).</p>
+      </description>
+    </release>
     <release version="2.1.4" date="2026-08-09">
       <description>
         <p>Corrigida a associação da janela com o lançador no GNOME, usando o GTK app-id e a identidade desktop canônica em Wayland e X11.</p>

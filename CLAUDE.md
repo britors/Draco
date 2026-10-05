@@ -5,7 +5,7 @@ artefato oficial é o app **Tauri 2**.
 
 - Repositório: <https://github.com/britors/Draco>
 - Identificador desktop: `org.lyraos.Draco`
-- Versão do workspace: `2.1.4`
+- Versão do workspace: `2.1.5`
 - Licença: GPL-3.0-or-later
 - Binário oficial: `target/release/draco`
 
@@ -186,7 +186,7 @@ uma configuração XDG temporária (passou contra PostgreSQL 18.6 em 03/10/2026)
 A decisão de remover o frontend GTK e o plano de rollback estão em
 `docs/architecture/adr-0003-gtk-removal.md`.
 
-O workspace, o RPM/OBS e o AppStream estão em `2.1.4`. Releases devem usar uma
+O workspace, o RPM/OBS e o AppStream estão em `2.1.5`. Releases devem usar uma
 tag imutável; nunca reutilizar uma tag nem gerar o tarball de um branch mutável.
 
 ## Documentação que acompanha mudanças

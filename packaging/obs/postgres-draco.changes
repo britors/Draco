@@ -1,4 +1,12 @@
 -------------------------------------------------------------------
+Mon Oct 05 12:00:00 UTC 2026 - rodrigo@dracodb.com.br
+
+- Versão 2.1.5: interface traduzida para português do Brasil e inglês,
+  escolhida pelo idioma do sistema, incluindo mensagens de validação.
+- Detalhe de tabela mostra o tipo declarado das colunas (integer em vez de
+  int4(32,0)), também usado como tipo atual no editor de tabelas.
+
+-------------------------------------------------------------------
 Sun Aug 09 12:30:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.1.4: corrigida a associação da janela com o lançador no GNOME.
