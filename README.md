@@ -24,6 +24,18 @@ esquemas, editor SQL e ferramenta de administração para PostgreSQL. Funciona e
 qualquer distribuição Linux moderna, com integração visual prioritária ao Lyra
 (GNOME/Wayland).
 
+![Editor SQL do Draco com destaque de sintaxe e grade de resultados](site/assets/screenshots/01-sql-editor.png)
+
+<p align="center">
+  <img src="site/assets/screenshots/02-table-detail.png" alt="Detalhe de tabela" width="49%">
+  <img src="site/assets/screenshots/03-erd.png" alt="Diagrama entidade-relacionamento" width="49%">
+  <img src="site/assets/screenshots/04-dashboard.png" alt="Dashboard" width="49%">
+  <img src="site/assets/screenshots/05-programming.png" alt="Área Programming editando uma função" width="49%">
+</p>
+
+As capturas usam um banco fictício e são geradas por
+`scripts/capture-screenshots.sh` (veja [`docs/development/tauri.md`](docs/development/tauri.md)).
+
 - Driver Postgres assíncrono (`tokio-postgres`) para queries — sem CLI externo
   (`psql`); backup/restauração usam explicitamente as ferramentas oficiais do
   PostgreSQL.
