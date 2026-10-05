@@ -13,7 +13,7 @@ pub struct SequenceInfo {
 pub async fn get_sequences(driver: &PostgresDriver, schema: &str) -> Result<Vec<SequenceInfo>> {
     let rows = driver
         .query(
-            "SELECT sequencename AS name, data_type, start_value::text, min_value::text, \
+            "SELECT sequencename AS name, data_type::text, start_value::text, min_value::text, \
                     max_value::text, increment_by::text, cycle, cache_size::text, \
                     last_value::text \
              FROM pg_sequences WHERE schemaname = $1 ORDER BY sequencename",
