@@ -152,7 +152,7 @@ Validação equivalente à CI:
 
 ```sh
 (cd frontend && npm ci --ignore-scripts && npm run check && npm test)
-cargo fmt --check -p draco-app -p draco-tauri
+cargo fmt --all --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
 cargo test --locked --workspace
 cargo build --locked -p draco-tauri
