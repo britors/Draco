@@ -169,7 +169,12 @@ credential store a partir de `DRACO_TEST_CONN_ID`:
 
 Ele aceita também `DRACO_TEST_HOST`, `DRACO_TEST_DB` e `DRACO_TEST_USER`; nunca
 colocar a senha no ambiente. A última execução documentada passou contra
-PostgreSQL 18.4, mas ainda não cobre SSH/jump host real nem as três APIs de IA.
+PostgreSQL 18.4, mas não cobre as três APIs de IA.
+
+O túnel SSH e o jump host são testados contra `sshd` reais por
+`draco-core/tests/live_ssh.rs`; na CI, `scripts/ci-ssh-tunnel.sh` sobe bastion,
+destino e decoy em loopback com segredos gerados no job (detalhes em
+`docs/testing/live-postgres.md`).
 
 O smoke do pacote instalado via `tauri-driver` usa a mesma regra de credenciais e
 uma configuração XDG temporária (passou contra PostgreSQL 18.6 em 03/10/2026):
