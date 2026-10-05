@@ -86,7 +86,17 @@ disponibilidade desses serviços externos.
 1. a conexão de teste aparece na lista;
 2. o botão Connect conecta usando a senha do credential store;
 3. o Explorer carrega os schemas da conexão;
-4. o Editor SQL executa `SELECT 42 AS answer, 'draco' AS name` e o grid mostra o resultado.
+4. o Editor SQL executa `SELECT 42 AS answer, 'draco' AS name` e o grid mostra o resultado;
+5. `Run script` cria um schema isolado `draco_e2e_<timestamp>` com uma tabela de três linhas, e
+   uma query confere a contagem;
+6. uma query contra tabela inexistente mostra o erro e a query seguinte volta a funcionar;
+7. o Explorer recarrega a conexão, expande o schema do fixture e abre o detalhe da tabela
+   (título, colunas com tipo/`NOT NULL`/PK e DDL);
+8. o painel de dados do detalhe pagina as três linhas pela chave primária;
+9. o Histórico lista a query de contagem executada.
+
+Ao final, o teste remove o schema do fixture com `DROP SCHEMA ... CASCADE`, mesmo quando um
+passo anterior falha; o nome é único por execução e nunca coincide com dados da aplicação.
 
 O script cria um `XDG_CONFIG_HOME` temporário com uma única conexão cujo ID é
 `DRACO_TEST_CONN_ID`; as conexões, o histórico e as preferências reais do usuário não são

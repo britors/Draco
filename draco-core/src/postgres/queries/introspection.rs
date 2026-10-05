@@ -531,9 +531,13 @@ pub async fn get_table_detail(driver: &PostgresDriver, schema: &str, table: &str
                c.column_name, c.data_type, c.udt_name,
                c.character_maximum_length, c.numeric_precision, c.numeric_scale,
                c.is_nullable, c.column_default, c.ordinal_position,
+               format_type(a.atttypid, a.atttypmod) AS formatted_type,
                COALESCE(pk.is_pk, false) AS is_pk,
                COALESCE(fk.is_fk, false) AS is_fk
              FROM information_schema.columns c
+             LEFT JOIN pg_catalog.pg_namespace n ON n.nspname = c.table_schema
+             LEFT JOIN pg_catalog.pg_class cl ON cl.relnamespace = n.oid AND cl.relname = c.table_name
+             LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid = cl.oid AND a.attname = c.column_name
              LEFT JOIN (
                SELECT kcu.column_name, true AS is_pk
                FROM information_schema.table_constraints tc
@@ -574,15 +578,20 @@ pub async fn get_table_detail(driver: &PostgresDriver, schema: &str, table: &str
             let char_len: Option<i32> = r.try_get("character_maximum_length").ok().flatten();
             let num_prec: Option<i32> = r.try_get("numeric_precision").ok().flatten();
             let num_scale: Option<i32> = r.try_get("numeric_scale").ok().flatten();
-            let full_type = if let Some(len) = char_len {
-                format!("{udt_name}({len})")
-            } else if let (Some(p), Some(s)) = (num_prec, num_scale) {
-                format!("{udt_name}({p},{s})")
-            } else if let Some(p) = num_prec {
-                format!("{udt_name}({p})")
-            } else {
-                udt_name
-            };
+            // information_schema reports the binary precision of every numeric
+            // type (int4 -> 32, float8 -> 53); format_type yields the declared,
+            // ALTER-ready spelling instead.
+            let full_type = get_opt_str(r, "formatted_type").unwrap_or_else(|| {
+                if let Some(len) = char_len {
+                    format!("{udt_name}({len})")
+                } else if udt_name != "numeric" {
+                    udt_name
+                } else if let (Some(p), Some(s)) = (num_prec, num_scale) {
+                    format!("{udt_name}({p},{s})")
+                } else {
+                    udt_name
+                }
+            });
             TableDetailColumn {
                 name: get_str(r, "column_name"),
                 data_type: get_str(r, "data_type"),
