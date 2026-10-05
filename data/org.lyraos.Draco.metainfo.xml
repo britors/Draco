@@ -79,6 +79,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="2.1.7" date="2026-10-05">
+      <description>
+        <p>O editor SQL e o Assistente de IA passam a mostrar os valores de numeric, datas, uuid, json, intervalos e arrays, que antes apareciam como NULL. A edição de sequences volta a funcionar, e o tema claro ganha destaque de sintaxe no editor e contraste correto na tabela de dados e no ERD. A ficha do app agora tem capturas de tela.</p>
+      </description>
+    </release>
     <release version="2.1.6" date="2026-10-05">
       <description>
         <p>O Assistente de IA passa a explicar por que uma solicitação falhou (chave ausente ou recusada, limite de requisições, falha de rede) e o histórico mostra só o resultado das ferramentas, sem o texto interno enviado ao modelo.</p>
