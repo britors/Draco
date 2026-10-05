@@ -39,7 +39,7 @@ pub enum ApplicationError {
     #[error("connection is not active: {0}")]
     ConnectionNotActive(String),
     #[error("assistant error: {0}")]
-    Assistant(String),
+    Assistant(Validation),
     #[error("github error: {0}")]
     Github(String),
     #[error("operation error: {0}")]
@@ -544,7 +544,83 @@ pub struct AssistantReplyView {
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub estimated_cost_usd: Option<f64>,
-    pub history: Vec<assistant::AiMessage>,
+    pub history: Vec<AssistantMessageView>,
+}
+
+/// A chat history entry as the interface shows it. Tool results carry only the tool output, never
+/// the untrusted-data wrapper sent to the model; `tool_failed` marks a refused or failed tool call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantMessageView {
+    pub role: assistant::AiRole,
+    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_label: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub tool_failed: bool,
+}
+
+impl From<&assistant::AiMessage> for AssistantMessageView {
+    fn from(message: &assistant::AiMessage) -> Self {
+        let display = assistant::tool_result_display(message);
+        Self {
+            role: message.role,
+            content: display
+                .as_ref()
+                .map_or_else(|| message.content.clone(), |tool| tool.output.clone()),
+            tool_label: message.tool_label.clone(),
+            tool_failed: display.is_some_and(|tool| tool.failed),
+        }
+    }
+}
+
+fn assistant_history_view(history: &[assistant::AiMessage]) -> Vec<AssistantMessageView> {
+    history.iter().map(AssistantMessageView::from).collect()
+}
+
+/// Maps an Assistant failure to a stable interface key. Only fixed English text crosses the IPC
+/// boundary: provider responses and transport errors may contain request details.
+fn assistant_error(error: assistant::AssistantError) -> ApplicationError {
+    use assistant::AssistantError as E;
+    let validation = match error {
+        E::Core(error) => return ApplicationError::Core(error),
+        E::EmptyKey => Validation::new("assistant.error.emptyKey", "The API key cannot be empty"),
+        E::MissingKey(provider) => Validation::new(
+            "assistant.error.missingKey",
+            format!("No API key is configured for {}", provider.label()),
+        )
+        .param("provider", provider.label()),
+        E::CredentialStore(_) => Validation::new(
+            "assistant.error.credentialStore",
+            "The system credential store is unavailable",
+        ),
+        E::Rejected(401 | 403) => Validation::new(
+            "assistant.error.unauthorized",
+            "The AI provider rejected the API key",
+        ),
+        E::Rejected(429) => Validation::new(
+            "assistant.error.rateLimited",
+            "The AI provider is rate limiting requests",
+        ),
+        E::Rejected(status) => Validation::new(
+            "assistant.error.rejected",
+            format!("The AI provider rejected the request (HTTP {status})"),
+        )
+        .param("status", status.to_string()),
+        E::NoModels => Validation::new(
+            "assistant.error.noModels",
+            "The AI provider returned no compatible models",
+        ),
+        E::Http(_) => Validation::new("assistant.error.network", "Could not reach the AI provider"),
+        E::Json(_) => Validation::new(
+            "assistant.error.invalidResponse",
+            "The AI provider sent an invalid response",
+        ),
+        E::Message(_) => Validation::new(
+            "error.operation_error",
+            "The requested operation could not be completed",
+        ),
+    };
+    ApplicationError::Assistant(validation)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1950,19 +2026,19 @@ impl Application {
     pub async fn assistant_models(&self, provider: assistant::Provider) -> Result<Vec<String>> {
         assistant::list_models(provider)
             .await
-            .map_err(|error| ApplicationError::Assistant(error.to_string()))
+            .map_err(assistant_error)
     }
 
     pub async fn save_assistant_key(&self, provider: assistant::Provider, key: &str) -> Result<()> {
         assistant::save_key(provider, key)
             .await
-            .map_err(|error| ApplicationError::Assistant(error.to_string()))
+            .map_err(assistant_error)
     }
 
     pub async fn clear_assistant_key(&self, provider: assistant::Provider) -> Result<()> {
         assistant::clear_key(provider)
             .await
-            .map_err(|error| ApplicationError::Assistant(error.to_string()))
+            .map_err(assistant_error)
     }
 
     pub async fn github_status(&self) -> Result<GithubConnection> {
@@ -2050,8 +2126,8 @@ impl Application {
             .map_err(|error| ApplicationError::Github(error.to_string()))
     }
 
-    pub fn assistant_history(&self, id: &str) -> Vec<assistant::AiMessage> {
-        store::get_ai_history(id)
+    pub fn assistant_history(&self, id: &str) -> Vec<AssistantMessageView> {
+        assistant_history_view(&store::get_ai_history(id))
     }
 
     pub fn clear_assistant_history(&self, id: &str) -> Result<()> {
@@ -2088,7 +2164,7 @@ impl Application {
             } else {
                 assistant::continue_after_tool(&settings, &history).await
             }
-            .map_err(|error| ApplicationError::Assistant(error.to_string()))?;
+            .map_err(assistant_error)?;
             input_tokens += reply.input_tokens;
             output_tokens += reply.output_tokens;
             if let Some(cost) = reply.estimated_cost_usd {
@@ -2109,15 +2185,7 @@ impl Application {
                 let outcome = assistant::run_tool(&driver, &call)
                     .await
                     .map_err(|error| error.to_string());
-                let outcome = outcome.unwrap_or_else(|error| format!("ERRO: {error}"));
-                history.push(assistant::AiMessage {
-                    role: assistant::AiRole::User,
-                    content: format!(
-                        "<dado_nao_confiavel origem=\"tool:{}\">\n{}\n</dado_nao_confiavel>\nContinue a resposta usando este resultado (ou corrija a chamada, se for um erro).",
-                        call.name, outcome
-                    ),
-                    tool_label: Some(call.name),
-                });
+                history.push(assistant::tool_result_message(&call.name, outcome));
             }
             store::save_ai_history(id, &history)?;
             if !has_tools {
@@ -2129,7 +2197,7 @@ impl Application {
             input_tokens,
             output_tokens,
             estimated_cost_usd: has_cost.then_some(estimated_cost_usd),
-            history,
+            history: assistant_history_view(&history),
         })
     }
 
@@ -3716,5 +3784,79 @@ mod tests {
             .await
             .expect_err("unselected path must fail");
         assert!(matches!(error, ApplicationError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn assistant_errors_carry_catalog_keys_without_provider_text() {
+        use assistant::AssistantError as E;
+        let catalog = include_str!("../../frontend/dist/locales/en.js");
+        let cases = [
+            (E::EmptyKey, "assistant.error.emptyKey"),
+            (
+                E::MissingKey(assistant::Provider::Gemini),
+                "assistant.error.missingKey",
+            ),
+            (
+                E::CredentialStore("dbus detail".into()),
+                "assistant.error.credentialStore",
+            ),
+            (E::Rejected(401), "assistant.error.unauthorized"),
+            (E::Rejected(403), "assistant.error.unauthorized"),
+            (E::Rejected(429), "assistant.error.rateLimited"),
+            (E::Rejected(500), "assistant.error.rejected"),
+            (E::NoModels, "assistant.error.noModels"),
+            (
+                E::Json(serde_json::from_str::<serde_json::Value>("{").unwrap_err()),
+                "assistant.error.invalidResponse",
+            ),
+            (E::Message("ERRO interno".into()), "error.operation_error"),
+        ];
+        for (error, expected) in cases {
+            let ApplicationError::Assistant(validation) = assistant_error(error) else {
+                panic!("{expected} must map to an assistant error");
+            };
+            assert_eq!(validation.key, expected);
+            assert!(
+                catalog.contains(&format!("'{expected}'")),
+                "{expected} missing from en.js"
+            );
+            assert!(!validation.message.contains("dbus detail"));
+            assert!(!validation.message.contains("ERRO"));
+        }
+        let ApplicationError::Assistant(missing) =
+            assistant_error(E::MissingKey(assistant::Provider::Gemini))
+        else {
+            unreachable!()
+        };
+        assert_eq!(missing.params, vec![("provider", "Gemini".to_string())]);
+        let ApplicationError::Assistant(rejected) = assistant_error(E::Rejected(500)) else {
+            unreachable!()
+        };
+        assert_eq!(rejected.params, vec![("status", "500".to_string())]);
+    }
+
+    #[test]
+    fn assistant_history_view_shows_tool_output_without_the_prompt_wrapper() {
+        let history = vec![
+            assistant::AiMessage {
+                role: assistant::AiRole::User,
+                content: "why is this slow?".into(),
+                tool_label: None,
+            },
+            assistant::tool_result_message("list_schemas", Ok("[\"public\"]".into())),
+            assistant::tool_result_message("run_select", Err("refused".into())),
+        ];
+        let view = assistant_history_view(&history);
+        assert_eq!(view[0].content, "why is this slow?");
+        assert!(!view[0].tool_failed);
+        assert_eq!(view[1].content, "[\"public\"]");
+        assert_eq!(view[1].tool_label.as_deref(), Some("list_schemas"));
+        assert!(!view[1].tool_failed);
+        assert!(view[2].tool_failed);
+        assert!(view[2].content.is_empty());
+        let json = serde_json::to_value(&view).expect("history serializes");
+        assert!(json[0].get("tool_failed").is_none());
+        assert_eq!(json[2]["tool_failed"], true);
+        assert!(!json.to_string().contains("dado_nao_confiavel"));
     }
 }

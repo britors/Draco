@@ -935,7 +935,7 @@ function renderAssistantHistory(history) {
   for (const message of history) {
     const bubble = document.createElement('article'); bubble.className = `assistant-message ${message.role === 'user' ? 'user' : ''}`;
     const label = document.createElement('small'); label.textContent = message.tool_label ? t('assistant.tool', { tool: message.tool_label }) : message.role === 'user' ? t('assistant.you') : t('nav.assistant');
-    const content = document.createElement('div'); content.textContent = message.content; bubble.append(label, content); transcript.append(bubble);
+    const content = document.createElement('div'); content.textContent = message.tool_failed ? t('assistant.toolFailed') : message.content; bubble.append(label, content); transcript.append(bubble);
   }
   scrollAssistantToBottom();
 }
@@ -964,7 +964,7 @@ async function sendAssistant() {
   try {
     const reply = await invoke('assistant_send', { id, message });
     if (requestEpoch === assistantRequestEpoch) { renderAssistantHistory(reply.history); byId('assistant-message').value = ''; byId('assistant-status').textContent = t('assistant.tokens', { input: reply.input_tokens, output: reply.output_tokens }); }
-  } catch (error) { if (requestEpoch === assistantRequestEpoch) byId('assistant-status').textContent = t('assistant.assistantRequestFailedConfigureA'); }
+  } catch (error) { if (requestEpoch === assistantRequestEpoch) byId('assistant-status').textContent = errorMessage(error, t, 'assistant.assistantRequestFailedConfigureA'); }
   finally { if (requestEpoch === assistantRequestEpoch) byId('send-assistant').disabled = false; }
 }
 
