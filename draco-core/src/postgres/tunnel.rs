@@ -37,12 +37,20 @@ impl client::Handler for ClientHandler {
                 if let Err(err) =
                     russh::keys::learn_known_hosts(&self.host, self.port, server_public_key)
                 {
-                    tracing::warn!("failed to record {}:{} in known_hosts: {err}", self.host, self.port);
+                    tracing::warn!(
+                        "failed to record {}:{} in known_hosts: {err}",
+                        self.host,
+                        self.port
+                    );
                 }
                 Ok(true)
             }
             Err(err) => {
-                tracing::warn!("SSH host key check failed for {}:{}: {err}", self.host, self.port);
+                tracing::warn!(
+                    "SSH host key check failed for {}:{}: {err}",
+                    self.host,
+                    self.port
+                );
                 Ok(false)
             }
         }
@@ -68,7 +76,9 @@ async fn authenticate(
             .await?
     };
     if !ok {
-        return Err(CoreError::Other(format!("SSH authentication failed for {user}")));
+        return Err(CoreError::Other(format!(
+            "SSH authentication failed for {user}"
+        )));
     }
     Ok(())
 }
@@ -84,7 +94,10 @@ async fn connect_and_authenticate(
     let mut handle = client::connect(
         config,
         (host, port),
-        ClientHandler { host: host.to_string(), port },
+        ClientHandler {
+            host: host.to_string(),
+            port,
+        },
     )
     .await?;
     authenticate(&mut handle, user, password, key_path).await?;
@@ -138,11 +151,19 @@ impl SshTunnel {
                 let mut main_handle = client::connect_stream(
                     config,
                     stream,
-                    ClientHandler { host: ssh_host.clone(), port: ssh_port },
+                    ClientHandler {
+                        host: ssh_host.clone(),
+                        port: ssh_port,
+                    },
                 )
                 .await?;
-                authenticate(&mut main_handle, &ssh_user, ssh_password, conn.ssh_key_path.as_deref())
-                    .await?;
+                authenticate(
+                    &mut main_handle,
+                    &ssh_user,
+                    ssh_password,
+                    conn.ssh_key_path.as_deref(),
+                )
+                .await?;
 
                 (Some(jump_handle), main_handle)
             }
@@ -175,7 +196,12 @@ impl SshTunnel {
                     Err(_) => break,
                 };
                 let channel = match main_handle
-                    .channel_open_direct_tcpip(target_host.as_str(), target_port as u32, "127.0.0.1", 0)
+                    .channel_open_direct_tcpip(
+                        target_host.as_str(),
+                        target_port as u32,
+                        "127.0.0.1",
+                        0,
+                    )
                     .await
                 {
                     Ok(c) => c,
@@ -189,10 +215,15 @@ impl SshTunnel {
                     let _ = tokio::io::copy_bidirectional(&mut socket, &mut stream).await;
                 });
             }
-            let _ = main_handle.disconnect(Disconnect::ByApplication, "", "en").await;
+            let _ = main_handle
+                .disconnect(Disconnect::ByApplication, "", "en")
+                .await;
         });
 
-        Ok(SshTunnel { local_port, accept_task })
+        Ok(SshTunnel {
+            local_port,
+            accept_task,
+        })
     }
 
     pub fn close(&self) {

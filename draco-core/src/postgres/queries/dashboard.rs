@@ -1,7 +1,7 @@
-use serde::Serialize;
+use super::helpers::*;
 use crate::error::Result;
 use crate::postgres::pool::PostgresDriver;
-use super::helpers::*;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct DashboardData {

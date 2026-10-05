@@ -1,7 +1,7 @@
-use serde::Serialize;
+use super::helpers::*;
 use crate::error::{CoreError, Result};
 use crate::postgres::pool::PostgresDriver;
-use super::helpers::*;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CronJob {
@@ -24,9 +24,17 @@ pub struct CronJobs {
 }
 
 pub async fn get_jobs(driver: &PostgresDriver) -> Result<CronJobs> {
-    let ext_rows = driver.query("SELECT extname FROM pg_extension WHERE extname = 'pg_cron'", &[]).await?;
+    let ext_rows = driver
+        .query(
+            "SELECT extname FROM pg_extension WHERE extname = 'pg_cron'",
+            &[],
+        )
+        .await?;
     if ext_rows.is_empty() {
-        return Ok(CronJobs { installed: false, jobs: vec![] });
+        return Ok(CronJobs {
+            installed: false,
+            jobs: vec![],
+        });
     }
     let rows = driver
         .query(
@@ -63,17 +71,41 @@ pub async fn get_jobs(driver: &PostgresDriver) -> Result<CronJobs> {
     })
 }
 
-pub async fn create_job(driver: &PostgresDriver, name: Option<&str>, schedule: &str, command: &str) -> Result<()> {
+pub async fn create_job(
+    driver: &PostgresDriver,
+    name: Option<&str>,
+    schedule: &str,
+    command: &str,
+) -> Result<()> {
     match name.filter(|n| !n.trim().is_empty()) {
-        Some(name) => driver.query("SELECT cron.schedule($1, $2, $3)", &[&name, &schedule, &command]).await?,
-        None => driver.query("SELECT cron.schedule($1, $2)", &[&schedule, &command]).await?,
+        Some(name) => {
+            driver
+                .query(
+                    "SELECT cron.schedule($1, $2, $3)",
+                    &[&name, &schedule, &command],
+                )
+                .await?
+        }
+        None => {
+            driver
+                .query("SELECT cron.schedule($1, $2)", &[&schedule, &command])
+                .await?
+        }
     };
     Ok(())
 }
 
-pub async fn update_job(driver: &PostgresDriver, job_id: i64, schedule: &str, command: &str) -> Result<()> {
+pub async fn update_job(
+    driver: &PostgresDriver,
+    job_id: i64,
+    schedule: &str,
+    command: &str,
+) -> Result<()> {
     let rows = driver
-        .query("UPDATE cron.job SET schedule = $1, command = $2 WHERE jobid = $3 RETURNING jobid", &[&schedule, &command, &job_id])
+        .query(
+            "UPDATE cron.job SET schedule = $1, command = $2 WHERE jobid = $3 RETURNING jobid",
+            &[&schedule, &command, &job_id],
+        )
         .await?;
     if rows.is_empty() {
         Err(CoreError::Other("Scheduled job was not found".to_string()))

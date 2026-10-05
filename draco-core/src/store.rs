@@ -57,7 +57,9 @@ pub fn save_connection(mut conn: DbConnection) -> Result<DbConnection> {
     if conn.id.is_empty() {
         conn.id = Uuid::new_v4().to_string();
     }
-    let mut file = ConnectionsFile { connections: list_connections() };
+    let mut file = ConnectionsFile {
+        connections: list_connections(),
+    };
     match file.connections.iter_mut().find(|c| c.id == conn.id) {
         Some(existing) => *existing = conn.clone(),
         None => file.connections.push(conn.clone()),
@@ -67,7 +69,9 @@ pub fn save_connection(mut conn: DbConnection) -> Result<DbConnection> {
 }
 
 pub fn delete_connection(id: &str) -> Result<()> {
-    let mut file = ConnectionsFile { connections: list_connections() };
+    let mut file = ConnectionsFile {
+        connections: list_connections(),
+    };
     file.connections.retain(|c| c.id != id);
     write_toml("connections.toml", &file)
 }
@@ -99,14 +103,18 @@ pub fn list_history() -> Vec<HistoryEntry> {
 
 pub fn add_history(mut entry: HistoryEntry) -> Result<()> {
     entry.id = Uuid::new_v4().to_string();
-    let mut file = HistoryFile { entries: list_history() };
+    let mut file = HistoryFile {
+        entries: list_history(),
+    };
     file.entries.insert(0, entry);
     file.entries.truncate(MAX_HISTORY);
     write_toml("history.toml", &file)
 }
 
 pub fn delete_history_entry(id: &str) -> Result<()> {
-    let mut file = HistoryFile { entries: list_history() };
+    let mut file = HistoryFile {
+        entries: list_history(),
+    };
     file.entries.retain(|e| e.id != id);
     write_toml("history.toml", &file)
 }
@@ -142,20 +150,26 @@ pub fn list_snippets() -> Vec<Snippet> {
 pub fn save_snippet(mut snippet: Snippet) -> Result<Snippet> {
     snippet.id = Uuid::new_v4().to_string();
     snippet.created_at = chrono_now_millis();
-    let mut file = SnippetsFile { snippets: list_snippets() };
+    let mut file = SnippetsFile {
+        snippets: list_snippets(),
+    };
     file.snippets.insert(0, snippet.clone());
     write_toml("snippets.toml", &file)?;
     Ok(snippet)
 }
 
 pub fn delete_snippet(id: &str) -> Result<()> {
-    let mut file = SnippetsFile { snippets: list_snippets() };
+    let mut file = SnippetsFile {
+        snippets: list_snippets(),
+    };
     file.snippets.retain(|s| s.id != id);
     write_toml("snippets.toml", &file)
 }
 
 pub fn rename_snippet(id: &str, name: &str) -> Result<()> {
-    let mut file = SnippetsFile { snippets: list_snippets() };
+    let mut file = SnippetsFile {
+        snippets: list_snippets(),
+    };
     if let Some(s) = file.snippets.iter_mut().find(|s| s.id == id) {
         s.name = name.to_string();
     }
@@ -287,7 +301,10 @@ impl AiProvider {
     }
 
     pub fn from_index(index: u32) -> Self {
-        Self::ALL.get(index as usize).copied().unwrap_or(Self::Anthropic)
+        Self::ALL
+            .get(index as usize)
+            .copied()
+            .unwrap_or(Self::Anthropic)
     }
 
     pub fn index(self) -> u32 {
@@ -378,7 +395,8 @@ pub fn get_ai_history(conn_id: &str) -> Vec<AiMessage> {
 
 pub fn save_ai_history(conn_id: &str, messages: &[AiMessage]) -> Result<()> {
     let mut file = read_toml::<AiHistoryFile>("ai-history.toml");
-    file.conversations.insert(conn_id.to_string(), messages.to_vec());
+    file.conversations
+        .insert(conn_id.to_string(), messages.to_vec());
     write_toml("ai-history.toml", &file)
 }
 
@@ -399,7 +417,10 @@ struct AiUsage {
 /// local midnight), which just means the cap resets a little earlier/later than midnight for the
 /// user, never a correctness issue for the feature it protects (accidental runaway API spend).
 fn today_index() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() / 86_400).unwrap_or(0)
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() / 86_400)
+        .unwrap_or(0)
 }
 
 /// Increments and persists the daily message counter, failing once `limit` is reached. Called
@@ -407,10 +428,15 @@ fn today_index() -> u64 {
 pub fn consume_ai_usage(limit: u32) -> Result<u32> {
     let mut usage: AiUsage = read_toml("ai-usage.toml");
     if usage.day != today_index() {
-        usage = AiUsage { day: today_index(), count: 0 };
+        usage = AiUsage {
+            day: today_index(),
+            count: 0,
+        };
     }
     if usage.count >= limit.max(1) {
-        return Err(CoreError::Other(format!("Limite diário de {limit} mensagens do Assistente de IA atingido.")));
+        return Err(CoreError::Other(format!(
+            "Limite diário de {limit} mensagens do Assistente de IA atingido."
+        )));
     }
     usage.count += 1;
     write_toml("ai-usage.toml", &usage)?;

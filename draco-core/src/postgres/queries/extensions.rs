@@ -1,9 +1,9 @@
 use serde::Serialize;
 use tokio_postgres::Row;
 
+use super::helpers::*;
 use crate::error::Result;
 use crate::postgres::pool::PostgresDriver;
-use super::helpers::*;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ExtensionInfo {
@@ -33,7 +33,11 @@ pub async fn get_extensions(driver: &PostgresDriver) -> Result<Extensions> {
     let to_ext = |r: &Row, with_installed: bool| ExtensionInfo {
         name: get_str(r, "name"),
         default_version: get_opt_str(r, "default_version"),
-        installed_version: if with_installed { get_opt_str(r, "installed_version") } else { None },
+        installed_version: if with_installed {
+            get_opt_str(r, "installed_version")
+        } else {
+            None
+        },
         comment: get_opt_str(r, "comment"),
     };
     Ok(Extensions {
@@ -43,11 +47,18 @@ pub async fn get_extensions(driver: &PostgresDriver) -> Result<Extensions> {
 }
 
 pub async fn ext_install(driver: &PostgresDriver, name: &str) -> Result<()> {
-    driver.query(&format!("CREATE EXTENSION IF NOT EXISTS {}", quote_ident(name)), &[]).await?;
+    driver
+        .query(
+            &format!("CREATE EXTENSION IF NOT EXISTS {}", quote_ident(name)),
+            &[],
+        )
+        .await?;
     Ok(())
 }
 
 pub async fn ext_drop(driver: &PostgresDriver, name: &str) -> Result<()> {
-    driver.query(&format!("DROP EXTENSION {}", quote_ident(name)), &[]).await?;
+    driver
+        .query(&format!("DROP EXTENSION {}", quote_ident(name)), &[])
+        .await?;
     Ok(())
 }

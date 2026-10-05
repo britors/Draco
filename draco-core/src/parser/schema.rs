@@ -105,7 +105,11 @@ fn parse_datasource(content: &str) -> Option<DracoDataSource> {
         .unwrap_or_default();
     let is_postgres = provider.to_lowercase().contains("postgres");
 
-    Some(DracoDataSource { provider, url, is_postgres })
+    Some(DracoDataSource {
+        provider,
+        url,
+        is_postgres,
+    })
 }
 
 fn parse_models(content: &str) -> Vec<DracoModel> {
@@ -140,7 +144,11 @@ fn parse_models(content: &str) -> Vec<DracoModel> {
                 .captures(&body)
                 .map(|c| c[1].to_string())
                 .unwrap_or_else(|| name.clone());
-            models.push(DracoModel { name, table_name, fields: parse_fields(&body) });
+            models.push(DracoModel {
+                name,
+                table_name,
+                fields: parse_fields(&body),
+            });
         } else {
             i += 1;
         }
@@ -159,7 +167,9 @@ fn parse_fields(body: &str) -> Vec<DracoField> {
         if trimmed.is_empty() || trimmed.starts_with("@@") || trimmed.starts_with("//") {
             continue;
         }
-        let Some(caps) = field_re.captures(trimmed) else { continue };
+        let Some(caps) = field_re.captures(trimmed) else {
+            continue;
+        };
         let field_name = caps[1].to_string();
         let type_raw = caps[2].to_string();
         let attrs = caps.get(3).map(|m| m.as_str()).unwrap_or("");
@@ -271,42 +281,65 @@ mod tests {
     #[test]
     fn parses_id_field_attribute() {
         let schema = parse("model User {\n  id Int @id\n}");
-        let id = schema.models[0].fields.iter().find(|f| f.name == "id").unwrap();
+        let id = schema.models[0]
+            .fields
+            .iter()
+            .find(|f| f.name == "id")
+            .unwrap();
         assert!(id.is_id);
     }
 
     #[test]
     fn parses_optional_field() {
         let schema = parse("model User {\n  id  Int     @id\n  bio String?\n}");
-        let bio = schema.models[0].fields.iter().find(|f| f.name == "bio").unwrap();
+        let bio = schema.models[0]
+            .fields
+            .iter()
+            .find(|f| f.name == "bio")
+            .unwrap();
         assert!(bio.is_optional);
     }
 
     #[test]
     fn parses_list_field() {
         let schema = parse("model User {\n  id   Int      @id\n  tags String[]\n}");
-        let tags = schema.models[0].fields.iter().find(|f| f.name == "tags").unwrap();
+        let tags = schema.models[0]
+            .fields
+            .iter()
+            .find(|f| f.name == "tags")
+            .unwrap();
         assert!(tags.is_list);
     }
 
     #[test]
     fn parses_map_column_alias() {
-        let schema =
-            parse("model User {\n  id        Int      @id\n  createdAt DateTime @map(\"created_at\")\n}");
-        let f = schema.models[0].fields.iter().find(|f| f.name == "createdAt").unwrap();
+        let schema = parse(
+            "model User {\n  id        Int      @id\n  createdAt DateTime @map(\"created_at\")\n}",
+        );
+        let f = schema.models[0]
+            .fields
+            .iter()
+            .find(|f| f.name == "createdAt")
+            .unwrap();
         assert_eq!(f.column_name, "created_at");
     }
 
     #[test]
     fn uses_field_name_as_column_name_when_map_absent() {
         let schema = parse("model User {\n  id   Int    @id\n  name String\n}");
-        let f = schema.models[0].fields.iter().find(|f| f.name == "name").unwrap();
+        let f = schema.models[0]
+            .fields
+            .iter()
+            .find(|f| f.name == "name")
+            .unwrap();
         assert_eq!(f.column_name, "name");
     }
 
     #[test]
     fn strips_single_line_comments_before_parsing() {
-        let schema = parse("// This is a comment\nmodel User {\n  // another comment\n  id Int @id // inline\n}");
+        let schema = parse(
+            "// This is a comment\nmodel User {\n  // another comment\n  id Int @id // inline\n}",
+        );
         assert_eq!(schema.models.len(), 1);
         assert!(schema.models[0].fields.iter().any(|f| f.name == "id"));
     }
@@ -321,7 +354,11 @@ mod tests {
     #[test]
     fn ignores_at_at_level_attributes_as_fields() {
         let schema = parse("model User {\n  id  Int    @id\n  @@index([id])\n  @@unique([id])\n}");
-        let field_names: Vec<&str> = schema.models[0].fields.iter().map(|f| f.name.as_str()).collect();
+        let field_names: Vec<&str> = schema.models[0]
+            .fields
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect();
         assert!(!field_names.contains(&"@@index"));
         assert!(!field_names.contains(&"@@unique"));
     }

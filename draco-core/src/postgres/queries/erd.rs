@@ -1,8 +1,8 @@
-use serde::Serialize;
-use crate::error::Result;
-use crate::postgres::pool::PostgresDriver;
 use super::helpers::*;
 use super::introspection::TableKind;
+use crate::error::Result;
+use crate::postgres::pool::PostgresDriver;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ErdColumn {
@@ -73,26 +73,38 @@ pub async fn get_erd_data(driver: &PostgresDriver, schema: &str) -> Result<ErdDa
         )
         .await?;
 
-    let pk_set: std::collections::HashSet<String> =
-        pk_rows.iter().map(|r| format!("{}.{}", get_str(r, "table_name"), get_str(r, "column_name"))).collect();
-    let fk_set: std::collections::HashSet<String> =
-        fk_rows.iter().map(|r| format!("{}.{}", get_str(r, "from_table"), get_str(r, "from_column"))).collect();
+    let pk_set: std::collections::HashSet<String> = pk_rows
+        .iter()
+        .map(|r| format!("{}.{}", get_str(r, "table_name"), get_str(r, "column_name")))
+        .collect();
+    let fk_set: std::collections::HashSet<String> = fk_rows
+        .iter()
+        .map(|r| format!("{}.{}", get_str(r, "from_table"), get_str(r, "from_column")))
+        .collect();
 
-    let mut cols_by_table: std::collections::HashMap<String, Vec<ErdColumn>> = std::collections::HashMap::new();
+    let mut cols_by_table: std::collections::HashMap<String, Vec<ErdColumn>> =
+        std::collections::HashMap::new();
     for r in &col_rows {
         let table_name = get_str(r, "table_name");
         let column_name = get_str(r, "column_name");
         let data_type = get_str(r, "data_type");
         let udt_name = get_str(r, "udt_name");
-        let type_label = if data_type == "USER-DEFINED" { udt_name } else { data_type };
+        let type_label = if data_type == "USER-DEFINED" {
+            udt_name
+        } else {
+            data_type
+        };
         let key = format!("{table_name}.{column_name}");
-        cols_by_table.entry(table_name).or_default().push(ErdColumn {
-            is_pk: pk_set.contains(&key),
-            is_fk: fk_set.contains(&key),
-            is_nullable: get_str(r, "is_nullable") == "YES",
-            name: column_name,
-            data_type: type_label,
-        });
+        cols_by_table
+            .entry(table_name)
+            .or_default()
+            .push(ErdColumn {
+                is_pk: pk_set.contains(&key),
+                is_fk: fk_set.contains(&key),
+                is_nullable: get_str(r, "is_nullable") == "YES",
+                name: column_name,
+                data_type: type_label,
+            });
     }
 
     let tables = table_rows
@@ -100,7 +112,11 @@ pub async fn get_erd_data(driver: &PostgresDriver, schema: &str) -> Result<ErdDa
         .map(|r| {
             let name = get_str(r, "table_name");
             ErdTable {
-                kind: if get_str(r, "table_type") == "VIEW" { TableKind::View } else { TableKind::Table },
+                kind: if get_str(r, "table_type") == "VIEW" {
+                    TableKind::View
+                } else {
+                    TableKind::Table
+                },
                 columns: cols_by_table.remove(&name).unwrap_or_default(),
                 name,
             }

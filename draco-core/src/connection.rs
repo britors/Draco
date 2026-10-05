@@ -136,7 +136,9 @@ mod tests {
     fn requires_database() {
         let mut d = valid_draft();
         d.database = String::new();
-        assert!(validate_connection(&d).iter().any(|e| e.contains("Database")));
+        assert!(validate_connection(&d)
+            .iter()
+            .any(|e| e.contains("Database")));
     }
 
     #[test]

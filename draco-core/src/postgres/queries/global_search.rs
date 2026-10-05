@@ -1,7 +1,7 @@
-use serde::Serialize;
+use super::helpers::*;
 use crate::error::Result;
 use crate::postgres::pool::PostgresDriver;
-use super::helpers::*;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -57,7 +57,11 @@ pub async fn global_search(driver: &PostgresDriver, term: &str) -> Result<Vec<Se
     let mut results = Vec::new();
     for r in &tables {
         results.push(SearchResult {
-            kind: if get_str(r, "table_type") == "VIEW" { SearchKind::View } else { SearchKind::Table },
+            kind: if get_str(r, "table_type") == "VIEW" {
+                SearchKind::View
+            } else {
+                SearchKind::Table
+            },
             schema: get_str(r, "schema"),
             table: None,
             name: get_str(r, "name"),
@@ -74,7 +78,13 @@ pub async fn global_search(driver: &PostgresDriver, term: &str) -> Result<Vec<Se
         });
     }
     for r in &functions {
-        results.push(SearchResult { kind: SearchKind::Function, schema: get_str(r, "schema"), table: None, name: get_str(r, "name"), detail: None });
+        results.push(SearchResult {
+            kind: SearchKind::Function,
+            schema: get_str(r, "schema"),
+            table: None,
+            name: get_str(r, "name"),
+            detail: None,
+        });
     }
     Ok(results)
 }

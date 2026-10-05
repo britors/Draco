@@ -1,7 +1,7 @@
-use serde::Serialize;
+use super::helpers::*;
 use crate::error::Result;
 use crate::postgres::pool::PostgresDriver;
-use super::helpers::*;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct QueryStatRow {
@@ -19,9 +19,17 @@ pub struct QueryStats {
 }
 
 pub async fn get_query_stats(driver: &PostgresDriver) -> Result<QueryStats> {
-    let ext_rows = driver.query("SELECT extname FROM pg_extension WHERE extname = 'pg_stat_statements'", &[]).await?;
+    let ext_rows = driver
+        .query(
+            "SELECT extname FROM pg_extension WHERE extname = 'pg_stat_statements'",
+            &[],
+        )
+        .await?;
     if ext_rows.is_empty() {
-        return Ok(QueryStats { installed: false, queries: vec![] });
+        return Ok(QueryStats {
+            installed: false,
+            queries: vec![],
+        });
     }
     let rows = driver
         .query(
@@ -48,6 +56,8 @@ pub async fn get_query_stats(driver: &PostgresDriver) -> Result<QueryStats> {
 }
 
 pub async fn reset_query_stats(driver: &PostgresDriver) -> Result<()> {
-    driver.query("SELECT pg_stat_statements_reset()", &[]).await?;
+    driver
+        .query("SELECT pg_stat_statements_reset()", &[])
+        .await?;
     Ok(())
 }

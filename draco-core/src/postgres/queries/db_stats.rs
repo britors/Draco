@@ -1,7 +1,7 @@
-use serde::Serialize;
+use super::helpers::*;
 use crate::error::Result;
 use crate::postgres::pool::PostgresDriver;
-use super::helpers::*;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DbStatsOverview {
@@ -154,11 +154,23 @@ pub async fn get_db_stats(driver: &PostgresDriver) -> Result<DbStats> {
             .collect(),
         unused_idx: unused_idx_rows
             .iter()
-            .map(|r| UnusedIndexRow { schema: get_str(r, "schema"), table: get_str(r, "table"), index: get_str(r, "index"), size: get_str(r, "size"), idx_scan: get_i64(r, "idx_scan") })
+            .map(|r| UnusedIndexRow {
+                schema: get_str(r, "schema"),
+                table: get_str(r, "table"),
+                index: get_str(r, "index"),
+                size: get_str(r, "size"),
+                idx_scan: get_i64(r, "idx_scan"),
+            })
             .collect(),
         seq_scans: seq_scan_rows
             .iter()
-            .map(|r| SeqScanRow { schema: get_str(r, "schema"), table: get_str(r, "table"), seq_scan: get_i64(r, "seq_scan"), n_live_tup: r.try_get("n_live_tup").ok(), size: get_str(r, "size") })
+            .map(|r| SeqScanRow {
+                schema: get_str(r, "schema"),
+                table: get_str(r, "table"),
+                seq_scan: get_i64(r, "seq_scan"),
+                n_live_tup: r.try_get("n_live_tup").ok(),
+                size: get_str(r, "size"),
+            })
             .collect(),
     })
 }
