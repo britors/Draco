@@ -1,0 +1,5 @@
+# Commits that only reformat code; skipped by `git blame` (GitHub uses this file
+# automatically; locally: git blame --ignore-revs-file .git-blame-ignore-revs).
+
+# style(core): apply cargo fmt to draco-core (#137)
+c1cfcfd4412c2e052bef605e3b2720984f3a107f
