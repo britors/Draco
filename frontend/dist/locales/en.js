@@ -703,6 +703,16 @@ export default Object.freeze({
   'assistant.reviewObject': 'Review this {kind} with AI',
   'assistant.tokens': '{input} input · {output} output tokens',
   'assistant.tool': 'Tool · {tool}',
+  'assistant.toolFailed': 'The tool call was refused or failed; the assistant was told to correct it.',
+  'assistant.error.emptyKey': 'The API key cannot be empty.',
+  'assistant.error.missingKey': 'No API key is configured for {provider}. Add one in Preferences.',
+  'assistant.error.credentialStore': 'The system credential store is unavailable. Unlock it and try again.',
+  'assistant.error.unauthorized': 'The AI provider rejected the API key. Check it in Preferences.',
+  'assistant.error.rateLimited': 'The AI provider is limiting requests. Wait a moment and try again.',
+  'assistant.error.rejected': 'The AI provider rejected the request (HTTP {status}).',
+  'assistant.error.noModels': 'The AI provider returned no compatible models.',
+  'assistant.error.network': 'Could not reach the AI provider. Check your network connection.',
+  'assistant.error.invalidResponse': 'The AI provider sent an invalid response.',
 
   'backup.failedExit': 'Failed (exit {code})',
 

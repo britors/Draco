@@ -89,12 +89,16 @@ Toda falha de comando chega ao frontend como:
 ```
 
 - `code` é a categoria estável: `invalid_input`, `connection_not_found`, `connection_not_active`,
-  `operation_error`, `github_error`, `backend_error` ou `filesystem_error`.
+  `assistant_error`, `operation_error`, `github_error`, `backend_error` ou `filesystem_error`.
 - `key`, quando presente, é uma chave estável dos catálogos em `frontend/dist/locales`; o
   frontend traduz por ela (`errorMessage` em `i18n.js`). Carregam chave: todas as validações
   (`invalid_input`, chaves `validation.*`, montadas com `draco_app::Validation`), conexão não
-  encontrada/inativa, falha genérica de operação, falha não-PostgreSQL do core e seletor de
-  arquivos indisponível.
+  encontrada/inativa, falhas do Assistente (`assistant_error`, chaves `assistant.error.*`: chave
+  vazia ou ausente, credential store indisponível, chave recusada, limite de requisições, outro
+  status HTTP, nenhum modelo, rede, resposta inválida), falha genérica de operação, falha
+  não-PostgreSQL do core e seletor de arquivos indisponível. Nas falhas do Assistente só cruzam
+  o IPC o status HTTP e o nome do provedor; o texto de erro do provedor é descartado no core,
+  porque alguns provedores ecoam parte da chave de API.
 - `params`, quando presente, traz os valores nomeados da mensagem. Valores que começam com
   `label.` são chaves de catálogo e também são traduzidos; os demais (nomes de objetos,
   constraints) entram como estão.
@@ -148,8 +152,13 @@ O shell inicial em `src-tauri` expõe:
 | `assistant_settings` / `save_assistant_settings` | configurações não secretas do Assistente |
 | `assistant_models` | listar modelos compatíveis do provedor usando a chave do Secret Service |
 | `save_assistant_key` / `clear_assistant_key` | gerenciar chaves no Secret Service |
-| `assistant_history` / `clear_assistant_history` | histórico por conexão |
+| `assistant_history` / `clear_assistant_history` | histórico por conexão, como `AssistantMessageView` |
 | `assistant_send` | conversar e executar somente ferramentas de inspeção read-only |
+
+O histórico guardado em `ai-history.toml` mantém, nas mensagens de ferramenta, o invólucro de
+dado não confiável enviado ao modelo. `assistant_history` e `assistant_send` devolvem
+`AssistantMessageView`: nessas mensagens, `content` é só a saída da ferramenta, e `tool_failed`
+marca uma chamada recusada ou com erro, cujo texto é dirigido ao modelo e não é exibido.
 
 O painel Query Stats pode iniciar `assistant_send` com a SQL e suas métricas de
 `pg_stat_statements`; o fluxo continua limitado às ferramentas read-only do Assistente e nunca

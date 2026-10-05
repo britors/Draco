@@ -5,17 +5,17 @@ use std::{fs, io};
 
 use draco_app::{
     AdminView, AlterTableInput, AlterTablePreviewView, Application, ApplicationError,
-    AssistantReplyView, BackupFormat, BackupOptionsInput, BrowseTableView, CompletionDataView,
-    ConnectionInput, ConnectionView, CreateRoleInput, CreateTableInput, CronJobInput,
-    CronJobRunView, CronJobsView, DashboardView, DeleteTableRowInput, ErdView, ExtensionsView,
-    FileAuthorizationPurpose, FunctionDefinitionView, GithubBranch, GithubConnection,
-    GithubPullRequest, GithubRepository, GithubSettings, Health, HistoryView, InsertTableRowInput,
-    PreferencesView, QueryResult, QueryStatsView, RestoreOptionsInput, RoleView, SchemaObjectView,
-    SchemaView, SearchResultView, SnippetInput, SnippetView, TableDetailView,
-    TableMaintenanceOperation, TableView, ToolResultView, TriggerInput, UpdateRoleInput,
-    UpdateStatusView, UpdateTableCellInput,
+    AssistantMessageView, AssistantReplyView, BackupFormat, BackupOptionsInput, BrowseTableView,
+    CompletionDataView, ConnectionInput, ConnectionView, CreateRoleInput, CreateTableInput,
+    CronJobInput, CronJobRunView, CronJobsView, DashboardView, DeleteTableRowInput, ErdView,
+    ExtensionsView, FileAuthorizationPurpose, FunctionDefinitionView, GithubBranch,
+    GithubConnection, GithubPullRequest, GithubRepository, GithubSettings, Health, HistoryView,
+    InsertTableRowInput, PreferencesView, QueryResult, QueryStatsView, RestoreOptionsInput,
+    RoleView, SchemaObjectView, SchemaView, SearchResultView, SnippetInput, SnippetView,
+    TableDetailView, TableMaintenanceOperation, TableView, ToolResultView, TriggerInput,
+    UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
 };
-use draco_core::assistant::{AiMessage, Provider, Settings};
+use draco_core::assistant::{Provider, Settings};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -63,7 +63,13 @@ impl From<ApplicationError> for CommandError {
                 params: std::collections::BTreeMap::new(),
                 message: format!("Connection '{id}' is not connected"),
             },
-            ApplicationError::Assistant(_) | ApplicationError::Operation(_) => Self {
+            ApplicationError::Assistant(validation) => Self {
+                code: "assistant_error",
+                key: Some(validation.key),
+                params: validation.params.into_iter().collect(),
+                message: validation.message,
+            },
+            ApplicationError::Operation(_) => Self {
                 code: "operation_error",
                 key: Some("error.operation_error"),
                 params: std::collections::BTreeMap::new(),
@@ -1243,7 +1249,7 @@ async fn clear_assistant_key(
 fn assistant_history(
     state: State<'_, Application>,
     id: String,
-) -> Result<Vec<AiMessage>, CommandError> {
+) -> Result<Vec<AssistantMessageView>, CommandError> {
     Ok(state.assistant_history(&id))
 }
 
@@ -1467,6 +1473,18 @@ mod tests {
         ));
         let json = serde_json::to_value(&database).expect("command error serializes");
         assert!(json.get("params").is_none());
+    }
+
+    #[test]
+    fn assistant_errors_keep_their_key_and_params() {
+        let error = CommandError::from(ApplicationError::Assistant(
+            draco_app::Validation::new("assistant.error.rejected", "rejected")
+                .param("status", "500"),
+        ));
+        let json = serde_json::to_value(&error).expect("command error serializes");
+        assert_eq!(json["code"], "assistant_error");
+        assert_eq!(json["key"], "assistant.error.rejected");
+        assert_eq!(json["params"]["status"], "500");
     }
 
     fn draco_core_error_for_test() -> draco_core::error::CoreError {

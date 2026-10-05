@@ -703,6 +703,16 @@ export default Object.freeze({
   'assistant.reviewObject': 'Revisar com IA ({kind})',
   'assistant.tokens': '{input} tokens de entrada · {output} de saída',
   'assistant.tool': 'Ferramenta · {tool}',
+  'assistant.toolFailed': 'A chamada da ferramenta foi recusada ou falhou; o assistente foi orientado a corrigi-la.',
+  'assistant.error.emptyKey': 'A chave de API não pode estar vazia.',
+  'assistant.error.missingKey': 'Nenhuma chave de API configurada para {provider}. Cadastre uma em Preferências.',
+  'assistant.error.credentialStore': 'O armazenamento de credenciais do sistema está indisponível. Desbloqueie-o e tente de novo.',
+  'assistant.error.unauthorized': 'O provedor de IA recusou a chave de API. Confira a chave em Preferências.',
+  'assistant.error.rateLimited': 'O provedor de IA está limitando as solicitações. Aguarde um pouco e tente de novo.',
+  'assistant.error.rejected': 'O provedor de IA recusou a solicitação (HTTP {status}).',
+  'assistant.error.noModels': 'O provedor de IA não retornou modelos compatíveis.',
+  'assistant.error.network': 'Não foi possível falar com o provedor de IA. Verifique a conexão de rede.',
+  'assistant.error.invalidResponse': 'O provedor de IA enviou uma resposta inválida.',
 
   'backup.failedExit': 'Falhou (código de saída {code})',
 
