@@ -66,6 +66,12 @@ como texto UTF-8; o caminho escolhido não volta para a webview. As senhas lidas
 fechar), nunca são serializadas para a UI e só são gravadas no Secret Service depois que a conexão
 passa no teste obrigatório. Uma URL `postgres://` colada é analisada no backend; o campo da URL é
 do tipo senha e é limpo assim que a análise termina, e erros de análise nunca ecoam a URL.
+A importação de CSV/JSON para tabela segue a mesma regra: o caminho só é aceito depois do seletor
+nativo (`choose_table_import_file`), com autorização própria (`Import`) que exige arquivo regular
+sem symlink, pode ser relida pela pré-visualização e é consumida pela importação. O arquivo é lido
+no backend até 128 MiB e precisa ser UTF-8. Os valores nunca são interpolados em SQL: seguem como
+dados de `COPY … FROM STDIN` em formato texto, com identificadores citados e colunas validadas
+contra a tabela reconsultada.
 
 O cancelamento usa um canal interno associado a um ID de operação e não transforma o ID ou os
 argumentos em comando executável.

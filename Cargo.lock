@@ -1181,6 +1181,7 @@ dependencies = [
 name = "draco-app"
 version = "2.1.7"
 dependencies = [
+ "bytes",
  "draco-core",
  "futures-util",
  "serde",
@@ -1195,6 +1196,7 @@ version = "2.1.7"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "bytes",
  "deadpool-postgres",
  "directories",
  "futures-util",

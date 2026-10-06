@@ -7,6 +7,7 @@ repository.workspace = true
 description = "Toolkit-independent application services and DTOs for Draco"
 
 [dependencies]
+bytes = "1"
 draco-core = { path = "../draco-core" }
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }

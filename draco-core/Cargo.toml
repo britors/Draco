@@ -7,7 +7,7 @@ repository.workspace = true
 description = "Postgres connection engine, introspection queries and local storage for Draco, independent of any GUI toolkit"
 
 [dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "process", "io-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "process", "io-util", "fs"] }
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
 deadpool-postgres = "0.14"
 tokio-postgres-rustls = "0.13"
@@ -25,6 +25,8 @@ uuid = { version = "1", features = ["v4", "serde"] }
 regex = "1"
 keyring = "4"
 base64 = "0.22"
+bytes = "1"
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 secret-service = { version = "5.1", features = ["crypto-rust"] }
