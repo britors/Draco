@@ -20,6 +20,9 @@ use draco_core::manager::{ConnectionManager, ConnectionStatus};
 use draco_core::postgres::backup::{
     DumpFormat, DumpOptions, RestoreOptions, ToolConnection, ToolEvent,
 };
+pub use draco_core::postgres::queries::{
+    ReplicaRow, ReplicationSlotRow, ReplicationStatus, StandbyStatus,
+};
 use draco_core::postgres::{backup, queries, test_connection_with_ssh, PostgresDriver};
 use draco_core::secrets;
 use draco_core::store;
@@ -1685,6 +1688,12 @@ impl Application {
             activity: serde_json::to_value(activity?).unwrap_or(serde_json::Value::Null),
             locks: serde_json::to_value(locks?).unwrap_or(serde_json::Value::Null),
         })
+    }
+
+    /// Replication state for the Administration monitor. Read-only on primary and standby.
+    pub async fn replication_status(&self, id: &str) -> Result<ReplicationStatus> {
+        let (driver, _) = self.connected_driver(id).await?;
+        Ok(queries::get_replication_status(&driver).await?)
     }
 
     pub async fn cancel_activity(&self, id: &str, pid: i32) -> Result<()> {

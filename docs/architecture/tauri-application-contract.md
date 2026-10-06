@@ -157,6 +157,7 @@ O shell inicial em `src-tauri` expõe:
 | `save_index_definition` | recriar um índice comum com `DROP` + `CREATE INDEX` na mesma transação |
 | `erd` | tabelas e relações de um schema |
 | `admin` | activity e locks |
+| `replication_status` | somente leitura: no primário, `pg_stat_replication` (estado, `sync_state`, atraso de write/flush/replay em bytes e segundos) e `pg_replication_slots` (ativo, WAL retido, `wal_status`); no standby, LSNs recebido/aplicado, backlog, último commit aplicado e `pg_stat_wal_receiver`; `has_monitor_privilege` indica quando falta `pg_monitor`. A UI atualiza a cada 5 s só com a aba visível |
 | `cancel_activity` | cancelar somente a query de um PID explícito, preservando a sessão |
 | `list_cron_jobs` / `set_cron_job_active` / `delete_cron_job` | detectar pg_cron, listar, pausar/retomar e excluir jobs |
 | `list_extensions` / `install_extension` / `drop_extension` | listar e gerenciar extensões por nome validado; `plpgsql` é protegida |
