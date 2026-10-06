@@ -1,4 +1,18 @@
 -------------------------------------------------------------------
+Tue Oct 06 23:19:23 UTC 2026 - rodrigo@dracodb.com.br
+
+- Versão 2.2.0: conexão por URL postgres:// e importação de ~/.pgpass e
+  ~/.pg_service.conf, com senhas só no cofre de credenciais.
+- Ambiente por conexão (desenvolvimento, homologação, produção) com marcação
+  visual, modo somente leitura e confirmação nominal para escrita em produção.
+- Importação de CSV e JSON para tabela em uma transação, cancelável.
+- Monitor de replicação (pg_stat_replication, slots e standby).
+- Diff de schema entre duas conexões ou dois schemas, com script de migração
+  aberto no editor SQL para revisão.
+- Notificação do sistema ao fim de operações longas com a janela fora de foco.
+- Identificador do app passa a ser br.com.dracodb.Draco.
+
+-------------------------------------------------------------------
 Mon Oct 05 19:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.1.7: o editor SQL e o Assistente de IA mostram os valores de

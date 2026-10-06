@@ -5,7 +5,7 @@ artefato oficial é o app **Tauri 2**.
 
 - Repositório: <https://github.com/britors/Draco>
 - Identificador desktop: `br.com.dracodb.Draco`
-- Versão do workspace: `2.1.7`
+- Versão do workspace: `2.2.0`
 - Licença: GPL-3.0-or-later
 - Binário oficial: `target/release/draco`
 
@@ -53,7 +53,8 @@ frontend/dist -> comandos Tauri -> draco-app -> draco-core -> PostgreSQL/SSH/XDG
 A bridge registrada em `src-tauri/src/main.rs` oferece:
 
 - criação, teste obrigatório, edição, favoritos, conexão/desconexão e exclusão
-  de conexões, incluindo SSH/jump host, ambiente (desenvolvimento/homologação/
+  de conexões, preenchimento por URL `postgres://` e importação de
+  `.pgpass`/`pg_service.conf` (senhas só no keyring, cada conexão testada antes de salvar), incluindo SSH/jump host, ambiente (desenvolvimento/homologação/
   produção, com marcação visual) e modo somente leitura
   (`default_transaction_read_only`); escrita em produção pede o nome da conexão;
 - Explorer lazy de schemas, tabelas, views, funções, procedures, sequences e
@@ -69,7 +70,12 @@ A bridge registrada em `src-tauri/src/main.rs` oferece:
   FKs, DDL e estatísticas de coluna) e ERD navegável;
 - Activity/Locks, roles, `pg_cron`, extensões, `pg_stat_statements` e manutenção
   allowlisted (`VACUUM`/`ANALYZE`);
-- backup/restauração canceláveis;
+- backup/restauração canceláveis; importação de CSV/JSON para tabela via
+  `COPY … FROM STDIN` em uma transação cancelável, com arquivo só pelo seletor nativo;
+- monitor de replicação (somente leitura) e diff de schema entre conexões ou
+  schemas, cujo script só roda se o usuário o abrir no editor SQL;
+- notificação do sistema ao fim de operações longas (10 s ou mais, janela fora de
+  foco), via `tauri-plugin-notification` usado só pelo Rust e com texto de catálogo fixo;
 - preferências de tema/destaque, About/Pix e checagem somente leitura da release
   mais recente no GitHub;
 - Assistente de IA por conexão com Anthropic, OpenAI ou Gemini.
@@ -188,7 +194,7 @@ uma configuração XDG temporária (passou contra PostgreSQL 18.6 em 03/10/2026)
 A decisão de remover o frontend GTK e o plano de rollback estão em
 `docs/architecture/adr-0003-gtk-removal.md`.
 
-O workspace, o RPM/OBS e o AppStream estão em `2.1.7`. Releases devem usar uma
+O workspace, o RPM/OBS e o AppStream estão em `2.2.0`. Releases devem usar uma
 tag imutável; nunca reutilizar uma tag nem gerar o tarball de um branch mutável.
 
 ## Documentação que acompanha mudanças
