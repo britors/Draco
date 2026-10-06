@@ -34,6 +34,51 @@ fn test_connection() -> DbConnection {
 
 #[tokio::test]
 #[ignore]
+async fn read_only_sessions_restore_the_setting_before_reuse() {
+    let conn = DbConnection {
+        read_only: true,
+        ..test_connection()
+    };
+    let password = secrets::get_password(&conn.id)
+        .await
+        .expect("password readable from Secret Service");
+    let driver =
+        PostgresDriver::connect(&conn, &password, 30_000, "draco-live-read-only", None, None)
+            .await
+            .expect("connect read-only");
+    assert!(driver.is_read_only());
+
+    let setting = |result: queries::QueryResult| {
+        result.rows[0]
+            .get("default_transaction_read_only")
+            .and_then(|value| value.as_str())
+            .map(str::to_string)
+    };
+    let shown = queries::execute_query(&driver, "SHOW default_transaction_read_only")
+        .await
+        .expect("show setting");
+    assert_eq!(setting(shown).as_deref(), Some("on"));
+
+    // The core driver has no SQL guard, so this simulates a session that slipped the setting off.
+    driver
+        .batch_execute("SET default_transaction_read_only = off")
+        .await
+        .expect("change setting");
+    for _ in 0..3 {
+        let shown = queries::execute_query(&driver, "SHOW default_transaction_read_only")
+            .await
+            .expect("show setting after reuse");
+        assert_eq!(
+            setting(shown).as_deref(),
+            Some("on"),
+            "the pooled session kept the change"
+        );
+    }
+    driver.disconnect().await;
+}
+
+#[tokio::test]
+#[ignore]
 async fn connects_and_introspects_the_real_database() {
     let conn = test_connection();
     let password = secrets::get_password(&conn.id)

@@ -181,6 +181,10 @@ async fn run_tool(
         .stdout(Stdio::null())
         .stderr(Stdio::null());
 
+    if driver.is_read_only() {
+        command.env("PGOPTIONS", "-c default_transaction_read_only=on");
+    }
+
     let mut child = command.spawn()?;
 
     let result = tokio::select! {

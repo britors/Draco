@@ -227,6 +227,35 @@ test('connecting refreshes every connection dropdown, not just the connection li
   assert.match(connectBody, /switchView\('dashboard'\);/, 'A successful connection should open its dashboard');
 });
 
+test('connection environment and read-only mode guard every database write', async () => {
+  const library = await readFile(new URL('../../draco-app/src/lib.rs', import.meta.url), 'utf8');
+  // Every public application method that takes the writable driver is a write command.
+  const backendWrites = new Set();
+  let current = null;
+  for (const line of library.split('\n')) {
+    const method = line.match(/^ {4}pub (?:async )?fn ([a-z_]+)/);
+    if (method) current = method[1];
+    else if (/^ {4}(?:async )?fn /.test(line)) current = null;
+    if (current && /\.writable_driver\(/.test(line)) backendWrites.add(current);
+  }
+  const frontendWrites = new Set([...app.match(/const WRITE_COMMANDS = new Set\(\[([\s\S]*?)\]\)/)[1].matchAll(/'([a-z_]+)'/g)].map((match) => match[1]));
+  assert.ok(backendWrites.size > 20, 'expected to find the backend write methods');
+  assert.deepEqual([...frontendWrites].sort(), [...backendWrites].sort(), 'WRITE_COMMANDS must match the methods gated by writable_driver');
+  assert.match(app, /const invoke = tauriInvoke \? guardedInvoke : null;/);
+  assert.match(app, /if \(connection\.read_only\) throw \{ code: 'connection_read_only', key: 'error\.connection_read_only' \}/);
+  assert.match(app, /SQL_COMMANDS\.has\(command\) && connection\.environment === 'production' && !connection\.read_only && sqlMayWrite\(args\.sql\)/);
+  assert.match(app, /typed\.trim\(\) !== connection\.label/, 'production writes need the connection name typed');
+  assert.match(index, /<select id="environment">/);
+  assert.match(index, /<input id="read-only" type="checkbox" \/>/);
+  assert.match(app, /environment: byId\('environment'\)\.value \|\| null,/);
+  assert.match(app, /read_only: byId\('read-only'\)\.checked,/);
+  for (const environment of ['development', 'staging', 'production']) {
+    assert.ok(en[`environment.${environment}`], `missing environment.${environment}`);
+    assert.match(style, new RegExp(`\\.env-badge\\[data-environment="${environment}"\\]`));
+  }
+  assert.match(style, /--env-production:[^;]+;[\s\S]*html\[data-theme="light"\] \{[\s\S]*--env-production:/, 'environment tokens need light theme values');
+});
+
 test('administration links a blocked session to its blocking activity', () => {
   assert.match(app, /function renderLocksPanel/);
   assert.match(app, /row\.dataset\.pid/);

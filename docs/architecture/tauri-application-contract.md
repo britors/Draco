@@ -56,6 +56,13 @@ O estado da conexão (`disconnected`, `connecting`, `connected` ou `error`) acom
 `ConnectionView`, permitindo que a UI represente loading, vazio, erro e retry sem inferir estado a
 partir de mensagens técnicas.
 
+Em conexões `read_only`, o PostgreSQL recusa a escrita (SQLSTATE `25006`) e a mensagem chega ao
+editor como diagnóstico sem tradução; SQL que tente reabilitar escrita na sessão é recusado antes
+com `connection_read_only`. Os demais comandos de escrita (os métodos de `Application` que usam
+`writable_driver`) falham com `connection_read_only` sem tocar o banco. O frontend espelha essa
+lista em `WRITE_COMMANDS`, e o teste de contrato exige que as duas fiquem iguais. Em conexões de
+`production`, esses comandos e SQL com possível escrita pedem o nome da conexão antes do `invoke`.
+
 ## Contrato de operações longas
 
 Queries, scripts e backup/restauração podem receber um `operationId` gerado pela UI. Enquanto a
@@ -94,11 +101,11 @@ Toda falha de comando chega ao frontend como:
 ```
 
 - `code` é a categoria estável: `invalid_input`, `connection_not_found`, `connection_not_active`,
-  `assistant_error`, `operation_error`, `github_error`, `backend_error` ou `filesystem_error`.
+  `connection_read_only`, `assistant_error`, `operation_error`, `github_error`, `backend_error` ou `filesystem_error`.
 - `key`, quando presente, é uma chave estável dos catálogos em `frontend/dist/locales`; o
   frontend traduz por ela (`errorMessage` em `i18n.js`). Carregam chave: todas as validações
   (`invalid_input`, chaves `validation.*`, montadas com `draco_app::Validation`), conexão não
-  encontrada/inativa, falhas do Assistente (`assistant_error`, chaves `assistant.error.*`: chave
+  encontrada/inativa/somente leitura, falhas do Assistente (`assistant_error`, chaves `assistant.error.*`: chave
   vazia ou ausente, credential store indisponível, chave recusada, limite de requisições, outro
   status HTTP, nenhum modelo, rede, resposta inválida), falha genérica de operação, falha
   não-PostgreSQL do core e seletor de arquivos indisponível. Nas falhas do Assistente só cruzam
@@ -125,7 +132,7 @@ O shell inicial em `src-tauri` expõe:
 | `github_compare` | obter o diff nativo entre duas branches do repositório |
 | `github_create_pull_request` | abrir um pull request da branch de trabalho para a base selecionada |
 | `list_connections` | listar metadados e estados |
-| `save_connection` / `delete_connection` | persistir metadados sem senha |
+| `save_connection` / `delete_connection` | persistir metadados sem senha, incluindo `environment` (`development`/`staging`/`production` ou ausente) e `read_only`; mudar `read_only` fecha a sessão ativa |
 | `connect_stored` / `disconnect` | ciclo de vida usando o Secret Service no backend |
 | `test_connection` | testar draft e credenciais antes de persistir |
 | `execute_query` / `execute_script` | executar SQL pela conexão ativa |

@@ -11,6 +11,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use draco_core::assistant;
+pub use draco_core::connection::ConnectionEnvironment;
 use draco_core::connection::{validate_connection, DbConnection, DbConnectionDraft};
 use draco_core::error::CoreError;
 use draco_core::github;
@@ -38,6 +39,8 @@ pub enum ApplicationError {
     ConnectionNotFound(String),
     #[error("connection is not active: {0}")]
     ConnectionNotActive(String),
+    #[error("connection is read-only: {0}")]
+    ReadOnly(String),
     #[error("assistant error: {0}")]
     Assistant(Validation),
     #[error("github error: {0}")]
@@ -139,6 +142,8 @@ pub struct ConnectionView {
     pub ssh_jump_user: Option<String>,
     pub ssh_jump_key_path: Option<String>,
     pub favorite: bool,
+    pub environment: Option<ConnectionEnvironment>,
+    pub read_only: bool,
     pub state: ConnectionState,
     pub error: Option<String>,
 }
@@ -162,6 +167,10 @@ pub struct ConnectionInput {
     pub ssh_jump_user: Option<String>,
     pub ssh_jump_key_path: Option<String>,
     pub favorite: bool,
+    #[serde(default)]
+    pub environment: Option<ConnectionEnvironment>,
+    #[serde(default)]
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1145,7 +1154,7 @@ impl Application {
     pub async fn next_sequence_value(&self, id: &str, schema: &str, name: &str) -> Result<String> {
         validate_schema_object_name(schema, "Schema")?;
         validate_schema_object_name(name, "Sequence")?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         Ok(queries::seq_next_val(&driver, schema, name).await?)
     }
 
@@ -1164,7 +1173,7 @@ impl Application {
                 "Sequence value must be a signed 64-bit integer",
             ))
         })?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::seq_set_val(&driver, schema, name, value).await?;
         Ok(())
     }
@@ -1318,7 +1327,7 @@ impl Application {
         input: UpdateTableCellInput,
     ) -> Result<()> {
         validate_table_name(schema, table)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         let metadata = table_edit_metadata(&driver, schema, table).await?;
         let keys = validate_row_keys(input.keys, &metadata.primary_keys)?;
         validate_table_column(&input.column, &metadata.columns)?;
@@ -1336,7 +1345,7 @@ impl Application {
         input: InsertTableRowInput,
     ) -> Result<()> {
         validate_table_name(schema, table)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         let metadata = table_edit_metadata(&driver, schema, table).await?;
         let values = parse_table_row(&input.values_json, &metadata.columns)?;
         queries::insert_table_row_json(&driver, schema, table, &values).await?;
@@ -1351,7 +1360,7 @@ impl Application {
         input: DeleteTableRowInput,
     ) -> Result<()> {
         validate_table_name(schema, table)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         let metadata = table_edit_metadata(&driver, schema, table).await?;
         let keys = validate_row_keys(input.keys, &metadata.primary_keys)?;
         queries::delete_table_row_json(&driver, schema, table, &keys).await?;
@@ -1360,7 +1369,7 @@ impl Application {
 
     pub async fn create_schema(&self, id: &str, schema: &str) -> Result<()> {
         validate_schema_object_name(schema, "Schema")?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::create_schema(&driver, schema).await?;
         Ok(())
     }
@@ -1378,7 +1387,7 @@ impl Application {
             .into_iter()
             .map(new_table_column)
             .collect::<Result<Vec<_>>>()?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::create_table(&driver, &input.schema, &input.table, &columns).await?;
         Ok(())
     }
@@ -1404,7 +1413,7 @@ impl Application {
         input: AlterTableInput,
     ) -> Result<()> {
         validate_table_name(schema, table)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         let detail = queries::get_table_detail(&driver, schema, table).await?;
         let preview = build_alter_table_preview(schema, table, input, &detail)?;
         queries::alter_table(&driver, &preview.statements).await?;
@@ -1414,7 +1423,7 @@ impl Application {
     pub async fn create_sequence(&self, id: &str, schema: &str, name: &str) -> Result<()> {
         validate_schema_object_name(schema, "Schema")?;
         validate_schema_object_name(name, "Sequence")?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::create_sequence(&driver, schema, name).await?;
         Ok(())
     }
@@ -1429,7 +1438,7 @@ impl Application {
         validate_schema_object_name(schema, "Schema")?;
         validate_schema_object_name(name, "View")?;
         validate_view_ddl(ddl, schema, name)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::save_object_definition(&driver, ddl).await?;
         Ok(())
     }
@@ -1444,7 +1453,7 @@ impl Application {
         validate_schema_object_name(schema, "Schema")?;
         validate_schema_object_name(name, "Sequence")?;
         validate_sequence_ddl(ddl, schema, name)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::save_object_definition(&driver, ddl).await?;
         Ok(())
     }
@@ -1490,7 +1499,7 @@ impl Application {
         validate_table_name(schema, table)?;
         validate_schema_object_name(name, "Index")?;
         validate_index_ddl(ddl, schema, table, name)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         let Some((_, constraint_name)) =
             queries::get_index_ddl(&driver, schema, table, name).await?
         else {
@@ -1522,7 +1531,7 @@ impl Application {
                 "Trigger function is required and cannot contain control characters",
             )));
         }
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::create_trigger(
             &driver,
             schema,
@@ -1568,14 +1577,14 @@ impl Application {
 
     pub async fn save_function_definition(&self, id: &str, ddl: &str) -> Result<()> {
         validate_function_ddl(ddl)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::save_function(&driver, ddl).await?;
         Ok(())
     }
 
     pub async fn save_trigger_definition(&self, id: &str, ddl: &str) -> Result<()> {
         validate_trigger_ddl(ddl)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::save_function(&driver, ddl).await?;
         Ok(())
     }
@@ -1599,7 +1608,7 @@ impl Application {
                 "Function"
             },
         )?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         let started = Instant::now();
         let result = queries::call_routine(&driver, schema, name, is_procedure, &params).await?;
         Ok(QueryResult {
@@ -1626,7 +1635,7 @@ impl Application {
                 "Function"
             },
         )?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::drop_routine(&driver, schema, name, identity_arguments, is_procedure).await?;
         Ok(())
     }
@@ -1641,7 +1650,7 @@ impl Application {
         validate_schema_object_name(schema, "Schema")?;
         validate_schema_object_name(table, "Table")?;
         validate_schema_object_name(name, "Trigger")?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::drop_trigger(&driver, schema, table, name).await?;
         Ok(())
     }
@@ -1703,14 +1712,14 @@ impl Application {
 
     pub async fn set_cron_job_active(&self, id: &str, job_id: i64, active: bool) -> Result<()> {
         validate_job_id(job_id)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::toggle_job(&driver, job_id, active).await?;
         Ok(())
     }
 
     pub async fn create_cron_job(&self, id: &str, input: CronJobInput) -> Result<()> {
         let (name, schedule, command) = validate_cron_job_input(input)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::create_job(&driver, name.as_deref(), &schedule, &command).await?;
         Ok(())
     }
@@ -1718,7 +1727,7 @@ impl Application {
     pub async fn update_cron_job(&self, id: &str, job_id: i64, input: CronJobInput) -> Result<()> {
         validate_job_id(job_id)?;
         let (_, schedule, command) = validate_cron_job_input(input)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::update_job(&driver, job_id, &schedule, &command).await?;
         Ok(())
     }
@@ -1742,7 +1751,7 @@ impl Application {
 
     pub async fn delete_cron_job(&self, id: &str, job_id: i64) -> Result<()> {
         validate_job_id(job_id)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::delete_job(&driver, job_id).await?;
         Ok(())
     }
@@ -1764,7 +1773,7 @@ impl Application {
 
     pub async fn install_extension(&self, id: &str, name: &str) -> Result<()> {
         let name = validate_extension_name(name)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::ext_install(&driver, &name).await?;
         Ok(())
     }
@@ -1777,7 +1786,7 @@ impl Application {
                 "The built-in plpgsql extension is protected",
             )));
         }
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::ext_drop(&driver, &name).await?;
         Ok(())
     }
@@ -1802,7 +1811,7 @@ impl Application {
     }
 
     pub async fn reset_query_stats(&self, id: &str) -> Result<()> {
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::reset_query_stats(&driver).await?;
         Ok(())
     }
@@ -1820,7 +1829,7 @@ impl Application {
                 "Schema and table are required for maintenance",
             )));
         }
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::run_vacuum(&driver, schema, table, operation.sql()).await?;
         Ok(())
     }
@@ -1850,7 +1859,7 @@ impl Application {
                 "Role connection limit must be -1 or greater",
             )));
         }
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::create_role(
             &driver,
             &queries::NewRole {
@@ -1877,7 +1886,7 @@ impl Application {
             )));
         }
         let valid_until = normalize_role_valid_until(input.valid_until.as_deref())?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::update_role(
             &driver,
             &name,
@@ -1895,7 +1904,7 @@ impl Application {
 
     pub async fn delete_role(&self, id: &str, name: &str) -> Result<()> {
         let name = validate_role_name(name)?;
-        let (driver, _) = self.connected_driver(id).await?;
+        let (driver, _) = self.writable_driver(id).await?;
         queries::drop_role(&driver, &name).await?;
         Ok(())
     }
@@ -1947,6 +1956,7 @@ impl Application {
         operation_id: &str,
         options: RestoreOptionsInput,
     ) -> Result<ToolResultView> {
+        self.writable_driver(id).await?;
         if options.input.trim().is_empty() || options.target_database.trim().is_empty() {
             return Err(ApplicationError::InvalidInput(Validation::new(
                 "validation.restoreInputAndTargetDatabaseAre",
@@ -2292,6 +2302,9 @@ impl Application {
             )));
         }
         let (driver, conn_label) = self.connected_driver(id).await?;
+        if driver.is_read_only() && reenables_writes(sql) {
+            return Err(ApplicationError::ReadOnly(id.to_string()));
+        }
         let cancel_rx = match operation_id {
             Some(operation_id) => Some(self.register_operation(operation_id).await?),
             None => None,
@@ -2412,6 +2425,16 @@ impl Application {
         Ok((driver, managed.conn.label.clone()))
     }
 
+    /// `connected_driver` for Draco's own write operations: a read-only connection refuses them
+    /// before anything reaches the server.
+    async fn writable_driver(&self, id: &str) -> Result<(PostgresDriver, String)> {
+        let (driver, label) = self.connected_driver(id).await?;
+        if driver.is_read_only() {
+            return Err(ApplicationError::ReadOnly(id.to_string()));
+        }
+        Ok((driver, label))
+    }
+
     async fn connected_context(&self, id: &str) -> Result<(PostgresDriver, DbConnection)> {
         let manager = self.manager.lock().await;
         let managed = manager
@@ -2446,6 +2469,8 @@ impl Application {
             ssh_jump_user: conn.ssh_jump_user,
             ssh_jump_key_path: conn.ssh_jump_key_path,
             favorite: conn.favorite,
+            environment: conn.environment,
+            read_only: conn.read_only,
             state: managed
                 .map(|m| m.status.into())
                 .unwrap_or(ConnectionState::Disconnected),
@@ -3231,6 +3256,41 @@ impl Default for Application {
     }
 }
 
+/// Whether `sql` tries to turn a read-only session back into a read-write one. PostgreSQL is what
+/// refuses writes on a read-only connection; this check only keeps the editor from undoing that
+/// setting, so it errs on the side of refusing (a match inside a string literal also counts).
+fn reenables_writes(sql: &str) -> bool {
+    let mut text = String::with_capacity(sql.len());
+    let mut rest = sql;
+    while !rest.is_empty() {
+        if let Some(after) = rest.strip_prefix("--") {
+            rest = after.find('\n').map_or("", |end| &after[end..]);
+        } else if let Some(after) = rest.strip_prefix("/*") {
+            rest = after.find("*/").map_or("", |end| &after[end + 2..]);
+            text.push(' ');
+        } else {
+            let character = rest.chars().next().unwrap_or_default();
+            text.push(character);
+            rest = &rest[character.len_utf8()..];
+        }
+    }
+    let words: Vec<String> = text
+        .split(|character: char| !(character.is_alphanumeric() || character == '_'))
+        .filter(|word| !word.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    let read_write = words
+        .windows(2)
+        .any(|pair| pair[0] == "read" && pair[1] == "write");
+    let changes_setting = words
+        .iter()
+        .any(|word| word.ends_with("transaction_read_only"))
+        && words
+            .iter()
+            .any(|word| matches!(word.as_str(), "set" | "set_config" | "reset"));
+    read_write || changes_setting
+}
+
 impl ConnectionInput {
     fn into_core(self) -> DbConnection {
         DbConnection {
@@ -3251,6 +3311,8 @@ impl ConnectionInput {
             ssh_jump_user: self.ssh_jump_user,
             ssh_jump_key_path: self.ssh_jump_key_path,
             favorite: self.favorite,
+            environment: self.environment,
+            read_only: self.read_only,
         }
     }
 }
@@ -3346,6 +3408,56 @@ mod tests {
             ssh_jump_user: None,
             ssh_jump_key_path: None,
             favorite: false,
+            environment: None,
+            read_only: false,
+        }
+    }
+
+    #[test]
+    fn environment_and_read_only_reach_the_stored_connection() {
+        let input = ConnectionInput {
+            environment: Some(ConnectionEnvironment::Production),
+            read_only: true,
+            ..valid_input()
+        };
+        let conn = input.into_core();
+        assert_eq!(conn.environment, Some(ConnectionEnvironment::Production));
+        assert!(conn.read_only);
+    }
+
+    #[test]
+    fn older_connection_inputs_default_to_no_environment_and_read_write() {
+        let mut json = serde_json::to_value(valid_input()).expect("serialize input");
+        let object = json.as_object_mut().expect("input object");
+        object.remove("environment");
+        object.remove("read_only");
+        let input: ConnectionInput = serde_json::from_value(json).expect("deserialize input");
+        assert_eq!(input.environment, None);
+        assert!(!input.read_only);
+    }
+
+    #[test]
+    fn read_only_guard_refuses_sql_that_turns_writes_back_on() {
+        for sql in [
+            "SET default_transaction_read_only = off",
+            "set   DEFAULT_TRANSACTION_READ_ONLY to false; delete from t",
+            "SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE",
+            "BEGIN READ WRITE; UPDATE t SET a = 1; COMMIT",
+            "START TRANSACTION READ/* hidden */WRITE",
+            "SET transaction_read_only = off",
+            "SELECT set_config('default_transaction_read_only', 'off', false)",
+            "RESET default_transaction_read_only",
+        ] {
+            assert!(reenables_writes(sql), "{sql}");
+        }
+        for sql in [
+            "SELECT * FROM orders OFFSET 10",
+            "SHOW default_transaction_read_only",
+            "SELECT 'read' AS a, 'write' AS b",
+            "UPDATE t SET a = 1 -- READ WRITE in a comment",
+            "SELECT 1 /* set default_transaction_read_only = off */",
+        ] {
+            assert!(!reenables_writes(sql), "{sql}");
         }
     }
 

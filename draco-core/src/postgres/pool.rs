@@ -17,6 +17,7 @@ pub struct PostgresDriver {
     tunnel: Option<Arc<SshTunnel>>,
     external_host: String,
     external_port: u16,
+    read_only: bool,
 }
 
 /// Result of `query_text`: the statement's columns with their types and every row as text
@@ -51,6 +52,16 @@ async fn text_query(
         })
         .collect();
     Ok(TextQueryResult { columns, rows })
+}
+
+/// Startup options sent to every session of a driver (and, through `PGOPTIONS`, to the external
+/// backup/restore tools).
+pub(crate) fn session_options(statement_timeout_ms: u32, read_only: bool) -> String {
+    let mut options = format!("-c statement_timeout={statement_timeout_ms}");
+    if read_only {
+        options.push_str(" -c default_transaction_read_only=on");
+    }
+    options
 }
 
 #[derive(Debug, Clone)]
@@ -91,11 +102,17 @@ impl PostgresDriver {
             .password(password)
             .application_name(app_name)
             .connect_timeout(std::time::Duration::from_secs(10))
-            .options(format!("-c statement_timeout={statement_timeout_ms}"));
+            .options(session_options(statement_timeout_ms, conn.read_only));
 
-        let manager_config = ManagerConfig {
-            recycling_method: RecyclingMethod::Fast,
+        // A read-only session can still be switched back with `SET` from the editor; resetting the
+        // setting before a pooled connection is reused brings back the startup value (`on`), so
+        // such a change never outlives the statement that made it.
+        let recycling_method = if conn.read_only {
+            RecyclingMethod::Custom("RESET default_transaction_read_only".to_string())
+        } else {
+            RecyclingMethod::Fast
         };
+        let manager_config = ManagerConfig { recycling_method };
         let manager = if conn.ssl {
             Manager::from_config(pg_config, tls::make_connector()?, manager_config)
         } else {
@@ -118,7 +135,13 @@ impl PostgresDriver {
             tunnel,
             external_host: host,
             external_port: port,
+            read_only: conn.read_only,
         })
+    }
+
+    /// Whether sessions were opened with `default_transaction_read_only = on`.
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
     }
 
     pub async fn disconnect(&self) {

@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+/// Where a connection points. It only drives visual cues and the production write
+/// confirmation; it never grants or removes permissions by itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ConnectionEnvironment {
+    Development,
+    Staging,
+    Production,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DbConnection {
     pub id: String,
@@ -31,6 +41,12 @@ pub struct DbConnection {
     pub ssh_jump_key_path: Option<String>,
     #[serde(default)]
     pub favorite: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment: Option<ConnectionEnvironment>,
+    /// Opens every session with `default_transaction_read_only = on`, so PostgreSQL itself
+    /// refuses writes; Draco also refuses its own write operations on such a connection.
+    #[serde(default)]
+    pub read_only: bool,
 }
 
 /// A connection being edited/created, before it has an id or has passed validation.
@@ -64,6 +80,8 @@ impl Default for DbConnection {
             ssh_jump_user: None,
             ssh_jump_key_path: None,
             favorite: false,
+            environment: None,
+            read_only: false,
         }
     }
 }
@@ -94,6 +112,33 @@ pub fn validate_connection(draft: &DbConnectionDraft) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn environment_and_read_only_round_trip_through_toml() {
+        let conn = DbConnection {
+            id: "prod".into(),
+            environment: Some(ConnectionEnvironment::Production),
+            read_only: true,
+            ..DbConnection::default()
+        };
+        let stored = toml::to_string(&conn).expect("serialize connection");
+        assert!(stored.contains("environment = \"production\""));
+        assert!(stored.contains("read_only = true"));
+        assert_eq!(
+            toml::from_str::<DbConnection>(&stored).expect("parse"),
+            conn
+        );
+
+        // Files written before these fields existed keep loading as read-write with no
+        // environment.
+        let legacy: DbConnection = toml::from_str(
+            "id = \"a\"\nlabel = \"A\"\nhost = \"h\"\nport = 5432\ndatabase = \"d\"\nuser = \"u\"\n",
+        )
+        .expect("parse legacy connection");
+        assert_eq!(legacy.environment, None);
+        assert!(!legacy.read_only);
+        assert!(!toml::to_string(&legacy).unwrap().contains("environment"));
+    }
 
     fn valid_draft() -> DbConnectionDraft {
         DbConnectionDraft {
