@@ -51,6 +51,13 @@ destino que já seja symlink. O backend não expõe leitura/escrita genérica de
 de PostgreSQL são passados diretamente a `std::process::Command`, nunca por shell; a política de
 processos é uma allowlist interna dos três binários oficiais.
 
+A importação de CSV/JSON para tabela segue a mesma regra: o caminho só é aceito depois do seletor
+nativo (`choose_table_import_file`), com autorização própria (`Import`) que exige arquivo regular
+sem symlink, pode ser relida pela pré-visualização e é consumida pela importação. O arquivo é lido
+no backend até 128 MiB e precisa ser UTF-8. Os valores nunca são interpolados em SQL: seguem como
+dados de `COPY … FROM STDIN` em formato texto, com identificadores citados e colunas validadas
+contra a tabela reconsultada.
+
 O cancelamento usa um canal interno associado a um ID de operação e não transforma o ID ou os
 argumentos em comando executável.
 

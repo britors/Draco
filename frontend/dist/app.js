@@ -16,7 +16,7 @@ const WRITE_COMMANDS = new Set([
   'alter_table', 'create_cron_job', 'create_role', 'create_schema', 'create_sequence', 'create_table',
   'create_trigger', 'delete_cron_job', 'delete_role', 'delete_routine', 'delete_table_row', 'delete_trigger',
   'drop_extension', 'insert_table_row', 'install_extension', 'next_sequence_value', 'reset_query_stats',
-  'run_restore', 'run_routine', 'run_table_maintenance', 'save_function_definition', 'save_index_definition',
+  'run_restore', 'run_routine', 'run_table_import', 'run_table_maintenance', 'save_function_definition', 'save_index_definition',
   'save_sequence_definition', 'save_trigger_definition', 'save_view_definition', 'set_cron_job_active',
   'set_sequence_value', 'update_cron_job', 'update_role', 'update_table_cell',
 ]);
@@ -2553,6 +2553,171 @@ function openProgramming() {
   void loadProgrammingSchemas(connection.value);
 }
 
+// CSV/JSON import into the open table. The file comes only from the native picker; the backend
+// rereads the table, validates the mapping and copies every row in one transaction.
+const tableImport = { id: null, schema: null, table: null, file: null, preview: null, operationId: null, onImported: null, returnFocus: null };
+
+function tableImportSource() {
+  return {
+    path: tableImport.file.path,
+    format: byId('table-import-format').value,
+    delimiter: byId('table-import-delimiter').value,
+    has_header: byId('table-import-header').checked,
+    empty_as_null: byId('table-import-empty-null').checked,
+  };
+}
+
+function setTableImportStatus(message, kind = '') {
+  const status = byId('table-import-status');
+  status.textContent = message;
+  status.className = `form-status ${kind}`;
+}
+
+function openTableImportDialog(id, schema, table, onImported) {
+  Object.assign(tableImport, { id, schema, table, file: null, preview: null, operationId: null, onImported, returnFocus: document.activeElement });
+  byId('table-import-target').textContent = `${schema}.${table}`;
+  byId('table-import-file').value = '';
+  byId('table-import-preview').replaceChildren();
+  byId('table-import-mapping').replaceChildren();
+  syncTableImportControls();
+  setTableImportStatus(t('tableImport.chooseFileHint'));
+  byId('table-import-dialog').hidden = false;
+  byId('table-import-choose').focus();
+}
+
+function closeTableImportDialog() {
+  if (tableImport.operationId) return;
+  byId('table-import-dialog').hidden = true;
+  tableImport.returnFocus?.focus?.();
+}
+
+function syncTableImportControls() {
+  const csv = byId('table-import-format').value === 'csv';
+  for (const control of ['table-import-delimiter', 'table-import-header', 'table-import-empty-null']) byId(control).disabled = !csv || Boolean(tableImport.operationId);
+  byId('table-import-preview-button').disabled = !tableImport.file || Boolean(tableImport.operationId);
+  byId('table-import-run').disabled = !tableImport.preview || Boolean(tableImport.operationId);
+  byId('table-import-run').hidden = Boolean(tableImport.operationId);
+  byId('table-import-cancel-run').hidden = !tableImport.operationId;
+  byId('table-import-choose').disabled = Boolean(tableImport.operationId);
+  byId('table-import-close').disabled = Boolean(tableImport.operationId);
+}
+
+async function chooseTableImportFile() {
+  try {
+    const file = await invoke('choose_table_import_file');
+    if (!file) return;
+    tableImport.file = file;
+    tableImport.preview = null;
+    byId('table-import-file').value = file.file_name;
+    byId('table-import-format').value = file.format;
+    if (file.file_name.toLowerCase().endsWith('.tsv')) byId('table-import-delimiter').value = '\\t';
+    byId('table-import-mapping').replaceChildren();
+    byId('table-import-preview').replaceChildren();
+    syncTableImportControls();
+    await previewTableImport();
+  } catch (error) {
+    setTableImportStatus(errorMessage(error, t, 'error.file_picker_unavailable'), 'error');
+  }
+}
+
+async function previewTableImport() {
+  if (!tableImport.file) return;
+  setTableImportStatus(t('tableImport.reading'));
+  tableImport.preview = null;
+  syncTableImportControls();
+  try {
+    const preview = await invoke('preview_table_import', { id: tableImport.id, schema: tableImport.schema, table: tableImport.table, source: tableImportSource() });
+    tableImport.preview = preview;
+    renderTableImportPreview(preview);
+    setTableImportStatus(t('tableImport.previewReady', { count: preview.total_rows }), 'success');
+  } catch (error) {
+    byId('table-import-preview').replaceChildren();
+    byId('table-import-mapping').replaceChildren();
+    setTableImportStatus(errorMessage(error, t, 'tableImport.previewFailed'), 'error');
+  } finally {
+    syncTableImportControls();
+  }
+}
+
+function renderTableImportPreview(preview) {
+  const mapping = byId('table-import-mapping');
+  mapping.replaceChildren();
+  preview.source_columns.forEach((column, index) => {
+    const row = document.createElement('label'); row.className = 'table-import-map-row';
+    const name = document.createElement('code'); name.textContent = column;
+    const arrow = document.createElement('span'); arrow.textContent = '→'; arrow.setAttribute('aria-hidden', 'true');
+    const select = document.createElement('select'); select.dataset.sourceColumn = String(index);
+    select.setAttribute('aria-label', t('tableImport.targetFor', { column }));
+    const skip = document.createElement('option'); skip.value = ''; skip.textContent = t('tableImport.skipColumn'); select.append(skip);
+    for (const target of preview.table_columns) {
+      const option = document.createElement('option'); option.value = target.name;
+      option.textContent = `${target.name} · ${target.data_type}${!target.nullable && !target.has_default ? ` · ${t('tableImport.required')}` : ''}`;
+      select.append(option);
+    }
+    select.value = preview.suggested_mapping[index] || '';
+    row.append(name, arrow, select); mapping.append(row);
+  });
+
+  const wrap = byId('table-import-preview'); wrap.replaceChildren();
+  if (!preview.sample_rows.length) { wrap.append(errorState(t('tableImport.noRows'), t('tableImport.noRowsMessage'))); return; }
+  const tableElement = document.createElement('table');
+  const head = document.createElement('tr');
+  for (const column of preview.source_columns) { const cell = document.createElement('th'); cell.textContent = column; head.append(cell); }
+  const thead = document.createElement('thead'); thead.append(head);
+  const tbody = document.createElement('tbody');
+  for (const values of preview.sample_rows) {
+    const row = document.createElement('tr');
+    for (const value of values) {
+      const cell = document.createElement('td');
+      if (value === null) { cell.textContent = 'NULL'; cell.className = 'null-cell'; } else cell.textContent = value;
+      row.append(cell);
+    }
+    tbody.append(row);
+  }
+  tableElement.append(thead, tbody);
+  const caption = document.createElement('small'); caption.textContent = t('tableImport.sampleCaption', { shown: preview.sample_rows.length, count: preview.total_rows });
+  wrap.append(caption, tableElement);
+}
+
+async function runTableImport() {
+  const mapping = [...byId('table-import-mapping').querySelectorAll('select')]
+    .filter((select) => select.value)
+    .map((select) => ({ source_column: Number(select.dataset.sourceColumn), table_column: select.value }));
+  if (!mapping.length) { setTableImportStatus(t('validation.importMappingEmpty'), 'error'); return; }
+  const targets = mapping.map((entry) => entry.table_column);
+  const duplicate = targets.find((name, index) => targets.indexOf(name) !== index);
+  if (duplicate) { setTableImportStatus(t('validation.importMappingDuplicate', { name: duplicate }), 'error'); return; }
+  const count = tableImport.preview.total_rows;
+  if (!await showConfirm(t('tableImport.confirm', { count, table: `${tableImport.schema}.${tableImport.table}` }), t('tableImport.confirmTitle'), false, t('tableImport.run'))) return;
+  tableImport.operationId = operationId();
+  syncTableImportControls();
+  setTableImportStatus(t('tableImport.importing', { count }));
+  try {
+    const result = await invoke('run_table_import', { id: tableImport.id, schema: tableImport.schema, table: tableImport.table, operationId: tableImport.operationId, input: { source: tableImportSource(), mapping } });
+    if (result.cancelled) {
+      setTableImportStatus(t('tableImport.cancelled'), 'error');
+    } else {
+      setTableImportStatus(t('tableImport.done', { count: result.rows_imported }), 'success');
+      tableImport.onImported?.();
+    }
+  } catch (error) {
+    setTableImportStatus(error?.code === 'write_cancelled' ? errorMessage(error, t) : `${errorMessage(error, t, 'tableImport.failed')} ${t('tableImport.rolledBack')}`, 'error');
+  } finally {
+    // The authorization is consumed by an import attempt; another import needs the file again.
+    tableImport.operationId = null;
+    tableImport.preview = null;
+    tableImport.file = null;
+    byId('table-import-file').value = '';
+    syncTableImportControls();
+  }
+}
+
+async function cancelTableImport() {
+  if (!tableImport.operationId) return;
+  setTableImportStatus(t('tableImport.cancelling'));
+  try { await invoke('cancel_operation', { operationId: tableImport.operationId }); } catch { /* the import reports the final state */ }
+}
+
 function tableMaintenancePanel(id, schema, table, detail) {
   const panel = document.createElement('section'); panel.className = 'data-panel maintenance-panel';
   const heading = document.createElement('div'); heading.className = 'maintenance-heading';
@@ -2599,7 +2764,7 @@ function formatTableCell(valueJson) {
   return valueJson;
 }
 
-function tableDataPanel(id, schema, table) {
+function tableDataPanel(id, schema, table, { importable = false } = {}) {
   const pageSize = 50;
   let offset = 0;
   let requestSequence = 0;
@@ -2618,7 +2783,10 @@ function tableDataPanel(id, schema, table) {
   const refresh = document.createElement('button'); refresh.className = 'button small'; refresh.type = 'button'; refresh.textContent = t('table.refresh');
   const previous = document.createElement('button'); previous.className = 'button small'; previous.type = 'button'; previous.textContent = t('table.previous');
   const next = document.createElement('button'); next.className = 'button small'; next.type = 'button'; next.textContent = t('explorer.sequenceNext');
-  controls.append(insert, refresh, previous, next); heading.append(headingCopy, controls);
+  const importButton = document.createElement('button'); importButton.className = 'button small'; importButton.type = 'button'; importButton.textContent = t('tableImport.open');
+  importButton.hidden = readOnly || !importable;
+  importButton.addEventListener('click', () => openTableImportDialog(id, schema, table, () => loadPage()));
+  controls.append(insert, importButton, refresh, previous, next); heading.append(headingCopy, controls);
   const status = document.createElement('div'); status.className = 'form-status table-data-status'; status.setAttribute('role', 'status');
   const grid = document.createElement('div'); grid.className = 'table-data-grid';
   panel.append(heading, status, grid);
@@ -3187,7 +3355,7 @@ async function openTable(id, schema, table, kind = 'table') {
   try {
     const payload = await invoke('table_detail', { id, schema, table }); const detail = payload.detail; content.replaceChildren(); byId('detail-summary').textContent = t('table.estimatedRows', { count: detail.row_estimate ?? 0 });
     if (kind === 'table' && !isReadOnly(id)) content.append(tableMaintenancePanel(id, schema, table, detail));
-    content.append(tableDataPanel(id, schema, table));
+    content.append(tableDataPanel(id, schema, table, { importable: kind === 'table' }));
     content.append(dataPanel(t('table.columns'), (detail.columns || []).map((row) => [row.name, `${row.full_type || row.data_type}${row.is_nullable ? '' : ' · NOT NULL'}${row.is_primary_key ? ' · PK' : ''}`])));
     content.append(dataPanel(t('table.constraints'), (detail.constraints || []).map((row) => [row.name, `${row.type}: ${row.definition}`])));
     if (kind === 'table') content.append(indexPanel(id, schema, table, detail.indexes || []));
@@ -4195,6 +4363,14 @@ document.addEventListener('keydown', (event) => {
 byId('cancel-connection').addEventListener('click', hideForm);
 byId('connection-form').addEventListener('submit', saveCurrentConnection);
 byId('test-connection').addEventListener('click', testCurrentConnection);
+byId('table-import-choose').addEventListener('click', chooseTableImportFile);
+byId('table-import-preview-button').addEventListener('click', previewTableImport);
+byId('table-import-format').addEventListener('change', () => { syncTableImportControls(); void previewTableImport(); });
+byId('table-import-run').addEventListener('click', runTableImport);
+byId('table-import-cancel-run').addEventListener('click', cancelTableImport);
+byId('table-import-close').addEventListener('click', closeTableImportDialog);
+for (const element of document.querySelectorAll('[data-close-table-import]')) element.addEventListener('click', closeTableImportDialog);
+byId('table-import-dialog').addEventListener('keydown', (event) => { if (event.key === 'Escape') closeTableImportDialog(); });
 byId('format-sql').addEventListener('click', () => {
   const editor = byId('sql-editor');
   const start = editor.selectionStart;

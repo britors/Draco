@@ -360,6 +360,26 @@
         <div id="command-list" class="command-list"></div>
       </div>
     </section>
+    <section id="table-import-dialog" class="app-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="table-import-title">
+      <div class="app-dialog-backdrop" data-close-table-import></div>
+      <div class="app-dialog-panel table-import-panel">
+        <div class="app-dialog-heading"><div><span class="eyebrow" data-i18n="tableImport.eyebrow">IMPORT DATA</span><h2 id="table-import-title" data-i18n="tableImport.title">Import CSV or JSON</h2></div><button class="button small" type="button" data-close-table-import aria-label="Close" data-i18n-aria-label="window.close">Esc</button></div>
+        <p class="table-import-description"><span data-i18n="tableImport.into">Into</span> <code id="table-import-target"></code>. <span data-i18n="tableImport.description">All rows are copied in one transaction: if any row fails, nothing is imported.</span></p>
+        <div class="table-import-options">
+          <label class="table-import-file"><span data-i18n="tableImport.file">File</span><span class="table-import-file-row"><input id="table-import-file" readonly /><button class="button small" id="table-import-choose" type="button" data-i18n="tableImport.choose">Choose…</button></span></label>
+          <label><span data-i18n="tableImport.format">Format</span><select id="table-import-format"><option value="csv">CSV</option><option value="json" data-i18n="tableImport.formatJson">JSON (array of objects)</option></select></label>
+          <label><span data-i18n="tableImport.delimiter">Delimiter</span><select id="table-import-delimiter"><option value="," data-i18n="tableImport.delimiterComma">Comma ( , )</option><option value=";" data-i18n="tableImport.delimiterSemicolon">Semicolon ( ; )</option><option value="\t" data-i18n="tableImport.delimiterTab">Tab</option><option value="|" data-i18n="tableImport.delimiterPipe">Pipe ( | )</option></select></label>
+          <label class="check-row"><input id="table-import-header" type="checkbox" checked /> <span data-i18n="tableImport.header">First line is a header</span></label>
+          <label class="check-row"><input id="table-import-empty-null" type="checkbox" checked /> <span data-i18n="tableImport.emptyAsNull">Empty unquoted fields are NULL</span></label>
+          <button class="button small" id="table-import-preview-button" type="button" data-i18n="tableImport.preview">Preview again</button>
+        </div>
+        <h3 class="table-import-heading" data-i18n="tableImport.mapping">Column mapping</h3>
+        <div id="table-import-mapping" class="table-import-mapping"></div>
+        <div id="table-import-preview" class="table-import-preview result-grid"></div>
+        <div id="table-import-status" class="form-status" role="status"></div>
+        <div class="app-dialog-actions"><button class="button" id="table-import-close" type="button" data-i18n="tableImport.close">Close</button><button class="button danger" id="table-import-cancel-run" type="button" hidden data-i18n="tableImport.cancel">Cancel import</button><button class="button primary" id="table-import-run" type="button" data-i18n="tableImport.run">Import rows</button></div>
+      </div>
+    </section>
     <section id="programming-run-dialog" class="app-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="programming-run-title">
       <div class="app-dialog-backdrop" data-close-programming-run></div>
       <div class="app-dialog-panel programming-run-panel">

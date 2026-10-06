@@ -177,6 +177,35 @@ impl PostgresDriver {
         Ok(())
     }
 
+    /// Streams `COPY … FROM STDIN` data (already encoded in the statement's format) inside one
+    /// transaction on a single pooled backend. Any server error, or a cancellation through
+    /// `cancel_rx`, rolls the whole copy back; on success it returns the rows PostgreSQL copied.
+    pub async fn copy_in(
+        &self,
+        copy_sql: &str,
+        chunks: Vec<bytes::Bytes>,
+        cancel_rx: watch::Receiver<bool>,
+    ) -> Result<u64> {
+        use futures_util::SinkExt;
+        let mut client = self.pool.get().await?;
+        let backend_pid = client
+            .query_one("SELECT pg_backend_pid()", &[])
+            .await?
+            .get::<_, i32>(0);
+        let copy = async {
+            let transaction = client.transaction().await?;
+            let sink = transaction.copy_in(copy_sql).await?;
+            futures_util::pin_mut!(sink);
+            for chunk in chunks {
+                sink.send(chunk).await?;
+            }
+            let copied = sink.as_mut().finish().await?;
+            transaction.commit().await?;
+            Ok(copied)
+        };
+        self.cancelable(backend_pid, copy, cancel_rx).await
+    }
+
     /// Same simple-query protocol as `batch_execute`, but keeps each statement's row/command
     /// data instead of discarding it — used by the query editor's "Run as script" so a
     /// multi-statement buffer still shows a result, not just a side effect.

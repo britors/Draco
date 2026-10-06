@@ -12,8 +12,9 @@ use draco_app::{
     GithubConnection, GithubPullRequest, GithubRepository, GithubSettings, Health, HistoryView,
     InsertTableRowInput, PreferencesView, QueryResult, QueryStatsView, RestoreOptionsInput,
     RoleView, SchemaObjectView, SchemaView, SearchResultView, SnippetInput, SnippetView,
-    TableDetailView, TableMaintenanceOperation, TableView, ToolResultView, TriggerInput,
-    UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
+    TableDetailView, TableImportFileView, TableImportInput, TableImportPreviewView,
+    TableImportResultView, TableImportSourceInput, TableMaintenanceOperation, TableView,
+    ToolResultView, TriggerInput, UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
 };
 use draco_core::assistant::{Provider, Settings};
 use serde::{Deserialize, Serialize};
@@ -889,6 +890,64 @@ async fn choose_restore_input(
     Ok(Some(path))
 }
 
+/// Opens the native picker for a CSV or JSON file and authorizes it for the table import.
+#[tauri::command]
+async fn choose_table_import_file(
+    state: State<'_, Application>,
+) -> Result<Option<TableImportFileView>, CommandError> {
+    let selected = tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("Choose a CSV or JSON file to import")
+            .add_filter("CSV or JSON", &["csv", "tsv", "txt", "json"])
+            .pick_file()
+    })
+    .await
+    .map_err(|_| CommandError {
+        code: "operation_error",
+        key: Some("error.file_picker_unavailable"),
+        params: std::collections::BTreeMap::new(),
+        message: "The native file picker could not be opened".to_string(),
+    })?;
+    let Some(path) = selected else {
+        return Ok(None);
+    };
+    let path = path.to_string_lossy().into_owned();
+    state
+        .authorize_import_file(&path)
+        .await
+        .map(Some)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn preview_table_import(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    source: TableImportSourceInput,
+) -> Result<TableImportPreviewView, CommandError> {
+    state
+        .preview_table_import(&id, &schema, &table, source)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn run_table_import(
+    state: State<'_, Application>,
+    id: String,
+    schema: String,
+    table: String,
+    operation_id: String,
+    input: TableImportInput,
+) -> Result<TableImportResultView, CommandError> {
+    state
+        .run_table_import(&id, &schema, &table, &operation_id, input)
+        .await
+        .map_err(Into::into)
+}
+
 #[tauri::command]
 async fn list_extensions(
     state: State<'_, Application>,
@@ -1314,6 +1373,9 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             update_table_cell,
             insert_table_row,
             delete_table_row,
+            choose_table_import_file,
+            preview_table_import,
+            run_table_import,
             create_schema,
             create_table,
             preview_alter_table,
