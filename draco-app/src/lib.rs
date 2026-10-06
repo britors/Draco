@@ -37,6 +37,9 @@ pub use connection_import::{
     ConnectionImportSource, ConnectionImportSourceView, ConnectionImportStatus,
     ParsedConnectionUrlView,
 };
+mod notifications;
+
+pub use notifications::{FinishedOperation, OperationNotification, OperationOutcome};
 
 pub type SharedApplication = Arc<Application>;
 
@@ -693,6 +696,12 @@ pub struct PreferencesView {
     pub accent: AccentColor,
     pub check_updates_on_startup: bool,
     pub programming_workspace: Option<String>,
+    #[serde(default = "default_true")]
+    pub notify_long_operations: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -744,6 +753,7 @@ impl Application {
             accent: settings.accent,
             check_updates_on_startup: settings.check_updates_on_startup,
             programming_workspace: settings.programming_workspace,
+            notify_long_operations: settings.notify_long_operations,
         }
     }
 
@@ -753,6 +763,7 @@ impl Application {
             settings.accent = preferences.accent;
             settings.check_updates_on_startup = preferences.check_updates_on_startup;
             settings.programming_workspace = preferences.programming_workspace.clone();
+            settings.notify_long_operations = preferences.notify_long_operations;
         })?;
         Ok(PreferencesView {
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -760,6 +771,7 @@ impl Application {
             accent: saved.accent,
             check_updates_on_startup: saved.check_updates_on_startup,
             programming_workspace: saved.programming_workspace,
+            notify_long_operations: saved.notify_long_operations,
         })
     }
 

@@ -53,7 +53,7 @@ const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
 const t = createTranslator(resolveLocale(navigator.languages?.length ? navigator.languages : [navigator.language]));
 document.documentElement.lang = t.locale;
 applyTranslations(document, t);
-const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.1.7', theme: 'dark', accent: 'coral', check_updates_on_startup: true, programming_workspace: null }, releaseUrl: '', queryTabs: [{ id: 1, label: t('query.tabLabel', { number: 1 }), sql: '' }], currentQueryTabId: 1 };
+const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.1.7', theme: 'dark', accent: 'coral', check_updates_on_startup: true, programming_workspace: null, notify_long_operations: true }, releaseUrl: '', queryTabs: [{ id: 1, label: t('query.tabLabel', { number: 1 }), sql: '' }], currentQueryTabId: 1 };
 let dialogResolver = null;
 let aiReviewRequest = null;
 let aiReviewReturnFocus = null;
@@ -97,6 +97,7 @@ function syncPreferenceControls() {
   for (const button of document.querySelectorAll('[data-theme-choice]')) button.setAttribute('aria-pressed', String(button.dataset.themeChoice === state.preferences.theme));
   for (const button of document.querySelectorAll('[data-accent-choice]')) button.setAttribute('aria-pressed', String(button.dataset.accentChoice === state.preferences.accent));
   byId('check-updates-startup').checked = state.preferences.check_updates_on_startup;
+  byId('notify-long-operations').checked = state.preferences.notify_long_operations !== false;
   byId('about-version').textContent = state.preferences.version;
   byId('update-detail').textContent = t('updates.currentVersion', { version: state.preferences.version });
   const workspacePreference = byId('programming-workspace-preference');
@@ -1289,6 +1290,15 @@ async function askAssistantAboutQueryStat(id, queryStat) {
   await sendAssistant();
 }
 
+// Tells the backend that a long-running operation ended. Only the kind, outcome and duration are
+// sent; the backend decides (10 s threshold, window focus, preference) and owns the text, so no
+// SQL, result or file name can reach a system notification.
+function reportOperationFinished(operation, outcome, startedAt) {
+  if (!invoke) return;
+  const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
+  void invoke('operation_finished', { operation, outcome, durationMs, locale: t.locale }).catch(() => {});
+}
+
 function operationId() { return `ui-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
 async function runBackup(restore = false) {
@@ -1297,10 +1307,15 @@ async function runBackup(restore = false) {
   const operation = operationId(); state.currentOperationId = operation; byId('cancel-operation').hidden = false; byId('backup-status').textContent = restore ? t('backup.restoring') : t('backup.creatingBackup'); byId('backup-log').textContent = '';
   for (const control of ['run-backup', 'run-restore', 'choose-backup-output', 'choose-restore-input', 'backup-connection', 'backup-output', 'backup-format', 'restore-input', 'restore-database']) byId(control).disabled = true;
   const options = restore ? { input: value('restore-input'), target_database: value('restore-database'), clean: false, single_transaction: true } : { output: value('backup-output'), format: byId('backup-format').value, compression: null, schemas: [], tables: [] };
+  const startedAt = performance.now();
   try {
     const result = await invoke(restore ? 'run_restore' : 'run_backup', { id, operationId: operation, options });
     byId('backup-log').textContent = result.logs.join('\n'); byId('backup-status').textContent = result.cancelled ? t('query.cancelled') : result.succeeded ? t('query.completed') : t('backup.failedExit', { code: result.exit_code ?? '?' });
-  } catch (error) { byId('backup-status').textContent = t('backup.backupOperationFailedCheckThe'); }
+    reportOperationFinished(restore ? 'restore' : 'backup', result.cancelled ? 'cancelled' : result.succeeded ? 'succeeded' : 'failed', startedAt);
+  } catch (error) {
+    byId('backup-status').textContent = t('backup.backupOperationFailedCheckThe');
+    if (error?.code !== 'write_cancelled') reportOperationFinished(restore ? 'restore' : 'backup', 'failed', startedAt);
+  }
   finally {
     state.currentOperationId = null; byId('cancel-operation').hidden = true;
     for (const control of ['run-backup', 'run-restore', 'choose-backup-output', 'choose-restore-input', 'backup-connection', 'backup-output', 'backup-format', 'restore-input', 'restore-database']) byId(control).disabled = false;
@@ -3775,12 +3790,16 @@ async function runQuery(mode = 'query') {
   byId('cancel-query').hidden = false;
   byId('query-status').textContent = explain ? t('query.planning') : script ? t('query.runningScript') : selectionActive ? t('query.runningSelection') : t('query.running');
   byId('result-error').textContent = '';
+  const operationKind = explain ? 'explain' : script ? 'script' : 'query';
+  const startedAt = performance.now();
   try {
     const command = explain ? 'execute_explain' : script ? 'execute_script' : 'execute_query';
     const result = await invoke(command, { id, sql, operationId: state.currentQueryOperationId });
     renderResult(result);
     byId('query-status').textContent = explain ? t('query.planReady') : t('query.completed');
+    reportOperationFinished(operationKind, 'succeeded', startedAt);
   } catch (error) {
+    if (error?.code !== 'write_cancelled') reportOperationFinished(operationKind, state.cancelRequested ? 'cancelled' : 'failed', startedAt);
     renderResult(null);
     byId('result-error').textContent = state.cancelRequested ? t('query.cancelledDetail') : errorMessage(error, t, explain ? 'query.explainFailed' : 'query.failed');
     byId('query-status').textContent = state.cancelRequested ? t('query.cancelled') : t('query.error');
@@ -4696,6 +4715,7 @@ for (const button of document.querySelectorAll('[data-admin-workspace]')) button
 for (const button of document.querySelectorAll('[data-theme-choice]')) button.addEventListener('click', () => void savePreferences({ theme: button.dataset.themeChoice }));
 for (const button of document.querySelectorAll('[data-accent-choice]')) button.addEventListener('click', () => void savePreferences({ accent: button.dataset.accentChoice }));
 byId('check-updates-startup').addEventListener('change', (event) => void savePreferences({ check_updates_on_startup: event.target.checked }));
+byId('notify-long-operations').addEventListener('change', (event) => void savePreferences({ notify_long_operations: event.target.checked }));
 byId('check-updates').addEventListener('click', () => void checkForUpdates(true));
 byId('copy-release-link').addEventListener('click', async () => { if (!state.releaseUrl) return; await navigator.clipboard.writeText(state.releaseUrl); byId('update-detail').textContent = t('updates.releaseLinkCopied'); });
 byId('copy-pix-key').addEventListener('click', async () => { await navigator.clipboard.writeText(PIX_KEY); byId('pix-status').textContent = t('about.pixKeyCopied'); });

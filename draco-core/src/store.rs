@@ -216,6 +216,9 @@ pub struct AppSettings {
     pub accent: AccentColor,
     pub check_updates_on_startup: bool,
     pub programming_workspace: Option<String>,
+    /// Desktop notification when a query, script, backup or restore of at least 10 s ends while
+    /// the window is not focused.
+    pub notify_long_operations: bool,
 }
 
 impl Default for AppSettings {
@@ -228,6 +231,7 @@ impl Default for AppSettings {
             accent: AccentColor::Coral,
             check_updates_on_startup: true,
             programming_workspace: None,
+            notify_long_operations: true,
         }
     }
 }
