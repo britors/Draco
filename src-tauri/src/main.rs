@@ -8,16 +8,17 @@ use draco_app::{
     AssistantMessageView, AssistantReplyView, BackupFormat, BackupOptionsInput, BrowseTableView,
     CompletionDataView, ConnectionInput, ConnectionView, CreateRoleInput, CreateTableInput,
     CronJobInput, CronJobRunView, CronJobsView, DashboardView, DeleteTableRowInput, ErdView,
-    ExtensionsView, FileAuthorizationPurpose, FunctionDefinitionView, GithubBranch,
-    GithubConnection, GithubPullRequest, GithubRepository, GithubSettings, Health, HistoryView,
-    InsertTableRowInput, PreferencesView, QueryResult, QueryStatsView, RestoreOptionsInput,
-    RoleView, SchemaObjectView, SchemaView, SearchResultView, SnippetInput, SnippetView,
-    TableDetailView, TableMaintenanceOperation, TableView, ToolResultView, TriggerInput,
-    UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
+    ExtensionsView, FileAuthorizationPurpose, FinishedOperation, FunctionDefinitionView,
+    GithubBranch, GithubConnection, GithubPullRequest, GithubRepository, GithubSettings, Health,
+    HistoryView, InsertTableRowInput, OperationOutcome, PreferencesView, QueryResult,
+    QueryStatsView, RestoreOptionsInput, RoleView, SchemaObjectView, SchemaView, SearchResultView,
+    SnippetInput, SnippetView, TableDetailView, TableMaintenanceOperation, TableView,
+    ToolResultView, TriggerInput, UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
 };
 use draco_core::assistant::{Provider, Settings};
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{Manager, State};
+use tauri_plugin_notification::NotificationExt;
 
 /// IPC error envelope. `code` is a stable category. `key`, when present, is a stable interface
 /// message key (see `frontend/dist/locales`) that the frontend translates; `message` stays as the
@@ -969,6 +970,40 @@ async fn cancel_operation(
         .map_err(Into::into)
 }
 
+/// Called by the interface when a query, script, plan, backup or restore ends. Only the kind,
+/// outcome and duration cross the bridge; the text comes from a fixed catalog in `draco-app`.
+/// Returns whether a notification was shown.
+#[tauri::command]
+fn operation_finished(
+    app: tauri::AppHandle,
+    state: State<'_, Application>,
+    operation: FinishedOperation,
+    outcome: OperationOutcome,
+    duration_ms: u64,
+    locale: String,
+) -> Result<bool, CommandError> {
+    let focused = app
+        .get_webview_window("main")
+        .and_then(|window| window.is_focused().ok())
+        .unwrap_or(false);
+    let Some(notification) = state.operation_notification(
+        operation,
+        outcome,
+        std::time::Duration::from_millis(duration_ms),
+        focused,
+        &locale,
+    ) else {
+        return Ok(false);
+    };
+    Ok(app
+        .notification()
+        .builder()
+        .title(notification.title)
+        .body(notification.body)
+        .show()
+        .is_ok())
+}
+
 #[tauri::command]
 async fn github_status(state: State<'_, Application>) -> Result<GithubConnection, CommandError> {
     state.github_status().await.map_err(Into::into)
@@ -1278,9 +1313,11 @@ async fn assistant_send(
 
 fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .manage(Application::new())
         .invoke_handler(tauri::generate_handler![
             health,
+            operation_finished,
             preferences,
             save_preferences,
             check_for_updates,
@@ -1390,7 +1427,6 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tauri::Manager;
 
     #[test]
     fn tauri_builder_registers_the_application_and_health_command() {

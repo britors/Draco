@@ -26,6 +26,14 @@ webview. A execução de
 backup usa somente os binários fixos `pg_dump`, `pg_restore` e `psql`, iniciados pelo backend sem
 shell intermediário.
 
+O plugin oficial `tauri-plugin-notification` é registrado só para uso pelo Rust: a capability não
+concede nenhuma permissão `notification:*`, então a webview não envia notificações nem texto
+arbitrário a elas. O comando `operation_finished` aceita apenas um tipo de operação
+(`query`/`script`/`explain`/`backup`/`restore`), um resultado (`succeeded`/`failed`/`cancelled`), a
+duração e o idioma; o backend descarta operações com menos de 10 s, com a janela `main` em foco ou
+com a preferência desligada, e monta o texto a partir de um catálogo fixo em
+`draco-app::notifications`. SQL, resultados, nomes de conexão e caminhos não chegam à notificação.
+
 A CSP permite apenas assets locais e o canal IPC interno:
 
 | Diretiva | Política | Motivo |

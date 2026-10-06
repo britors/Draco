@@ -70,7 +70,7 @@ test('shell contains every registered application view', () => {
 });
 
 test('frontend invokes only the typed local application bridge', () => {
-  for (const command of ['health', 'preferences', 'save_preferences', 'check_for_updates', 'list_connections', 'list_schema_objects', 'next_sequence_value', 'set_sequence_value', 'create_schema', 'create_table', 'preview_alter_table', 'alter_table', 'create_sequence', 'save_view_definition', 'save_sequence_definition', 'index_definition', 'save_index_definition', 'create_trigger', 'function_definitions', 'validate_function_definition', 'save_function_definition', 'save_trigger_definition', 'completion_data', 'global_search', 'execute_query', 'execute_explain', 'rename_snippet', 'dashboard', 'browse_table_data', 'update_table_cell', 'insert_table_row', 'delete_table_row', 'cancel_activity', 'list_cron_jobs', 'create_cron_job', 'update_cron_job', 'cron_job_runs', 'set_cron_job_active', 'delete_cron_job', 'list_extensions', 'install_extension', 'drop_extension', 'query_stats', 'reset_query_stats', 'run_table_maintenance', 'list_roles', 'create_role', 'update_role', 'delete_role', 'choose_backup_output', 'choose_restore_input', 'run_backup', 'assistant_settings', 'save_assistant_settings', 'assistant_models', 'save_assistant_key', 'clear_assistant_key', 'assistant_send']) {
+  for (const command of ['health', 'preferences', 'save_preferences', 'check_for_updates', 'list_connections', 'list_schema_objects', 'next_sequence_value', 'set_sequence_value', 'create_schema', 'create_table', 'preview_alter_table', 'alter_table', 'create_sequence', 'save_view_definition', 'save_sequence_definition', 'index_definition', 'save_index_definition', 'create_trigger', 'function_definitions', 'validate_function_definition', 'save_function_definition', 'save_trigger_definition', 'completion_data', 'global_search', 'execute_query', 'execute_explain', 'rename_snippet', 'dashboard', 'browse_table_data', 'update_table_cell', 'insert_table_row', 'delete_table_row', 'cancel_activity', 'list_cron_jobs', 'create_cron_job', 'update_cron_job', 'cron_job_runs', 'set_cron_job_active', 'delete_cron_job', 'list_extensions', 'install_extension', 'drop_extension', 'query_stats', 'reset_query_stats', 'run_table_maintenance', 'list_roles', 'create_role', 'update_role', 'delete_role', 'choose_backup_output', 'choose_restore_input', 'run_backup', 'assistant_settings', 'save_assistant_settings', 'assistant_models', 'save_assistant_key', 'clear_assistant_key', 'assistant_send', 'operation_finished']) {
     assert.match(app, new RegExp(`['"]${command}['"]`));
   }
   assert.doesNotMatch(app, /localStorage|sessionStorage|fetch\(|XMLHttpRequest|dangerouslySetInnerHTML/);
@@ -472,4 +472,13 @@ test('dark visual system is local and has explicit loading/error/empty surfaces'
   assert.match(style, /\.ddl-code/);
   assert.match(app, /run-backup', 'run-restore'/);
   for (const helper of ['showAlert', 'showConfirm', 'showPrompt']) assert.match(app, new RegExp(`function ${helper}`));
+});
+
+test('long-operation notifications send only kind, outcome and duration', () => {
+  assert.match(app, /invoke\('operation_finished', \{ operation, outcome, durationMs, locale: t\.locale \}\)/);
+  for (const call of app.matchAll(/reportOperationFinished\(([^;]+)\);/g)) {
+    assert.doesNotMatch(call[1], /sql|result\.rows|options|path|label/, call[0]);
+  }
+  assert.match(index, /id="notify-long-operations"[^>]+type="checkbox"/);
+  assert.match(app, /savePreferences\(\{ notify_long_operations: event\.target\.checked \}\)/);
 });

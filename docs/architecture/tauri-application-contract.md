@@ -127,8 +127,9 @@ O shell inicial em `src-tauri` expõe:
 | Comando | Finalidade |
 |---|---|
 | `health` | smoke check do backend Rust |
-| `preferences` / `save_preferences` | ler e persistir tema, cor de destaque e checagem automática de atualização |
+| `preferences` / `save_preferences` | ler e persistir tema, cor de destaque, checagem automática de atualização e `notify_long_operations` |
 | `check_for_updates` | consultar a última release pública no GitHub e comparar com a versão instalada |
+| `operation_finished` | receber só tipo, resultado e duração de uma operação longa; com 10 s ou mais, a janela fora de foco e `notify_long_operations` ligado, mostrar uma notificação do sistema com texto do catálogo fixo do backend |
 | `github_status` / `connect_github` / `disconnect_github` | configurar repositório e manter o token exclusivamente no Secret Service |
 | `github_branches` / `github_file` | listar branches e ler a definição SQL versionada em uma branch |
 | `github_commit_file` | criar ou atualizar o arquivo da definição na branch selecionada |
