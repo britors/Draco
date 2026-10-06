@@ -27,6 +27,14 @@ pub use draco_core::store::{AccentColor, AppTheme, GithubSettings};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, watch, Mutex};
 
+mod connection_import;
+
+pub use connection_import::{
+    ConnectionImportCandidateView, ConnectionImportPreviewView, ConnectionImportResultView,
+    ConnectionImportSource, ConnectionImportSourceView, ConnectionImportStatus,
+    ParsedConnectionUrlView,
+};
+
 pub type SharedApplication = Arc<Application>;
 
 #[derive(Debug, thiserror::Error)]
@@ -698,6 +706,7 @@ pub struct Application {
     manager: Mutex<ConnectionManager>,
     operations: Mutex<HashMap<String, watch::Sender<bool>>>,
     authorized_files: Mutex<HashMap<String, (FileAuthorizationPurpose, Instant)>>,
+    pending_import: Mutex<Option<connection_import::PendingImport>>,
 }
 
 impl Application {
@@ -708,6 +717,7 @@ impl Application {
             manager: Mutex::new(manager),
             operations: Mutex::new(HashMap::new()),
             authorized_files: Mutex::new(HashMap::new()),
+            pending_import: Mutex::new(None),
         }
     }
 

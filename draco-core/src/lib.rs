@@ -4,6 +4,7 @@
 
 pub mod assistant;
 pub mod connection;
+pub mod connection_import;
 pub mod error;
 pub mod github;
 mod legacy_secrets;

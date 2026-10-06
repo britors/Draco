@@ -51,6 +51,14 @@ destino que já seja symlink. O backend não expõe leitura/escrita genérica de
 de PostgreSQL são passados diretamente a `std::process::Command`, nunca por shell; a política de
 processos é uma allowlist interna dos três binários oficiais.
 
+A importação de conexões lê apenas os arquivos do libpq (`PGSERVICEFILE`/`~/.pg_service.conf` e
+`PGPASSFILE`/`~/.pgpass`) ou um arquivo escolhido no seletor nativo, sempre no backend, até 1 MiB e
+como texto UTF-8; o caminho escolhido não volta para a webview. As senhas lidas ficam na memória do
+`Application` entre a pré-visualização e a importação (no máximo 10 minutos ou até o diálogo
+fechar), nunca são serializadas para a UI e só são gravadas no Secret Service depois que a conexão
+passa no teste obrigatório. Uma URL `postgres://` colada é analisada no backend; o campo da URL é
+do tipo senha e é limpo assim que a análise termina, e erros de análise nunca ecoam a URL.
+
 O cancelamento usa um canal interno associado a um ID de operação e não transforma o ID ou os
 argumentos em comando executável.
 

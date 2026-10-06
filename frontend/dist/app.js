@@ -785,6 +785,7 @@ function connectionRequest() {
 }
 
 function clearCredentials() {
+  byId('connection-url').value = '';
   byId('password').value = '';
   byId('ssh-password').value = '';
   byId('jump-password').value = '';
@@ -954,6 +955,148 @@ async function testCurrentConnection() {
     return false;
   } finally {
     byId('test-connection').disabled = false;
+  }
+}
+
+// The URL may carry a password: it only fills the transient password field, the URL field is
+// cleared right away and saving still goes through the mandatory test.
+async function fillFromConnectionUrl() {
+  const field = byId('connection-url');
+  const url = field.value.trim();
+  if (!url) {
+    setStatus(t('connectionUrl.empty'), 'error');
+    return;
+  }
+  try {
+    const parsed = await invoke('parse_connection_url', { url });
+    field.value = '';
+    byId('label').value = byId('label').value.trim() || parsed.label;
+    byId('host').value = parsed.host;
+    byId('port').value = parsed.port;
+    byId('database').value = parsed.database;
+    byId('user').value = parsed.user;
+    byId('ssl').checked = parsed.ssl;
+    if (parsed.password) byId('password').value = parsed.password;
+    state.lastTested = null;
+    const notes = [t('connectionUrl.filled')];
+    if (parsed.ssl_verification_downgraded) notes.push(t('connectionUrl.sslNotVerified'));
+    if (parsed.ignored_parameters.length) notes.push(t('connectionUrl.ignored', { names: parsed.ignored_parameters.join(', ') }));
+    setStatus(notes.join(' '), 'success');
+    (parsed.user ? byId('label') : byId('user')).focus();
+  } catch (error) {
+    setStatus(errorMessage(error, t), 'error');
+  }
+}
+
+let connectionImportPreview = null;
+let connectionImportReturnFocus = null;
+
+async function openConnectionImport() {
+  connectionImportReturnFocus = document.activeElement;
+  byId('connection-import-dialog').hidden = false;
+  byId('connection-import-reload').focus();
+  await loadConnectionImport('preview_connection_imports');
+}
+
+async function closeConnectionImport() {
+  byId('connection-import-dialog').hidden = true;
+  connectionImportPreview = null;
+  byId('connection-import-list').replaceChildren();
+  try { await invoke('discard_connection_import'); } catch { /* nothing kept to discard */ }
+  connectionImportReturnFocus?.focus?.();
+}
+
+async function loadConnectionImport(command, args = {}) {
+  const status = byId('connection-import-status');
+  status.textContent = t('connectionImport.reading');
+  status.className = 'form-status';
+  try {
+    const preview = await invoke(command, args);
+    if (!preview) {
+      status.textContent = '';
+      return;
+    }
+    connectionImportPreview = preview;
+    renderConnectionImport();
+    status.textContent = preview.sources.map((source) => source.found
+      ? t(`connectionImport.source.${source.source}.found`, { count: source.count })
+      : t(`connectionImport.source.${source.source}.missing`)).join(' · ');
+  } catch (error) {
+    status.textContent = errorMessage(error, t);
+    status.className = 'form-status error';
+  }
+}
+
+function renderConnectionImport(results = new Map()) {
+  const list = byId('connection-import-list');
+  list.replaceChildren();
+  const candidates = connectionImportPreview?.candidates ?? [];
+  if (!candidates.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = t('connectionImport.empty');
+    list.append(empty);
+  }
+  for (const candidate of candidates) {
+    const row = document.createElement('label');
+    row.className = 'connection-import-row';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.value = candidate.key;
+    const result = results.get(candidate.key);
+    check.checked = !candidate.already_saved && result?.status !== 'saved';
+    check.disabled = result?.status === 'saved';
+    const text = document.createElement('span');
+    text.className = 'connection-import-text';
+    const title = document.createElement('strong');
+    title.textContent = candidate.label;
+    const detail = document.createElement('small');
+    detail.textContent = `${candidate.user}@${candidate.host}:${candidate.port}/${candidate.database}`;
+    text.append(title, detail);
+    const badges = document.createElement('span');
+    badges.className = 'connection-import-badges';
+    const tags = [t(`connectionImport.from.${candidate.source}`)];
+    if (candidate.ssl) tags.push(t(candidate.ssl_verification_downgraded ? 'connectionImport.tlsUnverified' : 'connectionImport.tls'));
+    tags.push(t(candidate.has_password ? 'connectionImport.hasPassword' : 'connectionImport.noPassword'));
+    if (candidate.already_saved) tags.push(t('connectionImport.alreadySaved'));
+    if (result) tags.push(t(`connectionImport.status.${result.status}`));
+    for (const tag of tags) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = tag;
+      badges.append(badge);
+    }
+    if (result) badges.lastChild.classList.add(result.status === 'saved' ? 'success' : 'error');
+    row.append(check, text, badges);
+    list.append(row);
+  }
+  byId('connection-import-confirm').disabled = !candidates.length;
+}
+
+async function runConnectionImport() {
+  const keys = [...byId('connection-import-list').querySelectorAll('input[type="checkbox"]:checked:not(:disabled)')].map((input) => input.value);
+  const status = byId('connection-import-status');
+  if (!keys.length) {
+    status.textContent = t('connectionImport.nothingSelected');
+    status.className = 'form-status error';
+    return;
+  }
+  const confirm = byId('connection-import-confirm');
+  confirm.disabled = true;
+  status.textContent = t('connectionImport.testing', { count: keys.length });
+  status.className = 'form-status';
+  try {
+    const results = await invoke('import_connections', { keys });
+    const saved = results.filter((result) => result.status === 'saved').length;
+    renderConnectionImport(new Map(results.map((result) => [result.key, result])));
+    status.textContent = t('connectionImport.done', { count: saved, total: results.length });
+    status.className = `form-status ${saved === results.length ? 'success' : 'error'}`;
+    if (saved) await refreshConnections();
+  } catch (error) {
+    status.textContent = errorMessage(error, t);
+    status.className = 'form-status error';
+  } finally {
+    confirm.disabled = false;
   }
 }
 
@@ -4195,6 +4338,22 @@ document.addEventListener('keydown', (event) => {
 byId('cancel-connection').addEventListener('click', hideForm);
 byId('connection-form').addEventListener('submit', saveCurrentConnection);
 byId('test-connection').addEventListener('click', testCurrentConnection);
+byId('fill-from-url').addEventListener('click', fillFromConnectionUrl);
+byId('connection-url').addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  void fillFromConnectionUrl();
+});
+byId('import-connections').addEventListener('click', openConnectionImport);
+byId('connection-import-reload').addEventListener('click', () => loadConnectionImport('preview_connection_imports'));
+byId('connection-import-choose-service').addEventListener('click', () => loadConnectionImport('choose_connection_import_file', { source: 'service' }));
+byId('connection-import-choose-pgpass').addEventListener('click', () => loadConnectionImport('choose_connection_import_file', { source: 'pgpass' }));
+byId('connection-import-confirm').addEventListener('click', runConnectionImport);
+byId('connection-import-cancel').addEventListener('click', closeConnectionImport);
+for (const element of document.querySelectorAll('[data-close-connection-import]')) element.addEventListener('click', closeConnectionImport);
+byId('connection-import-dialog').addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') void closeConnectionImport();
+});
 byId('format-sql').addEventListener('click', () => {
   const editor = byId('sql-editor');
   const start = editor.selectionStart;
