@@ -8,6 +8,7 @@ import { AI_QUERY_REVIEW_FOCUSES, buildAiQueryReviewMessage } from './ai-query-r
 import { assembleFunctionDdl, formatFunctionParameters, parseFunctionParameters, sliceFunctionDdl } from './function-ddl.js';
 import { applyTranslations, createTranslator, errorMessage, resolveLocale } from './i18n.js';
 import { sqlMayWrite } from './sql-write-detect.js';
+import { formatLagSeconds, formatWalBytes, replicationMode, slotNeedsAttention } from './replication-view.js';
 
 const tauriInvoke = window.__TAURI__?.core?.invoke;
 // Commands that change the database, all keyed by the connection `id`. The backend refuses them
@@ -3097,6 +3098,156 @@ function renderQueryStatsPanel(id, stats, sortBy = 'total') {
   return panel;
 }
 
+const REPLICATION_REFRESH_MS = 5000;
+let replicationRefreshTimer = null;
+let replicationAutoRefresh = true;
+
+function stopReplicationRefresh() {
+  if (replicationRefreshTimer) window.clearInterval(replicationRefreshTimer);
+  replicationRefreshTimer = null;
+}
+
+// Refreshes only while the Replication tab of this connection is on screen, like a monitor; a
+// failed refresh keeps the last panel and says so instead of blanking it.
+function scheduleReplicationRefresh(id) {
+  stopReplicationRefresh();
+  if (!replicationAutoRefresh) return;
+  replicationRefreshTimer = window.setInterval(async () => {
+    if (byId('view-admin').hidden || currentAdminPanel !== 'replication' || byId('admin-connection').value !== id) return;
+    const current = byId('admin-content').querySelector('[data-admin-panel="replication"]');
+    if (!current) { stopReplicationRefresh(); return; }
+    try {
+      const status = await invoke('replication_status', { id });
+      if (byId('admin-connection').value !== id || !current.isConnected) return;
+      const replacement = renderReplicationPanel(id, status);
+      replacement.dataset.adminPanel = 'replication';
+      replacement.hidden = current.hidden;
+      current.replaceWith(replacement);
+    } catch {
+      const stamp = current.querySelector('.replication-updated');
+      if (stamp) { stamp.textContent = t('replication.refreshFailed'); stamp.classList.add('error'); }
+    }
+  }, REPLICATION_REFRESH_MS);
+}
+
+function replicationMetric(label, value, warn = false) {
+  const item = document.createElement('div'); item.className = `replication-metric${warn ? ' warn' : ''}`;
+  const key = document.createElement('span'); key.textContent = label;
+  const text = document.createElement('strong'); text.textContent = value;
+  item.append(key, text);
+  return item;
+}
+
+function replicationBadge(text, tone = '') {
+  const badge = document.createElement('span'); badge.className = `badge${tone ? ` ${tone}` : ''}`; badge.textContent = text;
+  return badge;
+}
+
+function renderReplicationPanel(id, status) {
+  const locale = t.locale;
+  const bytes = (value) => formatWalBytes(value, locale);
+  const seconds = (value) => formatLagSeconds(value, locale);
+  const mode = replicationMode(status);
+  const panel = document.createElement('section'); panel.className = 'data-panel replication-panel';
+  const heading = document.createElement('div'); heading.className = 'query-stats-heading';
+  const title = document.createElement('h3'); title.textContent = t('replication.title');
+  title.append(' ', replicationBadge(t(status.in_recovery ? 'replication.roleStandby' : 'replication.rolePrimary')));
+  const controls = document.createElement('div'); controls.className = 'query-stats-controls';
+  const updated = document.createElement('small'); updated.className = 'replication-updated';
+  updated.textContent = t('replication.updatedAt', { time: new Date().toLocaleTimeString(locale) });
+  const auto = document.createElement('label'); auto.className = 'check-row replication-auto';
+  const autoInput = document.createElement('input'); autoInput.type = 'checkbox'; autoInput.checked = replicationAutoRefresh;
+  const autoText = document.createElement('span'); autoText.textContent = t('replication.autoRefresh');
+  auto.append(autoInput, autoText);
+  autoInput.addEventListener('change', () => { replicationAutoRefresh = autoInput.checked; if (replicationAutoRefresh) scheduleReplicationRefresh(id); else stopReplicationRefresh(); });
+  const refresh = document.createElement('button'); refresh.className = 'button small'; refresh.type = 'button'; refresh.textContent = t('replication.refresh');
+  refresh.addEventListener('click', async () => {
+    refresh.disabled = true;
+    try {
+      const next = renderReplicationPanel(id, await invoke('replication_status', { id }));
+      next.dataset.adminPanel = 'replication'; next.hidden = panel.hidden; panel.replaceWith(next);
+      next.querySelector('button')?.focus();
+    } catch (error) {
+      updated.textContent = errorMessage(error, t, 'replication.refreshFailed'); updated.classList.add('error'); refresh.disabled = false;
+    }
+  });
+  controls.append(updated, auto, refresh); heading.append(title, controls); panel.append(heading);
+
+  if (!status.has_monitor_privilege) {
+    const note = document.createElement('p'); note.className = 'replication-note'; note.textContent = t('replication.needsMonitor');
+    panel.append(note);
+  }
+
+  if (mode === 'none') {
+    panel.append(errorState(t('replication.noneTitle'), t('replication.noneMessage')));
+    return panel;
+  }
+
+  if (mode === 'standby') {
+    const standby = status.standby || {};
+    const section = document.createElement('div'); section.className = 'replication-section';
+    const subtitle = document.createElement('h4'); subtitle.textContent = t('replication.standbyTitle');
+    const grid = document.createElement('div'); grid.className = 'replication-metrics';
+    const sender = standby.sender_host ? `${standby.sender_host}${standby.sender_port ? `:${standby.sender_port}` : ''}` : '—';
+    grid.append(
+      replicationMetric(t('replication.receiverStatus'), standby.receiver_status || t('replication.receiverStopped'), !standby.receiver_status),
+      replicationMetric(t('replication.upstream'), sender),
+      replicationMetric(t('replication.receiveLsn'), standby.receive_lsn || '—'),
+      replicationMetric(t('replication.replayLsn'), standby.replay_lsn || '—'),
+      replicationMetric(t('replication.replayBacklog'), bytes(standby.replay_backlog_bytes), Number(standby.replay_backlog_bytes) > 16 * 1024 * 1024),
+      replicationMetric(t('replication.lastReplay'), standby.last_replay_at || '—'),
+      replicationMetric(t('replication.sinceLastReplay'), seconds(standby.seconds_since_last_replay)),
+    );
+    const hint = document.createElement('small'); hint.className = 'replication-hint'; hint.textContent = t('replication.sinceLastReplayHint');
+    section.append(subtitle, grid, hint); panel.append(section);
+  } else {
+    const section = document.createElement('div'); section.className = 'replication-section';
+    const subtitle = document.createElement('h4'); subtitle.textContent = t('replication.replicasTitle', { count: status.replicas.length });
+    section.append(subtitle);
+    if (!status.replicas.length) section.append(errorState(t('replication.noReplicas'), t('replication.noReplicasMessage')));
+    for (const replica of status.replicas) {
+      const row = document.createElement('article'); row.className = 'replication-item';
+      const header = document.createElement('div'); header.className = 'replication-item-header';
+      const name = document.createElement('strong'); name.textContent = replica.application_name || `PID ${replica.pid}`;
+      const where = document.createElement('small'); where.textContent = [replica.client_addr, replica.usename, `PID ${replica.pid}`].filter(Boolean).join(' · ');
+      const badges = document.createElement('span'); badges.className = 'replication-badges';
+      badges.append(replicationBadge(replica.state || '—', replica.state === 'streaming' ? 'success' : 'warn'));
+      if (replica.sync_state) badges.append(replicationBadge(replica.sync_state));
+      header.append(name, where, badges);
+      const grid = document.createElement('div'); grid.className = 'replication-metrics';
+      grid.append(
+        replicationMetric(t('replication.writeLag'), `${bytes(replica.write_lag_bytes)} · ${seconds(replica.write_lag_seconds)}`),
+        replicationMetric(t('replication.flushLag'), `${bytes(replica.flush_lag_bytes)} · ${seconds(replica.flush_lag_seconds)}`),
+        replicationMetric(t('replication.replayLag'), `${bytes(replica.replay_lag_bytes)} · ${seconds(replica.replay_lag_seconds)}`, Number(replica.replay_lag_bytes) > 16 * 1024 * 1024),
+        replicationMetric(t('replication.sentLsn'), replica.sent_lsn || '—'),
+        replicationMetric(t('replication.replayLsn'), replica.replay_lsn || '—'),
+      );
+      row.append(header, grid); section.append(row);
+    }
+    panel.append(section);
+  }
+
+  const slots = document.createElement('div'); slots.className = 'replication-section';
+  const slotsTitle = document.createElement('h4'); slotsTitle.textContent = t('replication.slotsTitle', { count: status.slots.length });
+  slots.append(slotsTitle);
+  if (!status.slots.length) slots.append(errorState(t('replication.noSlots'), t('replication.noSlotsMessage')));
+  for (const slot of status.slots) {
+    const attention = slotNeedsAttention(slot);
+    const row = document.createElement('div'); row.className = `activity-item replication-slot${attention ? ' warn' : ''}`;
+    const detail = document.createElement('div');
+    const name = document.createElement('strong'); name.textContent = slot.slot_name;
+    const meta = document.createElement('small');
+    meta.textContent = [slot.slot_type, slot.plugin, slot.database, t('replication.retained', { size: bytes(slot.retained_wal_bytes) }), slot.wal_status].filter(Boolean).join(' · ');
+    detail.append(name, meta);
+    const badges = document.createElement('span'); badges.className = 'replication-badges';
+    badges.append(replicationBadge(slot.active ? t('replication.slotActive') : t('replication.slotInactive'), slot.active ? 'success' : 'warn'));
+    if (attention) badges.append(replicationBadge(slot.wal_status === 'lost' ? t('replication.slotLost') : t('replication.slotHoldingWal'), 'error'));
+    row.append(detail, badges); slots.append(row);
+  }
+  panel.append(slots);
+  return panel;
+}
+
 let currentAdminPanel = 'roles';
 
 function showAdminPanel(section) {
@@ -3131,11 +3282,12 @@ function renderAdminPanels(sections) {
 }
 
 async function loadAdmin(id) {
+  stopReplicationRefresh();
   const content = byId('admin-content'); content.replaceChildren();
   const tabs = byId('admin-tabs'); tabs.hidden = true; tabs.replaceChildren();
   if (!id) { content.append(errorState(t('admin.chooseAConnectedConnection'), t('admin.activityAndLocksAreRead'))); return; }
   content.append(errorState(t('admin.loadingAdministration'), ''));
-  const [adminResult, rolesResult, cronResult, extensionsResult, queryStatsResult] = await Promise.allSettled([invoke('admin', { id }), invoke('list_roles', { id }), invoke('list_cron_jobs', { id }), invoke('list_extensions', { id }), invoke('query_stats', { id })]);
+  const [adminResult, rolesResult, cronResult, extensionsResult, queryStatsResult, replicationResult] = await Promise.allSettled([invoke('admin', { id }), invoke('list_roles', { id }), invoke('list_cron_jobs', { id }), invoke('list_extensions', { id }), invoke('query_stats', { id }), invoke('replication_status', { id })]);
   if (byId('admin-connection').value !== id) return;
   const sections = [
     ['roles', t('admin.roles'), rolesResult.status === 'fulfilled' ? renderRolesPanel(id, rolesResult.value) : unavailablePanel(t('admin.rolesUnavailable'), t('admin.theConnectedRoleMayNot'))],
@@ -3151,7 +3303,9 @@ async function loadAdmin(id) {
     sections.push(['activity', t('admin.activity'), unavailablePanel(t('admin.activityUnavailable'), t('admin.checkMonitoringPermissionsAndReconnect'))]);
     sections.push(['locks', t('admin.locks'), unavailablePanel(t('admin.locksUnavailable'), t('admin.checkMonitoringPermissionsAndReconnect'))]);
   }
+  sections.push(['replication', t('admin.replication'), replicationResult.status === 'fulfilled' ? renderReplicationPanel(id, replicationResult.value) : unavailablePanel(t('replication.unavailable'), t('replication.unavailableMessage'))]);
   renderAdminPanels(sections);
+  if (replicationResult.status === 'fulfilled') scheduleReplicationRefresh(id); else stopReplicationRefresh();
 }
 
 let explorerReturnState = null;

@@ -21,6 +21,7 @@ mod global_search;
 mod introspection;
 mod object_editor;
 mod query_stats;
+mod replication;
 mod roles;
 mod sequences;
 
@@ -39,5 +40,6 @@ pub use global_search::*;
 pub use introspection::*;
 pub use object_editor::*;
 pub use query_stats::*;
+pub use replication::*;
 pub use roles::*;
 pub use sequences::*;

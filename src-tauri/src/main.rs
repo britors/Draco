@@ -10,10 +10,10 @@ use draco_app::{
     CronJobInput, CronJobRunView, CronJobsView, DashboardView, DeleteTableRowInput, ErdView,
     ExtensionsView, FileAuthorizationPurpose, FunctionDefinitionView, GithubBranch,
     GithubConnection, GithubPullRequest, GithubRepository, GithubSettings, Health, HistoryView,
-    InsertTableRowInput, PreferencesView, QueryResult, QueryStatsView, RestoreOptionsInput,
-    RoleView, SchemaObjectView, SchemaView, SearchResultView, SnippetInput, SnippetView,
-    TableDetailView, TableMaintenanceOperation, TableView, ToolResultView, TriggerInput,
-    UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
+    InsertTableRowInput, PreferencesView, QueryResult, QueryStatsView, ReplicationStatus,
+    RestoreOptionsInput, RoleView, SchemaObjectView, SchemaView, SearchResultView, SnippetInput,
+    SnippetView, TableDetailView, TableMaintenanceOperation, TableView, ToolResultView,
+    TriggerInput, UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
 };
 use draco_core::assistant::{Provider, Settings};
 use serde::{Deserialize, Serialize};
@@ -703,6 +703,14 @@ async fn admin(state: State<'_, Application>, id: String) -> Result<AdminView, C
 }
 
 #[tauri::command]
+async fn replication_status(
+    state: State<'_, Application>,
+    id: String,
+) -> Result<ReplicationStatus, CommandError> {
+    state.replication_status(&id).await.map_err(Into::into)
+}
+
+#[tauri::command]
 async fn cancel_activity(
     state: State<'_, Application>,
     id: String,
@@ -1333,6 +1341,7 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             delete_trigger,
             erd,
             admin,
+            replication_status,
             cancel_activity,
             list_cron_jobs,
             create_cron_job,
