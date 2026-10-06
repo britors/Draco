@@ -515,3 +515,36 @@ async fn connects_and_introspects_the_real_database() {
         }
     }
 }
+
+#[tokio::test]
+#[ignore]
+async fn replication_status_reads_a_server_without_replication() {
+    let conn = test_connection();
+    let password = secrets::get_password(&conn.id)
+        .await
+        .expect("password readable from Secret Service");
+    let driver = PostgresDriver::connect(
+        &conn,
+        &password,
+        30_000,
+        "draco-live-replication",
+        None,
+        None,
+    )
+    .await
+    .expect("connect");
+    let status = queries::get_replication_status(&driver)
+        .await
+        .expect("replication status");
+    assert!(status.server_version_num >= 100_000);
+    if status.in_recovery {
+        assert!(status.standby.is_some());
+        assert!(status.replicas.is_empty());
+    } else {
+        assert!(status.standby.is_none());
+    }
+    for slot in &status.slots {
+        assert!(!slot.slot_name.is_empty());
+    }
+    driver.disconnect().await;
+}

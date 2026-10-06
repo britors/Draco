@@ -23,7 +23,7 @@ test('shell contains every registered application view', () => {
   assert.match(app, /function showAdminWorkspaceSection/);
   assert.match(app, /function showAdminPanel/);
   assert.match(app, /function renderAdminPanels/);
-  for (const section of ['roles', 'jobs', 'extensions', 'query-stats', 'activity', 'locks']) assert.match(app, new RegExp(`\\['${section}',`));
+  for (const section of ['roles', 'jobs', 'extensions', 'query-stats', 'activity', 'locks', 'replication']) assert.match(app, new RegExp(`\\['${section}',`));
   for (const section of ['editor', 'history', 'snippets']) {
     assert.match(index, new RegExp(`data-query-workspace="${section}"`));
     assert.match(index, new RegExp(`data-query-workspace-panel="${section}"`));
@@ -70,7 +70,7 @@ test('shell contains every registered application view', () => {
 });
 
 test('frontend invokes only the typed local application bridge', () => {
-  for (const command of ['health', 'preferences', 'save_preferences', 'check_for_updates', 'list_connections', 'list_schema_objects', 'next_sequence_value', 'set_sequence_value', 'create_schema', 'create_table', 'preview_alter_table', 'alter_table', 'create_sequence', 'save_view_definition', 'save_sequence_definition', 'index_definition', 'save_index_definition', 'create_trigger', 'function_definitions', 'validate_function_definition', 'save_function_definition', 'save_trigger_definition', 'completion_data', 'global_search', 'execute_query', 'execute_explain', 'rename_snippet', 'dashboard', 'browse_table_data', 'update_table_cell', 'insert_table_row', 'delete_table_row', 'cancel_activity', 'list_cron_jobs', 'create_cron_job', 'update_cron_job', 'cron_job_runs', 'set_cron_job_active', 'delete_cron_job', 'list_extensions', 'install_extension', 'drop_extension', 'query_stats', 'reset_query_stats', 'run_table_maintenance', 'list_roles', 'create_role', 'update_role', 'delete_role', 'choose_backup_output', 'choose_restore_input', 'run_backup', 'assistant_settings', 'save_assistant_settings', 'assistant_models', 'save_assistant_key', 'clear_assistant_key', 'assistant_send', 'parse_connection_url', 'preview_connection_imports', 'choose_connection_import_file', 'import_connections', 'discard_connection_import']) {
+  for (const command of ['health', 'preferences', 'save_preferences', 'check_for_updates', 'list_connections', 'list_schema_objects', 'next_sequence_value', 'set_sequence_value', 'create_schema', 'create_table', 'preview_alter_table', 'alter_table', 'create_sequence', 'save_view_definition', 'save_sequence_definition', 'index_definition', 'save_index_definition', 'create_trigger', 'function_definitions', 'validate_function_definition', 'save_function_definition', 'save_trigger_definition', 'completion_data', 'global_search', 'execute_query', 'execute_explain', 'rename_snippet', 'dashboard', 'browse_table_data', 'update_table_cell', 'insert_table_row', 'delete_table_row', 'cancel_activity', 'list_cron_jobs', 'create_cron_job', 'update_cron_job', 'cron_job_runs', 'set_cron_job_active', 'delete_cron_job', 'list_extensions', 'install_extension', 'drop_extension', 'query_stats', 'reset_query_stats', 'run_table_maintenance', 'list_roles', 'create_role', 'update_role', 'delete_role', 'choose_backup_output', 'choose_restore_input', 'run_backup', 'assistant_settings', 'save_assistant_settings', 'assistant_models', 'save_assistant_key', 'clear_assistant_key', 'assistant_send', 'parse_connection_url', 'preview_connection_imports', 'choose_connection_import_file', 'import_connections', 'discard_connection_import', 'replication_status']) {
     assert.match(app, new RegExp(`['"]${command}['"]`));
   }
   assert.doesNotMatch(app, /localStorage|sessionStorage|fetch\(|XMLHttpRequest|dangerouslySetInnerHTML/);
@@ -486,4 +486,11 @@ test('connection URLs and libpq imports keep passwords out of persistent UI stat
   assert.match(app, /candidate\.has_password/);
   assert.doesNotMatch(app, /candidate\.password/);
   assert.match(app, /invoke\('discard_connection_import'\)/);
+});
+
+test('replication monitor is read-only and refreshes only while visible', () => {
+  assert.match(app, /import \{ formatLagSeconds, formatWalBytes, replicationMode, slotNeedsAttention \} from '\.\/replication-view\.js'/);
+  assert.match(app, /if \(byId\('view-admin'\)\.hidden \|\| currentAdminPanel !== 'replication' \|\| byId\('admin-connection'\)\.value !== id\) return;/);
+  assert.match(app, /async function loadAdmin\(id\) \{\n\s+stopReplicationRefresh\(\);/);
+  assert.doesNotMatch(app, /'replication_status'[^\n]*WRITE_COMMANDS|WRITE_COMMANDS[^\n]*'replication_status'/);
 });
