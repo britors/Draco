@@ -22,6 +22,7 @@ mod introspection;
 mod object_editor;
 mod query_stats;
 mod roles;
+mod schema_snapshot;
 mod sequences;
 
 pub use activity_locks::*;
@@ -40,4 +41,5 @@ pub use introspection::*;
 pub use object_editor::*;
 pub use query_stats::*;
 pub use roles::*;
+pub use schema_snapshot::*;
 pub use sequences::*;

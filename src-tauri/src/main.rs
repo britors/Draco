@@ -11,9 +11,9 @@ use draco_app::{
     ExtensionsView, FileAuthorizationPurpose, FunctionDefinitionView, GithubBranch,
     GithubConnection, GithubPullRequest, GithubRepository, GithubSettings, Health, HistoryView,
     InsertTableRowInput, PreferencesView, QueryResult, QueryStatsView, RestoreOptionsInput,
-    RoleView, SchemaObjectView, SchemaView, SearchResultView, SnippetInput, SnippetView,
-    TableDetailView, TableMaintenanceOperation, TableView, ToolResultView, TriggerInput,
-    UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
+    RoleView, SchemaDiffInput, SchemaDiffView, SchemaObjectView, SchemaView, SearchResultView,
+    SnippetInput, SnippetView, TableDetailView, TableMaintenanceOperation, TableView,
+    ToolResultView, TriggerInput, UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
 };
 use draco_core::assistant::{Provider, Settings};
 use serde::{Deserialize, Serialize};
@@ -689,6 +689,14 @@ async fn delete_trigger(
 }
 
 #[tauri::command]
+async fn schema_diff(
+    state: State<'_, Application>,
+    input: SchemaDiffInput,
+) -> Result<SchemaDiffView, CommandError> {
+    state.schema_diff(input).await.map_err(Into::into)
+}
+
+#[tauri::command]
 async fn erd(
     state: State<'_, Application>,
     id: String,
@@ -1332,6 +1340,7 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             delete_routine,
             delete_trigger,
             erd,
+            schema_diff,
             admin,
             cancel_activity,
             list_cron_jobs,

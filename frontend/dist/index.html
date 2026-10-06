@@ -215,6 +215,7 @@
           <div class="admin-workspace-nav" role="tablist" aria-label="Administration sections" data-i18n-aria-label="admin.administrationSections">
             <button class="admin-workspace-tab active" data-admin-workspace="administration" type="button" role="tab" aria-selected="true" data-i18n="nav.admin">Administration</button>
             <button class="admin-workspace-tab" data-admin-workspace="backup" type="button" role="tab" aria-selected="false" data-i18n="palette.backupRestore">Backup &amp; Restore</button>
+            <button class="admin-workspace-tab" data-admin-workspace="schema-diff" type="button" role="tab" aria-selected="false" data-i18n="schemaDiff.tab">Schema diff</button>
           </div>
           <div class="admin-workspace-panel" data-admin-workspace-panel="administration">
           <section class="panel"><div class="panel-heading"><div><span class="eyebrow" data-i18n="admin.operations">OPERATIONS</span><h2 data-i18n="nav.admin">Administration</h2></div><select id="admin-connection"><option value="" data-i18n="common.selectConnected">Select a connected connection</option></select></div><div id="admin-tabs" class="admin-tabs" role="tablist" aria-label="Administration tools" data-i18n-aria-label="admin.administrationTools" hidden></div><div id="admin-content" class="admin-content"><div class="empty-state"><strong data-i18n="explorer.chooseConnection">Choose a connection</strong><span data-i18n="admin.rolesPgCronActivityLocks">Roles, pg_cron, activity, locks, extensions and query stats.</span></div></div></section>
@@ -230,6 +231,32 @@
             <div class="form-actions"><button class="button primary" id="run-backup" type="button" data-i18n="erd.createBackup">Create backup</button><button class="button" id="run-restore" type="button" data-i18n="window.restore">Restore</button><button class="button danger" id="cancel-operation" type="button" hidden data-i18n="connectionForm.cancel">Cancel</button></div>
             <div id="backup-status" class="form-status" role="status"></div>
             <pre id="backup-log" class="operation-log"></pre>
+          </section>
+          <section class="panel admin-workspace-panel schema-diff-panel" data-admin-workspace-panel="schema-diff" hidden>
+            <div class="panel-heading"><div><span class="eyebrow" data-i18n="schemaDiff.eyebrow">COMPARE</span><h2 data-i18n="schemaDiff.title">Schema diff</h2></div></div>
+            <p class="schema-diff-description" data-i18n="schemaDiff.description">Compares tables (columns, constraints, indexes, triggers), views, functions, procedures and sequences, and writes the SQL that makes the target match the source. Nothing runs here: open the script in the SQL editor to review and execute it.</p>
+            <div class="schema-diff-sides">
+              <fieldset><legend data-i18n="schemaDiff.source">Source (desired state)</legend>
+                <label><span data-i18n="schemaDiff.connection">Connection</span><select id="diff-source-connection"></select></label>
+                <label><span data-i18n="schemaDiff.schema">Schema</span><select id="diff-source-schema"></select></label>
+              </fieldset>
+              <span class="schema-diff-arrow" aria-hidden="true">→</span>
+              <fieldset><legend data-i18n="schemaDiff.target">Target (to change)</legend>
+                <label><span data-i18n="schemaDiff.connection">Connection</span><select id="diff-target-connection"></select></label>
+                <label><span data-i18n="schemaDiff.schema">Schema</span><select id="diff-target-schema"></select></label>
+              </fieldset>
+            </div>
+            <div class="form-actions"><button class="button" id="diff-swap" type="button" data-i18n="schemaDiff.swap">Swap sides</button><button class="button primary" id="run-schema-diff" type="button" data-i18n="schemaDiff.compare">Compare</button></div>
+            <div id="schema-diff-status" class="form-status" role="status"></div>
+            <div id="schema-diff-result" class="schema-diff-result" hidden>
+              <div class="schema-diff-objects"><h3 data-i18n="schemaDiff.objects">Differences</h3><div id="schema-diff-list" class="schema-diff-list" role="listbox" aria-label="Differences" data-i18n-aria-label="schemaDiff.objects"></div></div>
+              <div class="schema-diff-detail">
+                <div class="schema-diff-columns"><strong id="schema-diff-left-title"></strong><strong id="schema-diff-right-title"></strong></div>
+                <div id="schema-diff-compare" class="schema-diff-compare"></div>
+                <div id="schema-diff-object-sql-wrap"><h4 data-i18n="schemaDiff.objectStatements">Statements for this object</h4><pre id="schema-diff-object-sql" class="operation-log"></pre></div>
+              </div>
+              <div class="schema-diff-script"><div class="query-stats-heading"><h3 data-i18n="schemaDiff.script">Migration script</h3><div class="form-actions"><button class="button small" id="copy-schema-diff" type="button" data-i18n="schemaDiff.copy">Copy</button><button class="button small primary" id="open-schema-diff" type="button" data-i18n="schemaDiff.openInEditor">Open in SQL editor</button></div></div><pre id="schema-diff-script" class="operation-log"></pre></div>
+            </div>
           </section>
         </section>
         <section id="view-table-detail" class="view" hidden>

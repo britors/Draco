@@ -27,6 +27,10 @@ pub use draco_core::store::{AccentColor, AppTheme, GithubSettings};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, watch, Mutex};
 
+mod schema_diff;
+
+pub use schema_diff::{DiffObjectKind, DiffStatus, ObjectDiff, SchemaDiffInput, SchemaDiffView};
+
 pub type SharedApplication = Arc<Application>;
 
 #[derive(Debug, thiserror::Error)]
