@@ -6,14 +6,15 @@ use std::{fs, io};
 use draco_app::{
     AdminView, AlterTableInput, AlterTablePreviewView, Application, ApplicationError,
     AssistantMessageView, AssistantReplyView, BackupFormat, BackupOptionsInput, BrowseTableView,
-    CompletionDataView, ConnectionInput, ConnectionView, CreateRoleInput, CreateTableInput,
+    CompletionDataView, ConnectionImportPreviewView, ConnectionImportResultView,
+    ConnectionImportSource, ConnectionInput, ConnectionView, CreateRoleInput, CreateTableInput,
     CronJobInput, CronJobRunView, CronJobsView, DashboardView, DeleteTableRowInput, ErdView,
     ExtensionsView, FileAuthorizationPurpose, FunctionDefinitionView, GithubBranch,
     GithubConnection, GithubPullRequest, GithubRepository, GithubSettings, Health, HistoryView,
-    InsertTableRowInput, PreferencesView, QueryResult, QueryStatsView, RestoreOptionsInput,
-    RoleView, SchemaObjectView, SchemaView, SearchResultView, SnippetInput, SnippetView,
-    TableDetailView, TableMaintenanceOperation, TableView, ToolResultView, TriggerInput,
-    UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
+    InsertTableRowInput, ParsedConnectionUrlView, PreferencesView, QueryResult, QueryStatsView,
+    RestoreOptionsInput, RoleView, SchemaObjectView, SchemaView, SearchResultView, SnippetInput,
+    SnippetView, TableDetailView, TableMaintenanceOperation, TableView, ToolResultView,
+    TriggerInput, UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
 };
 use draco_core::assistant::{Provider, Settings};
 use serde::{Deserialize, Serialize};
@@ -182,6 +183,66 @@ async fn test_connection(
         )
         .await
         .map_err(Into::into)
+}
+
+#[tauri::command]
+fn parse_connection_url(
+    state: State<'_, Application>,
+    url: String,
+) -> Result<ParsedConnectionUrlView, CommandError> {
+    state.parse_connection_url(&url).map_err(Into::into)
+}
+
+#[tauri::command]
+async fn preview_connection_imports(
+    state: State<'_, Application>,
+) -> Result<ConnectionImportPreviewView, CommandError> {
+    state.preview_connection_imports().await.map_err(Into::into)
+}
+
+/// Reads a password or service file chosen in the native dialog; the path never reaches the
+/// webview.
+#[tauri::command]
+async fn choose_connection_import_file(
+    state: State<'_, Application>,
+    source: ConnectionImportSource,
+) -> Result<Option<ConnectionImportPreviewView>, CommandError> {
+    let selected = tauri::async_runtime::spawn_blocking(move || {
+        let title = match source {
+            ConnectionImportSource::Pgpass => "Choose a PostgreSQL password file",
+            ConnectionImportSource::Service => "Choose a PostgreSQL service file",
+        };
+        rfd::FileDialog::new().set_title(title).pick_file()
+    })
+    .await
+    .map_err(|_| CommandError {
+        code: "operation_error",
+        key: Some("error.file_picker_unavailable"),
+        params: std::collections::BTreeMap::new(),
+        message: "The native file picker could not be opened".to_string(),
+    })?;
+    let Some(path) = selected else {
+        return Ok(None);
+    };
+    state
+        .preview_connection_import_file(&path, source)
+        .await
+        .map(Some)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn import_connections(
+    state: State<'_, Application>,
+    keys: Vec<String>,
+) -> Result<Vec<ConnectionImportResultView>, CommandError> {
+    state.import_connections(keys).await.map_err(Into::into)
+}
+
+#[tauri::command]
+async fn discard_connection_import(state: State<'_, Application>) -> Result<(), CommandError> {
+    state.discard_connection_import().await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -1287,6 +1348,11 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             list_connections,
             save_connection,
             test_connection,
+            parse_connection_url,
+            preview_connection_imports,
+            choose_connection_import_file,
+            import_connections,
+            discard_connection_import,
             delete_connection,
             connect_stored,
             disconnect,

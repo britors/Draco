@@ -138,6 +138,9 @@ O shell inicial em `src-tauri` expõe:
 | `save_connection` / `delete_connection` | persistir metadados sem senha, incluindo `environment` (`development`/`staging`/`production` ou ausente) e `read_only`; mudar `read_only` fecha a sessão ativa |
 | `connect_stored` / `disconnect` | ciclo de vida usando o Secret Service no backend |
 | `test_connection` | testar draft e credenciais antes de persistir |
+| `parse_connection_url` | transformar uma URL `postgres://`/`postgresql://` em campos do formulário; a senha da URL volta só para o campo de senha transitório e o salvamento continua exigindo `test_connection` |
+| `preview_connection_imports` / `choose_connection_import_file` | ler `PGSERVICEFILE`/`~/.pg_service.conf` e `PGPASSFILE`/`~/.pgpass`, ou um arquivo escolhido no seletor nativo, e listar candidatos sem senha (apenas `has_password`) |
+| `import_connections` / `discard_connection_import` | testar e salvar os candidatos selecionados da última pré-visualização (válida por 10 minutos); as senhas lidas ficam só na memória do backend até irem para o Secret Service |
 | `execute_query` / `execute_script` | executar SQL pela conexão ativa |
 | `execute_explain` | gerar plano JSON com `EXPLAIN` puro, sem `ANALYZE` |
 | `cancel_query` | cancelar a operação ativa via `pg_cancel_backend` |

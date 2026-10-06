@@ -8,11 +8,11 @@ description = "Toolkit-independent application services and DTOs for Draco"
 
 [dependencies]
 draco-core = { path = "../draco-core" }
+futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
 thiserror = "2"
 tokio = { version = "1", features = ["sync", "time"] }
 
 [dev-dependencies]
-futures-util = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

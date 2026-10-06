@@ -52,12 +52,16 @@
             <div class="health-card"><span class="status-dot"></span><strong id="health-value" data-i18n="health.checking">Checking health</strong><small data-i18n="health.bridge">Rust ↔ frontend bridge</small></div>
           </section>
           <section class="panel">
-            <div class="panel-heading"><div><span class="eyebrow" data-i18n="connections.savedEyebrow">SAVED CONNECTIONS</span><h2 data-i18n="connections.title">Connections</h2></div><button class="button primary" id="new-connection" type="button" data-i18n="connections.new">New connection</button></div>
+            <div class="panel-heading"><div><span class="eyebrow" data-i18n="connections.savedEyebrow">SAVED CONNECTIONS</span><h2 data-i18n="connections.title">Connections</h2></div><div class="form-actions"><button class="button" id="import-connections" type="button" data-i18n="connectionImport.open">Import…</button><button class="button primary" id="new-connection" type="button" data-i18n="connections.new">New connection</button></div></div>
             <div id="connection-list" class="connection-list"></div>
           </section>
           <form id="connection-form" class="panel form-panel" hidden>
             <div class="panel-heading"><div><span class="eyebrow" data-i18n="connectionForm.eyebrow">CONNECTION SETUP</span><h2 id="form-title" data-i18n="connectionForm.newTitle">New connection</h2></div><button class="button" id="cancel-connection" type="button" data-i18n="connectionForm.cancel">Cancel</button></div>
             <input id="connection-id" type="hidden" />
+            <div class="connection-url-row">
+              <label><span data-i18n="connectionUrl.label">Connection URL</span><input id="connection-url" type="password" autocomplete="off" spellcheck="false" placeholder="postgresql://user@host:5432/database" data-i18n-placeholder="connectionUrl.placeholder" /></label>
+              <button class="button" id="fill-from-url" type="button" data-i18n="connectionUrl.fill">Fill from URL</button>
+            </div>
             <div class="form-grid">
               <label><span data-i18n="connectionForm.label">Label</span><input id="label" required autocomplete="off" /></label>
               <label><span data-i18n="connectionForm.host">Host</span><input id="host" required value="localhost" autocomplete="off" /></label>
@@ -358,6 +362,17 @@
         <label class="sr-only" for="command-search" data-i18n="dialog.filterCommands">Filter commands</label>
         <input id="command-search" class="command-search" type="search" placeholder="Search views or database objects…" data-i18n-placeholder="palette.searchViewsOrDatabaseObjects" autocomplete="off" />
         <div id="command-list" class="command-list"></div>
+      </div>
+    </section>
+    <section id="connection-import-dialog" class="app-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="connection-import-title">
+      <div class="app-dialog-backdrop" data-close-connection-import></div>
+      <div class="app-dialog-panel connection-import-panel">
+        <div class="app-dialog-heading"><div><span class="eyebrow" data-i18n="connectionImport.eyebrow">IMPORT CONNECTIONS</span><h2 id="connection-import-title" data-i18n="connectionImport.title">Import from libpq files</h2></div><button class="button small" type="button" data-close-connection-import aria-label="Close" data-i18n-aria-label="window.close">Esc</button></div>
+        <p class="connection-import-description" data-i18n="connectionImport.description">Reads ~/.pg_service.conf and ~/.pgpass (or PGSERVICEFILE and PGPASSFILE). Each selected connection is tested before it is saved; passwords go only to the system credential store.</p>
+        <div class="form-actions connection-import-sources"><button class="button small" id="connection-import-reload" type="button" data-i18n="connectionImport.reload">Read standard files</button><button class="button small" id="connection-import-choose-service" type="button" data-i18n="connectionImport.chooseService">Choose service file…</button><button class="button small" id="connection-import-choose-pgpass" type="button" data-i18n="connectionImport.choosePgpass">Choose password file…</button></div>
+        <div id="connection-import-list" class="connection-import-list" role="group" aria-labelledby="connection-import-title"></div>
+        <div id="connection-import-status" class="form-status" role="status"></div>
+        <div class="app-dialog-actions"><button class="button" id="connection-import-cancel" type="button" data-i18n="connectionImport.close">Close</button><button class="button primary" id="connection-import-confirm" type="button" data-i18n="connectionImport.import">Test and import selected</button></div>
       </div>
     </section>
     <section id="programming-run-dialog" class="app-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="programming-run-title">
