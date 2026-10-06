@@ -11,6 +11,7 @@ mod legacy_secrets;
 pub mod manager;
 pub mod parser;
 pub mod postgres;
+pub mod schema_diff;
 pub mod secrets;
 pub mod store;
 pub mod table_import;

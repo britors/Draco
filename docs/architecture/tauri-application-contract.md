@@ -160,6 +160,7 @@ O shell inicial em `src-tauri` expõe:
 | `index_definition` | obter `pg_get_indexdef` de um índice comum pertencente à tabela selecionada |
 | `save_index_definition` | recriar um índice comum com `DROP` + `CREATE INDEX` na mesma transação |
 | `erd` | tabelas e relações de um schema |
+| `schema_diff` | somente leitura: snapshots de dois schemas (mesma conexão ou conexões diferentes) lidos em transação `READ ONLY` com `search_path` vazio — tabelas (colunas, constraints, índices, triggers), views/materializadas, funções/procedures e sequences, sem objetos de extensão, partições ou sequences de identidade — e o script, como texto, que deixa o destino igual à origem, com as referências ao schema de origem requalificadas. A execução só acontece se o usuário abrir o script no editor SQL |
 | `admin` | activity e locks |
 | `replication_status` | somente leitura: no primário, `pg_stat_replication` (estado, `sync_state`, atraso de write/flush/replay em bytes e segundos) e `pg_replication_slots` (ativo, WAL retido, `wal_status`); no standby, LSNs recebido/aplicado, backlog, último commit aplicado e `pg_stat_wal_receiver`; `has_monitor_privilege` indica quando falta `pg_monitor`. A UI atualiza a cada 5 s só com a aba visível |
 | `cancel_activity` | cancelar somente a query de um PID explícito, preservando a sessão |

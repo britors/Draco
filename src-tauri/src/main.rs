@@ -12,11 +12,11 @@ use draco_app::{
     ExtensionsView, FileAuthorizationPurpose, FinishedOperation, FunctionDefinitionView,
     GithubBranch, GithubConnection, GithubPullRequest, GithubRepository, GithubSettings, Health,
     HistoryView, InsertTableRowInput, OperationOutcome, ParsedConnectionUrlView, PreferencesView,
-    QueryResult, QueryStatsView, ReplicationStatus, RestoreOptionsInput, RoleView,
-    SchemaObjectView, SchemaView, SearchResultView, SnippetInput, SnippetView, TableDetailView,
-    TableImportFileView, TableImportInput, TableImportPreviewView, TableImportResultView,
-    TableImportSourceInput, TableMaintenanceOperation, TableView, ToolResultView, TriggerInput,
-    UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
+    QueryResult, QueryStatsView, ReplicationStatus, RestoreOptionsInput, RoleView, SchemaDiffInput,
+    SchemaDiffView, SchemaObjectView, SchemaView, SearchResultView, SnippetInput, SnippetView,
+    TableDetailView, TableImportFileView, TableImportInput, TableImportPreviewView,
+    TableImportResultView, TableImportSourceInput, TableMaintenanceOperation, TableView,
+    ToolResultView, TriggerInput, UpdateRoleInput, UpdateStatusView, UpdateTableCellInput,
 };
 use draco_core::assistant::{Provider, Settings};
 use serde::{Deserialize, Serialize};
@@ -750,6 +750,14 @@ async fn delete_trigger(
         .delete_trigger(&id, &schema, &table, &name)
         .await
         .map_err(Into::into)
+}
+
+#[tauri::command]
+async fn schema_diff(
+    state: State<'_, Application>,
+    input: SchemaDiffInput,
+) -> Result<SchemaDiffView, CommandError> {
+    state.schema_diff(input).await.map_err(Into::into)
 }
 
 #[tauri::command]
@@ -1506,6 +1514,7 @@ fn builder() -> tauri::Builder<tauri::Wry> {
             delete_routine,
             delete_trigger,
             erd,
+            schema_diff,
             admin,
             replication_status,
             cancel_activity,

@@ -24,6 +24,7 @@ mod object_editor;
 mod query_stats;
 mod replication;
 mod roles;
+mod schema_snapshot;
 mod sequences;
 
 pub use activity_locks::*;
@@ -44,4 +45,5 @@ pub use object_editor::*;
 pub use query_stats::*;
 pub use replication::*;
 pub use roles::*;
+pub use schema_snapshot::*;
 pub use sequences::*;

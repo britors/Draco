@@ -46,6 +46,9 @@ pub use table_import::{
     TableImportColumnView, TableImportFileView, TableImportFormat, TableImportInput,
     TableImportMappingInput, TableImportPreviewView, TableImportResultView, TableImportSourceInput,
 };
+mod schema_diff;
+
+pub use schema_diff::{DiffObjectKind, DiffStatus, ObjectDiff, SchemaDiffInput, SchemaDiffView};
 
 pub type SharedApplication = Arc<Application>;
 

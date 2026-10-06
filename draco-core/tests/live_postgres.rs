@@ -518,6 +518,103 @@ async fn connects_and_introspects_the_real_database() {
 
 #[tokio::test]
 #[ignore]
+async fn schema_diff_script_makes_the_target_match() {
+    let conn = test_connection();
+    let password = secrets::get_password(&conn.id)
+        .await
+        .expect("password readable from Secret Service");
+    let driver = PostgresDriver::connect(&conn, &password, 30_000, "draco-live-diff", None, None)
+        .await
+        .expect("connect");
+    let suffix = std::process::id();
+    let src = format!("draco_diff_src_{suffix}");
+    let dst = format!("draco_diff_dst_{suffix}");
+    let fixture = format!(
+        "CREATE SCHEMA {src}; CREATE SCHEMA {dst};
+         CREATE SEQUENCE {src}.ticket_seq INCREMENT BY 5 START WITH 100;
+         CREATE TABLE {src}.users (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, email text NOT NULL UNIQUE, created_at timestamptz NOT NULL DEFAULT now());
+         CREATE TABLE {src}.orders (id serial PRIMARY KEY, user_id integer NOT NULL REFERENCES {src}.users(id) ON DELETE CASCADE,
+           qty integer NOT NULL CHECK (qty > 0), price numeric(10,2) NOT NULL, total numeric(12,2) GENERATED ALWAYS AS (qty * price) STORED,
+           ticket bigint DEFAULT nextval('{src}.ticket_seq'));
+         CREATE INDEX orders_user_idx ON {src}.orders (user_id);
+         CREATE VIEW {src}.big_orders AS SELECT id, total FROM {src}.orders WHERE total > 100;
+         CREATE MATERIALIZED VIEW {src}.order_counts AS SELECT user_id, count(*) AS n FROM {src}.orders GROUP BY user_id;
+         CREATE FUNCTION {src}.touch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.qty := NEW.qty; RETURN NEW; END $$;
+         CREATE TRIGGER orders_touch BEFORE UPDATE ON {src}.orders FOR EACH ROW EXECUTE FUNCTION {src}.touch();
+         CREATE PROCEDURE {src}.reset_orders() LANGUAGE sql AS $$ DELETE FROM {src}.orders $$;
+         CREATE TABLE {dst}.users (id bigint PRIMARY KEY, email varchar(50), legacy text);
+         CREATE INDEX users_legacy_idx ON {dst}.users (legacy);
+         CREATE TABLE {dst}.leftover (id integer);
+         CREATE FUNCTION {dst}.touch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+         CREATE VIEW {dst}.old_view AS SELECT 1 AS one;"
+    );
+    let scenario = AssertUnwindSafe(async {
+        queries::execute_script(&driver, &fixture)
+            .await
+            .expect("create fixture");
+        let source = queries::get_schema_snapshot(&driver, &src)
+            .await
+            .expect("source snapshot");
+        let target = queries::get_schema_snapshot(&driver, &dst)
+            .await
+            .expect("target snapshot");
+        assert_eq!(source.tables.len(), 2);
+        assert!(source.sequences.contains_key("ticket_seq"));
+        assert!(
+            source.sequences.contains_key("orders_id_seq"),
+            "serial sequences are objects"
+        );
+        assert!(
+            !source
+                .sequences
+                .keys()
+                .any(|name| name.starts_with("users_id")),
+            "identity sequences are not"
+        );
+        assert!(source.routines.contains_key("reset_orders()"));
+
+        let diff = draco_core::schema_diff::diff_schemas(&source, &target);
+        assert!(diff.destructive);
+        assert!(!diff.script.contains(&format!("{src}.")), "{}", diff.script);
+        queries::execute_script(&driver, &diff.script)
+            .await
+            .unwrap_or_else(|error| {
+                panic!(
+                    "apply diff script: {}\n{}",
+                    error.detailed_message(),
+                    diff.script
+                )
+            });
+
+        let after = queries::get_schema_snapshot(&driver, &dst)
+            .await
+            .expect("target after");
+        let again = draco_core::schema_diff::diff_schemas(&source, &after);
+        assert!(
+            again.objects.is_empty(),
+            "target still differs:\n{:#?}\n{}",
+            again.objects,
+            again.script
+        );
+    })
+    .catch_unwind()
+    .await;
+    let cleanup = queries::execute_script(
+        &driver,
+        &format!("DROP SCHEMA IF EXISTS {src} CASCADE; DROP SCHEMA IF EXISTS {dst} CASCADE"),
+    )
+    .await;
+    driver.disconnect().await;
+    match scenario {
+        Ok(()) => {
+            cleanup.expect("drop the diff fixture");
+        }
+        Err(payload) => std::panic::resume_unwind(payload),
+    }
+}
+
+#[tokio::test]
+#[ignore]
 async fn replication_status_reads_a_server_without_replication() {
     let conn = test_connection();
     let password = secrets::get_password(&conn.id)
