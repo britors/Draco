@@ -56,19 +56,19 @@ jobs:
         run: cargo build --locked -p draco-tauri
       - name: Validate desktop and AppStream metadata
         run: |
-          desktop-file-validate data/org.lyraos.Draco.desktop
-          appstreamcli validate --no-net data/org.lyraos.Draco.metainfo.xml
+          desktop-file-validate data/br.com.dracodb.Draco.desktop
+          appstreamcli validate --no-net data/br.com.dracodb.Draco.metainfo.xml
       - name: Smoke test installed package layout and linked libraries
         run: |
           install_root="$RUNNER_TEMP/postgres-draco-root"
           install -Dm755 target/debug/draco "$install_root/usr/bin/draco"
-          install -Dm644 data/org.lyraos.Draco.desktop "$install_root/usr/share/applications/org.lyraos.Draco.desktop"
-          install -Dm644 data/org.lyraos.Draco.metainfo.xml "$install_root/usr/share/metainfo/org.lyraos.Draco.metainfo.xml"
-          install -Dm644 logo-new.png "$install_root/usr/share/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png"
+          install -Dm644 data/br.com.dracodb.Draco.desktop "$install_root/usr/share/applications/br.com.dracodb.Draco.desktop"
+          install -Dm644 data/br.com.dracodb.Draco.metainfo.xml "$install_root/usr/share/metainfo/br.com.dracodb.Draco.metainfo.xml"
+          install -Dm644 logo-new.png "$install_root/usr/share/icons/hicolor/1024x1024/apps/br.com.dracodb.Draco.png"
           test -x "$install_root/usr/bin/draco"
-          test -s "$install_root/usr/share/applications/org.lyraos.Draco.desktop"
-          test -s "$install_root/usr/share/metainfo/org.lyraos.Draco.metainfo.xml"
-          test -s "$install_root/usr/share/icons/hicolor/1024x1024/apps/org.lyraos.Draco.png"
+          test -s "$install_root/usr/share/applications/br.com.dracodb.Draco.desktop"
+          test -s "$install_root/usr/share/metainfo/br.com.dracodb.Draco.metainfo.xml"
+          test -s "$install_root/usr/share/icons/hicolor/1024x1024/apps/br.com.dracodb.Draco.png"
           ! ldd "$install_root/usr/bin/draco" | grep -F 'not found'
 
   installed-app-e2e:

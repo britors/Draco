@@ -4167,8 +4167,12 @@ async function boot() {
     const health = await invoke('health');
     byId('health-label').textContent = health.ready ? t('health.ready') : t('health.unavailable');
     byId('health-value').textContent = health.ready ? t('health.bridgeOnline') : t('health.bridgeOffline');
+    // A Flatpak store delivers updates itself, so the GitHub release check is not offered there.
+    byId('updates-managed').hidden = !health.updates_managed;
+    byId('check-updates-startup-row').hidden = Boolean(health.updates_managed);
+    byId('update-card').hidden = Boolean(health.updates_managed);
     await refreshConnections();
-    if (preferences.check_updates_on_startup) void checkForUpdates(false);
+    if (preferences.check_updates_on_startup && !health.updates_managed) void checkForUpdates(false);
   } catch (error) {
     byId('health-label').textContent = t('health.error');
     byId('health-value').textContent = t('health.bridgeUnavailable');

@@ -3,7 +3,11 @@
 ## Artefato oficial
 
 O binário oficial é `target/release/draco`, produzido pelo crate `draco-tauri`.
-O package id continua `org.lyraos.Draco`.
+O ID do app é `br.com.dracodb.Draco`. Até a 2.1.7 era `org.lyraos.Draco`; a troca atende ao
+Flathub, que exige um ID sob um domínio controlado pelo projeto. O AppStream declara o ID antigo
+em `<replaces>`. Os diretórios de dados (`ProjectDirs` em `draco-core/src/store.rs`) e o
+`publisher` do instalador Windows não mudaram, então conexões, histórico e a instalação NSIS são
+preservados; atalhos fixados no dock pelo `.desktop` antigo precisam ser fixados de novo.
 
 ```sh
 cargo run -p draco-tauri
@@ -63,7 +67,7 @@ editar o HTML.
 ## Capturas de tela
 
 As capturas em `site/assets/screenshots/` servem ao AppStream (`<screenshots>` em
-`data/org.lyraos.Draco.metainfo.xml`, por URL estável em `https://dracodb.com.br/assets/…`), ao site
+`data/br.com.dracodb.Draco.metainfo.xml`, por URL estável em `https://dracodb.com.br/assets/…`), ao site
 e ao README. Elas são geradas pelo app real via WebDriver:
 
 ```sh
@@ -97,6 +101,29 @@ Além dos testes Rust/frontend, o CI valida `.desktop` e AppStream sem rede, mon
 instalação temporária, confere binário/ícone/metadados e rejeita bibliotecas dinâmicas ausentes.
 Wayland, X11, leitor de tela e conexão PostgreSQL real permanecem no checklist manual porque
 dependem de uma sessão desktop e de serviços externos reais.
+
+## Flatpak e Flathub
+
+O manifesto do Flathub é escrito e submetido pelo mantenedor. A política do Flathub proíbe
+conteúdo gerado ou assistido por IA no manifesto e proíbe que ferramentas de IA abram ou
+automatizem o PR de submissão; por isso o manifesto não fica neste repositório e não deve ser
+gerado por agentes. O que o app precisa do sandbox:
+
+- **Rede:** PostgreSQL, túnel SSH (`russh`, em processo) e provedores do Assistente.
+- **Display:** Wayland, com fallback X11; WebKitGTK 4.1 vem do runtime GNOME.
+- **Credenciais:** acesso D-Bus ao Secret Service (`org.freedesktop.secrets`). Sem ele, conectar
+  falha ao ler a senha.
+- **Arquivos:** os seletores de backup/restauração usam o portal XDG (`rfd` com `xdg-portal`),
+  então não é preciso acesso amplo ao filesystem. Chaves SSH em `~/.ssh` exigem acesso de leitura
+  a esse diretório ou que o usuário escolha um caminho acessível.
+- **Backup/restauração:** `pg_dump`, `pg_restore` e `psql` são procurados no `PATH`; o sandbox não
+  enxerga os do host, então o client do PostgreSQL precisa estar no Flatpak (`/app/bin`).
+- **Atualizações:** dentro do Flatpak (`FLATPAK_ID` ou `/.flatpak-info`), `health` devolve
+  `updates_managed: true` e as Preferências escondem a checagem de release do GitHub; a central de
+  software entrega as atualizações.
+
+A cada release, o mantenedor atualiza a tag e o hash do tarball no manifesto do Flathub depois que
+a release do GitHub e o OBS estiverem publicados.
 
 ## Debug e logs
 

@@ -890,6 +890,7 @@ export default Object.freeze({
   'prefs.applicationUpdates': 'Application updates',
   'prefs.blue': 'Blue',
   'prefs.checkForUpdatesWhenDraco': 'Check for updates when Draco starts',
+  'prefs.updatesManaged': 'Updates for this installation come from your software center (Flathub).',
   'prefs.choose': 'Choose…',
   'prefs.chooseTheProviderUsedBy': 'Choose the provider used by the read-only database advisor. Each provider keeps its own model configuration.',
   'prefs.chooseYourWorkspaceTheme': 'Choose your workspace theme',

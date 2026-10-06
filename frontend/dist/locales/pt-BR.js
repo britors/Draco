@@ -890,6 +890,7 @@ export default Object.freeze({
   'prefs.applicationUpdates': 'Atualizações do aplicativo',
   'prefs.blue': 'Azul',
   'prefs.checkForUpdatesWhenDraco': 'Verificar atualizações ao iniciar o Draco',
+  'prefs.updatesManaged': 'As atualizações desta instalação vêm da sua central de software (Flathub).',
   'prefs.choose': 'Escolher…',
   'prefs.chooseTheProviderUsedBy': 'Escolha o provedor usado pelo consultor somente leitura. Cada provedor guarda a própria configuração de modelo.',
   'prefs.chooseYourWorkspaceTheme': 'Escolha o tema da área de trabalho',

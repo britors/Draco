@@ -28,11 +28,14 @@ deve importar `draco-core`, acessar o `ConnectionManager` ou serializar tipos do
 ```json
 {
   "service": "draco-app",
-  "ready": true
+  "ready": true,
+  "updates_managed": false
 }
 ```
 
 Esse contrato é deliberadamente pequeno para ser usado pelo smoke test do shell Tauri.
+`updates_managed` é `true` dentro de um Flatpak, onde a loja entrega as atualizações; nesse caso
+o frontend não oferece nem roda a checagem de release do GitHub.
 
 ## Contrato de query
 

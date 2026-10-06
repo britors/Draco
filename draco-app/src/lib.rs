@@ -671,6 +671,8 @@ pub struct SnippetView {
 pub struct Health {
     pub service: String,
     pub ready: bool,
+    /// Updates come from the Flatpak store, so the UI hides the GitHub release check.
+    pub updates_managed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -717,6 +719,7 @@ impl Application {
         Health {
             service: "draco-app".to_string(),
             ready: true,
+            updates_managed: draco_core::updates::updates_managed_by_flatpak(),
         }
     }
 

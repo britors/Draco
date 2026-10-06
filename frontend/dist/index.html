@@ -334,8 +334,9 @@
                 </section>
                 <section class="preference-section" data-preference-panel="updates" hidden>
                   <span class="eyebrow" data-i18n="prefs.releases">RELEASES</span><h3 data-i18n="prefs.applicationUpdates">Application updates</h3><p data-i18n="prefs.dracoChecksTheLatestPublished">Draco checks the latest published release in the official GitHub repository. Updates are never installed automatically.</p>
-                  <label class="check-row preference-check"><input id="check-updates-startup" type="checkbox" checked /> <span data-i18n="prefs.checkForUpdatesWhenDraco">Check for updates when Draco starts</span></label>
-                  <div class="update-card"><div><strong id="update-title" data-i18n="prefs.dracoIsReadyToCheck">Draco is ready to check</strong><small id="update-detail">Current version: 2.1.7</small></div><div class="form-actions"><button class="button small" id="copy-release-link" type="button" hidden data-i18n="prefs.copyReleaseLink">Copy release link</button><button class="button primary" id="check-updates" type="button" data-i18n="palette.checkNow">Check now</button></div></div>
+                  <p class="form-status" id="updates-managed" hidden data-i18n="prefs.updatesManaged">Updates for this installation come from your software center.</p>
+                  <label class="check-row preference-check" id="check-updates-startup-row"><input id="check-updates-startup" type="checkbox" checked /> <span data-i18n="prefs.checkForUpdatesWhenDraco">Check for updates when Draco starts</span></label>
+                  <div class="update-card" id="update-card"><div><strong id="update-title" data-i18n="prefs.dracoIsReadyToCheck">Draco is ready to check</strong><small id="update-detail">Current version: 2.1.7</small></div><div class="form-actions"><button class="button small" id="copy-release-link" type="button" hidden data-i18n="prefs.copyReleaseLink">Copy release link</button><button class="button primary" id="check-updates" type="button" data-i18n="palette.checkNow">Check now</button></div></div>
                 </section>
                 <section class="preference-section" data-preference-panel="about" hidden>
                   <div class="about-grid">
