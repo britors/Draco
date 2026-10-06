@@ -9,6 +9,7 @@ import { assembleFunctionDdl, formatFunctionParameters, parseFunctionParameters,
 import { applyTranslations, createTranslator, errorMessage, resolveLocale } from './i18n.js';
 import { sqlMayWrite } from './sql-write-detect.js';
 import { formatLagSeconds, formatWalBytes, replicationMode, slotNeedsAttention } from './replication-view.js';
+import { alignLines, diffSummary } from './schema-diff-view.js';
 
 const tauriInvoke = window.__TAURI__?.core?.invoke;
 // Commands that change the database, all keyed by the connection `id`. The backend refuses them
@@ -760,7 +761,7 @@ function connectionOptionLabel(connection) {
   return markers.length ? `${connection.label} · ${markers.join(' · ')}` : connection.label;
 }
 
-const CONNECTION_SELECTS = ['query-connection', 'dashboard-connection', 'admin-connection', 'backup-connection', 'assistant-connection', 'programming-connection'];
+const CONNECTION_SELECTS = ['query-connection', 'dashboard-connection', 'admin-connection', 'backup-connection', 'assistant-connection', 'programming-connection', 'diff-source-connection', 'diff-target-connection'];
 
 // Mirrors the selected connection's environment on the select (and on the SQL editor) so the
 // production color stays visible while working.
@@ -1156,7 +1157,7 @@ function renderQueryConnections() {
 }
 
 function renderAdvancedConnections() {
-  for (const id of ['dashboard-connection', 'admin-connection', 'backup-connection', 'assistant-connection', 'programming-connection']) {
+  for (const id of ['dashboard-connection', 'admin-connection', 'backup-connection', 'assistant-connection', 'programming-connection', 'diff-source-connection', 'diff-target-connection']) {
     const select = byId(id);
     const selected = select.value;
     select.replaceChildren();
@@ -4071,11 +4072,123 @@ function showAdminWorkspaceSection(section) {
     button.setAttribute('aria-selected', String(active));
   }
   for (const panel of document.querySelectorAll('[data-admin-workspace-panel]')) panel.hidden = panel.dataset.adminWorkspacePanel !== section;
+  if (section === 'schema-diff') prepareSchemaDiff();
   if (section === 'backup' && !byId('backup-connection').value && byId('admin-connection').value) {
     byId('backup-connection').value = byId('admin-connection').value; syncConnectionMarkers();
     const connection = state.connections.find((item) => item.id === byId('backup-connection').value);
     if (connection) byId('restore-database').value = connection.database;
   }
+}
+
+// Schema diff: two read-only snapshots compared in the backend. The script is only text here;
+// it runs only from the SQL editor, which applies the read-only and production guards.
+let schemaDiffResult = null;
+let schemaDiffSchemaRequest = 0;
+
+async function loadDiffSchemas(side, preferred = null) {
+  const connection = byId(`diff-${side}-connection`).value;
+  const select = byId(`diff-${side}-schema`);
+  const previous = preferred ?? select.value;
+  select.replaceChildren();
+  if (!connection) return;
+  const request = ++schemaDiffSchemaRequest;
+  try {
+    const schemas = await invoke('list_schemas', { id: connection });
+    if (request !== schemaDiffSchemaRequest && byId(`diff-${side}-connection`).value !== connection) return;
+    for (const schema of schemas) {
+      const option = document.createElement('option'); option.value = schema.name; option.textContent = schema.name; select.append(option);
+    }
+    select.value = schemas.some((schema) => schema.name === previous) ? previous : (schemas.some((schema) => schema.name === 'public') ? 'public' : schemas[0]?.name || '');
+  } catch (error) {
+    setSchemaDiffStatus(errorMessage(error, t, 'schemaDiff.schemasFailed'), 'error');
+  }
+}
+
+function setSchemaDiffStatus(message, kind = '') {
+  const status = byId('schema-diff-status'); status.textContent = message; status.className = `form-status ${kind}`;
+}
+
+function prepareSchemaDiff() {
+  const fallback = byId('admin-connection').value || state.connections.find((item) => item.state === 'connected')?.id || '';
+  for (const side of ['source', 'target']) {
+    const select = byId(`diff-${side}-connection`);
+    if (!select.value && fallback) { select.value = fallback; syncConnectionMarkers(); }
+    if (select.value && !byId(`diff-${side}-schema`).options.length) void loadDiffSchemas(side);
+  }
+}
+
+async function runSchemaDiff() {
+  const input = {
+    source_id: byId('diff-source-connection').value, source_schema: byId('diff-source-schema').value,
+    target_id: byId('diff-target-connection').value, target_schema: byId('diff-target-schema').value,
+  };
+  if (!input.source_id || !input.target_id || !input.source_schema || !input.target_schema) { setSchemaDiffStatus(t('schemaDiff.chooseBoth'), 'error'); return; }
+  const button = byId('run-schema-diff'); button.disabled = true;
+  setSchemaDiffStatus(t('schemaDiff.comparing'));
+  try {
+    schemaDiffResult = await invoke('schema_diff', { input });
+    schemaDiffResult.target_id = input.target_id;
+    renderSchemaDiff();
+  } catch (error) {
+    byId('schema-diff-result').hidden = true;
+    setSchemaDiffStatus(errorMessage(error, t, 'schemaDiff.failed'), 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function renderSchemaDiff() {
+  const result = schemaDiffResult;
+  const summary = diffSummary(result.objects);
+  byId('schema-diff-result').hidden = false;
+  byId('schema-diff-script').textContent = result.script;
+  if (!result.objects.length) setSchemaDiffStatus(t('schemaDiff.identical'), 'success');
+  else setSchemaDiffStatus(`${t('schemaDiff.summary', { added: summary.added, changed: summary.changed, removed: summary.removed })}${result.destructive ? ` ${t('schemaDiff.destructive')}` : ''}`, result.destructive ? 'error' : 'success');
+  byId('schema-diff-left-title').textContent = `${t('schemaDiff.source')} · ${result.source_label} · ${result.source_schema}`;
+  byId('schema-diff-right-title').textContent = `${t('schemaDiff.target')} · ${result.target_label} · ${result.target_schema}`;
+  const list = byId('schema-diff-list'); list.replaceChildren();
+  if (!result.objects.length) list.append(errorState(t('schemaDiff.noDifferences'), t('schemaDiff.noDifferencesMessage')));
+  result.objects.forEach((object, index) => {
+    const item = document.createElement('button'); item.type = 'button'; item.className = 'schema-diff-item'; item.setAttribute('role', 'option');
+    const name = document.createElement('span'); name.textContent = object.name;
+    const kind = document.createElement('small'); kind.textContent = t(`schemaDiff.kind.${object.kind}`);
+    const status = document.createElement('span'); status.className = `badge ${object.status === 'added' ? 'success' : object.status === 'removed' ? 'error' : 'warn'}`; status.textContent = t(`schemaDiff.status.${object.status}`);
+    item.append(name, kind, status);
+    item.addEventListener('click', () => selectSchemaDiffObject(index));
+    list.append(item);
+  });
+  byId('copy-schema-diff').disabled = !result.objects.length;
+  byId('open-schema-diff').disabled = !result.objects.length;
+  if (result.objects.length) selectSchemaDiffObject(0); else { byId('schema-diff-compare').replaceChildren(); byId('schema-diff-object-sql').textContent = ''; }
+}
+
+function selectSchemaDiffObject(index) {
+  const object = schemaDiffResult.objects[index];
+  for (const [position, item] of [...byId('schema-diff-list').children].entries()) {
+    item.classList.toggle('selected', position === index); item.setAttribute('aria-selected', String(position === index));
+  }
+  const compare = byId('schema-diff-compare'); compare.replaceChildren();
+  for (const row of alignLines(object.source_ddl, object.target_ddl)) {
+    for (const [side, text] of [['left', row.left], ['right', row.right]]) {
+      const cell = document.createElement('code');
+      cell.className = `schema-diff-line ${row.type}${text === null ? ' empty' : ''} ${side}`;
+      cell.textContent = text ?? '';
+      compare.append(cell);
+    }
+  }
+  const notes = object.notes.map((note) => `-- ${note}`);
+  byId('schema-diff-object-sql').textContent = [...notes, ...object.statements.map((statement) => `${statement};`)].join('\n\n');
+}
+
+async function copySchemaDiff() {
+  try { await navigator.clipboard.writeText(schemaDiffResult.script); setSchemaDiffStatus(t('schemaDiff.copied'), 'success'); }
+  catch { await showAlert(t('results.copyFailed'), t('results.copyUnavailable')); }
+}
+
+async function openSchemaDiffInEditor() {
+  if (!schemaDiffResult?.objects.length) return;
+  if (schemaDiffResult.destructive && !await showConfirm(t('schemaDiff.destructiveConfirm'), t('schemaDiff.destructiveTitle'), true, t('schemaDiff.openInEditor'))) return;
+  openSqlInNewTab(schemaDiffResult.script, schemaDiffResult.target_id, t('schemaDiff.tabLabel', { schema: schemaDiffResult.target_schema }));
 }
 
 function filterExplorerTree() {
@@ -4888,6 +5001,16 @@ byId('save-ai-key').addEventListener('click', () => void saveAssistantKey());
 byId('clear-ai-key').addEventListener('click', () => void clearAssistantKey());
 for (const button of document.querySelectorAll('[data-query-workspace]')) button.addEventListener('click', () => showQueryWorkspaceSection(button.dataset.queryWorkspace));
 for (const button of document.querySelectorAll('[data-admin-workspace]')) button.addEventListener('click', () => showAdminWorkspaceSection(button.dataset.adminWorkspace));
+for (const side of ['source', 'target']) byId(`diff-${side}-connection`).addEventListener('change', () => { syncConnectionMarkers(); void loadDiffSchemas(side); });
+byId('diff-swap').addEventListener('click', async () => {
+  const [sourceId, sourceSchema] = [byId('diff-source-connection').value, byId('diff-source-schema').value];
+  const [targetId, targetSchema] = [byId('diff-target-connection').value, byId('diff-target-schema').value];
+  byId('diff-source-connection').value = targetId; byId('diff-target-connection').value = sourceId; syncConnectionMarkers();
+  await Promise.all([loadDiffSchemas('source', targetSchema), loadDiffSchemas('target', sourceSchema)]);
+});
+byId('run-schema-diff').addEventListener('click', runSchemaDiff);
+byId('copy-schema-diff').addEventListener('click', copySchemaDiff);
+byId('open-schema-diff').addEventListener('click', openSchemaDiffInEditor);
 for (const button of document.querySelectorAll('[data-theme-choice]')) button.addEventListener('click', () => void savePreferences({ theme: button.dataset.themeChoice }));
 for (const button of document.querySelectorAll('[data-accent-choice]')) button.addEventListener('click', () => void savePreferences({ accent: button.dataset.accentChoice }));
 byId('check-updates-startup').addEventListener('change', (event) => void savePreferences({ check_updates_on_startup: event.target.checked }));

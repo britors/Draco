@@ -206,6 +206,27 @@ impl PostgresDriver {
         self.cancelable(backend_pid, copy, cancel_rx).await
     }
 
+    /// Runs read-only catalog queries on one backend inside a `READ ONLY` transaction with an
+    /// empty `search_path`, so every `pg_get_*def` output is fully schema-qualified and does not
+    /// depend on the session settings. Each statement receives `params`.
+    pub async fn catalog_snapshot(
+        &self,
+        statements: &[&str],
+        params: &[&(dyn ToSql + Sync)],
+    ) -> Result<Vec<Vec<Row>>> {
+        let mut client = self.pool.get().await?;
+        let transaction = client.build_transaction().read_only(true).start().await?;
+        transaction
+            .batch_execute("SET LOCAL search_path = ''")
+            .await?;
+        let mut results = Vec::with_capacity(statements.len());
+        for statement in statements {
+            results.push(transaction.query(*statement, params).await?);
+        }
+        transaction.rollback().await?;
+        Ok(results)
+    }
+
     /// Same simple-query protocol as `batch_execute`, but keeps each statement's row/command
     /// data instead of discarding it — used by the query editor's "Run as script" so a
     /// multi-statement buffer still shows a result, not just a side effect.
