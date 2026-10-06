@@ -152,6 +152,9 @@ O shell inicial em `src-tauri` expõe:
 | `completion_data` | schemas/tabelas/colunas/funções do banco inteiro num round trip, para o autocomplete do Editor SQL |
 | `dashboard` | KPIs, saúde do banco e maiores tabelas |
 | `table_detail` | colunas, constraints, índices, FKs, DDL e estatísticas de coluna |
+| `choose_table_import_file` | abrir o seletor nativo para um CSV/TSV/JSON e autorizar o caminho para importação (10 minutos; consumido pela importação) |
+| `preview_table_import` | ler o arquivo autorizado (CSV com delimitador, cabeçalho e vazio→NULL configuráveis; JSON como array de objetos), devolver até 20 linhas, o total, as colunas graváveis da tabela (sem colunas geradas) e o mapeamento sugerido por nome |
+| `run_table_import` | escrita (`WRITE_COMMANDS`): reconsultar a tabela, validar o mapeamento (colunas existentes, sem duplicadas, obrigatórias sem default mapeadas) e copiar tudo com um `COPY … FROM STDIN` em uma transação; cancelável por `operationId`; qualquer erro desfaz a importação inteira |
 | `save_view_definition` | salvar somente `CREATE OR REPLACE VIEW` para a view selecionada |
 | `save_sequence_definition` | salvar somente `ALTER SEQUENCE` para a sequence selecionada |
 | `index_definition` | obter `pg_get_indexdef` de um índice comum pertencente à tabela selecionada |

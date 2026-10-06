@@ -40,6 +40,12 @@ pub use connection_import::{
 mod notifications;
 
 pub use notifications::{FinishedOperation, OperationNotification, OperationOutcome};
+mod table_import;
+
+pub use table_import::{
+    TableImportColumnView, TableImportFileView, TableImportFormat, TableImportInput,
+    TableImportMappingInput, TableImportPreviewView, TableImportResultView, TableImportSourceInput,
+};
 
 pub type SharedApplication = Arc<Application>;
 
@@ -531,6 +537,8 @@ pub enum BackupFormat {
 pub enum FileAuthorizationPurpose {
     Backup,
     Restore,
+    /// A CSV/JSON file for the table import; previews reread it, the import consumes it.
+    Import,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2036,6 +2044,28 @@ impl Application {
         Ok(())
     }
 
+    /// Like `consume_file_authorization`, but leaves the authorization in place for a later call.
+    async fn check_file_authorization(
+        &self,
+        path: &str,
+        purpose: FileAuthorizationPurpose,
+    ) -> Result<()> {
+        const FILE_AUTHORIZATION_TTL: Duration = Duration::from_secs(10 * 60);
+        let authorized = self.authorized_files.lock().await.get(path).is_some_and(
+            |(authorized_purpose, created)| {
+                *authorized_purpose == purpose && created.elapsed() <= FILE_AUTHORIZATION_TTL
+            },
+        );
+        if authorized {
+            Ok(())
+        } else {
+            Err(ApplicationError::InvalidInput(Validation::new(
+                "validation.chooseTheFileAgainWithThe",
+                "Choose the file again with the native file picker before running this operation",
+            )))
+        }
+    }
+
     async fn consume_file_authorization(
         &self,
         path: &str,
@@ -2562,6 +2592,20 @@ fn validate_selected_path(value: &str, purpose: FileAuthorizationPurpose) -> Res
                 return Err(ApplicationError::InvalidInput(Validation::new(
                     "validation.backupDestinationCannotBeASymbolic",
                     "Backup destination cannot be a symbolic link",
+                )));
+            }
+        }
+        FileAuthorizationPurpose::Import => {
+            let metadata = std::fs::symlink_metadata(path).map_err(|_| {
+                ApplicationError::InvalidInput(Validation::new(
+                    "validation.importFileMustBeARegular",
+                    "The import file must be an existing regular file, not a symbolic link",
+                ))
+            })?;
+            if !metadata.is_file() || metadata.file_type().is_symlink() {
+                return Err(ApplicationError::InvalidInput(Validation::new(
+                    "validation.importFileMustBeARegular",
+                    "The import file must be an existing regular file, not a symbolic link",
                 )));
             }
         }

@@ -179,6 +179,29 @@ test('installed app connects, browses the schema, runs queries and inspects a ta
     assert.deepEqual(rows, [['1', 'alpha'], ['2', 'beta'], ['3', 'gamma']]);
   });
 
+  // The native file picker cannot be driven by WebDriver, so this checks the entry point and the
+  // initial state; draco-app/tests/live_postgres.rs covers file → COPY → rollback.
+  await t.test('offers CSV/JSON import on the table detail', async () => {
+    await session.waitFor('the import button', `
+      const button = [...document.querySelectorAll('.table-data-controls button')].find((item) => !item.hidden && item.textContent.endsWith('…'));
+      if (!button) return false;
+      button.click();
+      return true;
+    `);
+    const state = await session.waitFor('the import dialog', `
+      const dialog = document.getElementById('table-import-dialog');
+      if (dialog.hidden) return null;
+      return {
+        target: document.getElementById('table-import-target').textContent,
+        runDisabled: document.getElementById('table-import-run').disabled,
+        previewDisabled: document.getElementById('table-import-preview-button').disabled,
+      };
+    `);
+    assert.deepEqual(state, { target: `${FIXTURE_SCHEMA}.${FIXTURE_TABLE}`, runDisabled: true, previewDisabled: true });
+    await session.click('#table-import-close');
+    assert.equal(await session.run(`return document.getElementById('table-import-dialog').hidden;`), true);
+  });
+
   await t.test('records executed queries in the history', async () => {
     await session.click('[data-view="query"]');
     await session.click('[data-query-workspace="history"]');
