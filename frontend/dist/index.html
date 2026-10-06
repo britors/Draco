@@ -68,6 +68,10 @@
             </div>
             <label class="check-row"><input id="ssl" type="checkbox" /> <span data-i18n="connectionForm.tls">Use TLS</span></label>
             <label class="check-row"><input id="favorite" type="checkbox" /> <span data-i18n="connectionForm.favorite">Favorite connection</span></label>
+            <div class="form-grid">
+              <label><span data-i18n="connectionForm.environment">Environment</span><select id="environment"><option value="" data-i18n="environment.none">Not set</option><option value="development" data-i18n="environment.development">Development</option><option value="staging" data-i18n="environment.staging">Staging</option><option value="production" data-i18n="environment.production">Production</option></select></label>
+            </div>
+            <label class="check-row"><input id="read-only" type="checkbox" /> <span data-i18n="connectionForm.readOnly">Read-only sessions (PostgreSQL rejects writes)</span></label>
             <details>
               <summary data-i18n="connectionForm.sshSection">SSH tunnel and jump host</summary>
               <div class="form-grid">

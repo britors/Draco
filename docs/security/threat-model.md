@@ -59,6 +59,29 @@ podem imprimir valores e mensagens do servidor podem ecoar dados. A UI recebe so
 sucesso/cancelamento e exit code, nunca a saída bruta, SQL, resultado ou caminho. Ausência do
 binário vira uma mensagem allowlisted sem revelar a resolução de `PATH`.
 
+## Ambiente e modo somente leitura
+
+Cada conexão pode declarar o ambiente (`development`, `staging` ou `production`) e o modo somente
+leitura (`read_only`). Os dois são metadados TOML, não segredos.
+
+Em modo somente leitura a garantia vem do PostgreSQL: toda sessão do pool abre com
+`-c default_transaction_read_only=on`, e o pool recicla conexões com
+`RESET default_transaction_read_only`, de modo que um `SET ... = off` dentro de uma sessão não
+sobrevive à devolução ao pool. `pg_dump`, `pg_restore` e `psql` recebem a mesma opção por
+`PGOPTIONS`. Além disso, `draco-app` recusa (`connection_read_only`) os comandos de escrita do
+próprio Draco (DDL visual, edição de linhas, manutenção, roles, jobs, extensões, sequences,
+restauração) e SQL do editor que tente reabilitar escrita (`READ WRITE`, `SET`/`RESET`/`set_config`
+de `*transaction_read_only`). Mudar o flag de uma conexão ativa fecha a sessão para que a próxima
+conexão aplique o novo valor.
+
+Isso não é uma fronteira de segurança contra um usuário determinado: quem controla o SQL pode
+procurar outras formas de escrever. Para impedir escrita de fato, use uma role PostgreSQL sem
+privilégios de escrita; o modo somente leitura protege contra erro operacional.
+
+Em produção, o frontend pede o nome da conexão antes de qualquer comando de escrita e antes de SQL
+em que uma heurística local (`sql-write-detect.js`) encontra uma palavra de escrita fora de
+literais e comentários. A heurística só serve para pedir confirmação; nunca libera nada.
+
 ## Erros e payloads
 
 Payloads vazios, IDs de operação duplicados, compressão fora de `0..=9` e caminhos relativos ou

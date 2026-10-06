@@ -42,7 +42,16 @@ impl ConnectionManager {
 
         for conn in connections {
             match self.map.get_mut(&conn.id) {
-                Some(managed) => managed.conn = conn,
+                Some(managed) => {
+                    // A live session keeps the read-only setting it was opened with, so switching
+                    // the flag closes it and the next connect applies the new one.
+                    if managed.conn.read_only != conn.read_only {
+                        managed.driver = None;
+                        managed.status = ConnectionStatus::Disconnected;
+                        managed.error = None;
+                    }
+                    managed.conn = conn;
+                }
                 None => {
                     self.map.insert(
                         conn.id.clone(),
@@ -203,6 +212,22 @@ mod tests {
         mgr.map.get_mut("a").unwrap().status = ConnectionStatus::Error;
         mgr.sync_connections(vec![make_conn("a", "a")]);
         assert_eq!(mgr.get("a").unwrap().status, ConnectionStatus::Error);
+    }
+
+    #[test]
+    fn switching_read_only_closes_the_live_session() {
+        let mut mgr = ConnectionManager::new();
+        mgr.sync_connections(vec![make_conn("a", "a")]);
+        mgr.map.get_mut("a").unwrap().status = ConnectionStatus::Connected;
+        let mut read_only = make_conn("a", "a");
+        read_only.read_only = true;
+        mgr.sync_connections(vec![read_only.clone()]);
+        assert_eq!(mgr.get("a").unwrap().status, ConnectionStatus::Disconnected);
+        assert!(mgr.get("a").unwrap().conn.read_only);
+
+        mgr.map.get_mut("a").unwrap().status = ConnectionStatus::Connected;
+        mgr.sync_connections(vec![read_only]);
+        assert_eq!(mgr.get("a").unwrap().status, ConnectionStatus::Connected);
     }
 
     #[test]

@@ -7,8 +7,46 @@ import { clampResultColumnWidth } from './result-columns.js';
 import { AI_QUERY_REVIEW_FOCUSES, buildAiQueryReviewMessage } from './ai-query-review.js';
 import { assembleFunctionDdl, formatFunctionParameters, parseFunctionParameters, sliceFunctionDdl } from './function-ddl.js';
 import { applyTranslations, createTranslator, errorMessage, resolveLocale } from './i18n.js';
+import { sqlMayWrite } from './sql-write-detect.js';
 
-const invoke = window.__TAURI__?.core?.invoke;
+const tauriInvoke = window.__TAURI__?.core?.invoke;
+// Commands that change the database, all keyed by the connection `id`. The backend refuses them
+// on read-only connections; here they fail early and, on production, wait for the connection name.
+const WRITE_COMMANDS = new Set([
+  'alter_table', 'create_cron_job', 'create_role', 'create_schema', 'create_sequence', 'create_table',
+  'create_trigger', 'delete_cron_job', 'delete_role', 'delete_routine', 'delete_table_row', 'delete_trigger',
+  'drop_extension', 'insert_table_row', 'install_extension', 'next_sequence_value', 'reset_query_stats',
+  'run_restore', 'run_routine', 'run_table_maintenance', 'save_function_definition', 'save_index_definition',
+  'save_sequence_definition', 'save_trigger_definition', 'save_view_definition', 'set_cron_job_active',
+  'set_sequence_value', 'update_cron_job', 'update_role', 'update_table_cell',
+]);
+// Free-form SQL is only confirmed when the heuristic sees a possible write; on read-only
+// connections PostgreSQL itself rejects the write, so no confirmation is asked there.
+const SQL_COMMANDS = new Set(['execute_query', 'execute_script']);
+const invoke = tauriInvoke ? guardedInvoke : null;
+
+async function guardedInvoke(command, args = {}) {
+  const connection = typeof args?.id === 'string' ? state.connections.find((item) => item.id === args.id) : null;
+  if (connection && WRITE_COMMANDS.has(command)) {
+    if (connection.read_only) throw { code: 'connection_read_only', key: 'error.connection_read_only' };
+    if (connection.environment === 'production') await confirmProductionWrite(connection);
+  } else if (connection && SQL_COMMANDS.has(command) && connection.environment === 'production' && !connection.read_only && sqlMayWrite(args.sql)) {
+    await confirmProductionWrite(connection);
+  }
+  return tauriInvoke(command, args);
+}
+
+async function confirmProductionWrite(connection) {
+  const typed = await showDialog({
+    title: t('production.writeTitle'),
+    message: t('production.writeConfirm', { name: connection.label }),
+    kind: 'prompt-danger',
+    confirmLabel: t('production.writeAction'),
+    inputLabel: t('production.connectionName'),
+    placeholder: connection.label,
+  });
+  if (typeof typed !== 'string' || typed.trim() !== connection.label) throw { code: 'write_cancelled', key: 'error.write_cancelled' };
+}
 const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
 // The interface follows the system locale reported by the webview; English is the fallback.
 const t = createTranslator(resolveLocale(navigator.languages?.length ? navigator.languages : [navigator.language]));
@@ -614,7 +652,7 @@ function openSqlInNewTab(sql, connectionId, label = null) {
     tab.label = label || (firstLine.length > 28 ? `${firstLine.slice(0, 28)}…` : firstLine || tab.label);
   }
   setEditorValue(sql);
-  byId('query-connection').value = connectionId;
+  byId('query-connection').value = connectionId; syncConnectionMarkers();
   renderQueryTabs();
 }
 
@@ -677,7 +715,64 @@ function connectionInput() {
     ssh_jump_user: optional('jump-user'),
     ssh_jump_key_path: optional('jump-key-path'),
     favorite: byId('favorite').checked,
+    environment: byId('environment').value || null,
+    read_only: byId('read-only').checked,
   };
+}
+
+const ENVIRONMENTS = ['development', 'staging', 'production'];
+
+function connectionById(id) {
+  return id ? state.connections.find((item) => item.id === id) || null : null;
+}
+
+function isReadOnly(id) {
+  return Boolean(connectionById(id)?.read_only);
+}
+
+// Environment and read-only markers shown wherever a connection is named. The color comes from
+// the --env-* tokens; the text keeps the meaning available without color.
+function connectionBadges(connection) {
+  const badges = [];
+  if (ENVIRONMENTS.includes(connection?.environment)) {
+    const badge = document.createElement('span');
+    badge.className = 'env-badge';
+    badge.dataset.environment = connection.environment;
+    badge.textContent = t(`environment.${connection.environment}`);
+    badges.push(badge);
+  }
+  if (connection?.read_only) {
+    const badge = document.createElement('span');
+    badge.className = 'env-badge read-only-badge';
+    badge.textContent = t('environment.readOnly');
+    badge.title = t('environment.readOnlyHint');
+    badges.push(badge);
+  }
+  return badges;
+}
+
+function connectionOptionLabel(connection) {
+  const markers = [];
+  if (ENVIRONMENTS.includes(connection.environment)) markers.push(t(`environment.${connection.environment}`));
+  if (connection.read_only) markers.push(t('environment.readOnly'));
+  return markers.length ? `${connection.label} · ${markers.join(' · ')}` : connection.label;
+}
+
+const CONNECTION_SELECTS = ['query-connection', 'dashboard-connection', 'admin-connection', 'backup-connection', 'assistant-connection', 'programming-connection'];
+
+// Mirrors the selected connection's environment on the select (and on the SQL editor) so the
+// production color stays visible while working.
+function syncConnectionMarkers() {
+  for (const id of CONNECTION_SELECTS) {
+    const select = byId(id);
+    const connection = connectionById(select.value);
+    select.dataset.environment = connection?.environment || '';
+    select.toggleAttribute('data-read-only', Boolean(connection?.read_only));
+  }
+  const editor = byId('query-connection').closest('.query-workspace-panel');
+  const queryConnection = connectionById(byId('query-connection').value);
+  editor.dataset.environment = queryConnection?.environment || '';
+  editor.toggleAttribute('data-read-only', Boolean(queryConnection?.read_only));
 }
 
 function connectionRequest() {
@@ -729,10 +824,11 @@ function renderConnections() {
       favorite.textContent = '★';
       favorite.title = t('connections.favorite');
       favorite.setAttribute('aria-label', t('connections.favorite'));
-      meta.append(dot, title, favorite, status);
+      meta.append(dot, title, favorite, ...connectionBadges(connection), status);
     } else {
-      meta.append(dot, title, status);
+      meta.append(dot, title, ...connectionBadges(connection), status);
     }
+    if (connection.environment) card.dataset.environment = connection.environment;
     const detail = document.createElement('div');
     detail.className = 'connection-detail';
     detail.textContent = `${connection.user}@${connection.host}:${connection.port}/${connection.database}${connection.ssh_enabled ? ' · SSH' : ''}`;
@@ -770,6 +866,8 @@ function showForm(connection = null) {
   byId('user').value = connection?.user ?? '';
   byId('ssl').checked = connection?.ssl ?? false;
   byId('favorite').checked = connection?.favorite ?? false;
+  byId('environment').value = connection?.environment ?? '';
+  byId('read-only').checked = connection?.read_only ?? false;
   byId('ssh-enabled').checked = connection?.ssh_enabled ?? false;
   byId('ssh-host').value = connection?.ssh_host ?? '';
   byId('ssh-port').value = connection?.ssh_port ?? 22;
@@ -812,7 +910,7 @@ async function connect(id) {
     renderExplorerConnections();
     renderQueryConnections();
     renderAdvancedConnections();
-    byId('dashboard-connection').value = id;
+    byId('dashboard-connection').value = id; syncConnectionMarkers();
     switchView('dashboard');
   } catch (error) {
     connection.state = 'error';
@@ -880,7 +978,9 @@ function renderExplorerConnections() {
     const item = document.createElement('button');
     item.type = 'button';
     item.className = `tree-item ${state.selectedConnectionId === connection.id ? 'selected' : ''}`;
-    item.textContent = connection.label;
+    const name = document.createElement('span');
+    name.textContent = connection.label;
+    item.append(name, ...connectionBadges(connection));
     item.addEventListener('click', () => openExplorer(connection.id));
     pane.append(item);
   }
@@ -903,10 +1003,11 @@ function renderQueryConnections() {
   for (const connection of state.connections.filter((item) => item.state === 'connected')) {
     const option = document.createElement('option');
     option.value = connection.id;
-    option.textContent = connection.label;
+    option.textContent = connectionOptionLabel(connection);
     select.append(option);
   }
   select.value = state.connections.some((item) => item.id === selected && item.state === 'connected') ? selected : '';
+  syncConnectionMarkers();
 }
 
 function renderAdvancedConnections() {
@@ -916,10 +1017,11 @@ function renderAdvancedConnections() {
     select.replaceChildren();
     const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = t('common.selectConnected'); select.append(placeholder);
     for (const connection of state.connections.filter((item) => item.state === 'connected')) {
-      const option = document.createElement('option'); option.value = connection.id; option.textContent = connection.label; select.append(option);
+      const option = document.createElement('option'); option.value = connection.id; option.textContent = connectionOptionLabel(connection); select.append(option);
     }
     select.value = state.connections.some((item) => item.id === selected && item.state === 'connected') ? selected : '';
   }
+  syncConnectionMarkers();
 }
 
 function scrollAssistantToBottom() {
@@ -1030,14 +1132,14 @@ async function submitAiReview() {
   const { connectionId, sql, returnView } = aiReviewRequest;
   const message = buildAiQueryReviewMessage(aiReviewFocus, sql, byId('ai-review-note').value);
   closeAiReviewDialog({ restoreFocus: false });
-  byId('assistant-connection').value = connectionId;
+  byId('assistant-connection').value = connectionId; syncConnectionMarkers();
   byId('assistant-message').value = message;
   goToAssistant(returnView);
   await sendAssistant();
 }
 
 async function askAssistantAboutQueryStat(id, queryStat) {
-  byId('assistant-connection').value = id;
+  byId('assistant-connection').value = id; syncConnectionMarkers();
   byId('assistant-message').value = `${t('assistant.analyzeQueryStat', { calls: queryStat.calls, mean: queryStat.mean_exec_ms.toFixed(1), total: queryStat.total_exec_ms.toFixed(1), rows: queryStat.rows })}\n\n\`\`\`sql\n${queryStat.query}\n\`\`\``;
   goToAssistant('admin');
   await sendAssistant();
@@ -1116,7 +1218,10 @@ function indexPanel(id, schema, table, indexes) {
     const name = document.createElement('span'); name.textContent = index.name;
     const definition = document.createElement('strong'); definition.textContent = index.definition || '—'; definition.title = index.definition || '';
     const edit = document.createElement('button'); edit.className = 'button small'; edit.type = 'button'; edit.textContent = t('common.edit');
-    if (index.constraint_name) {
+    if (isReadOnly(id)) {
+      edit.disabled = true;
+      edit.title = t('environment.readOnlyHint');
+    } else if (index.constraint_name) {
       edit.disabled = true;
       edit.title = t('table.managedByConstraint', { name: index.constraint_name });
     } else {
@@ -1373,7 +1478,7 @@ function definitionEditorDialog(id, title, ddl, kind, context = {}) {
 async function openProgrammingFromExplorer(id, schema, object) {
   state.selectedConnectionId = id;
   state.selectedSchema = schema;
-  byId('programming-connection').value = id;
+  byId('programming-connection').value = id; syncConnectionMarkers();
   switchView('programming');
   await loadProgrammingSchemas(id);
   byId('programming-schema').value = schema;
@@ -1391,7 +1496,7 @@ async function newProgrammingFromExplorer(kind) {
   if (!id || !schema) return;
   state.selectedConnectionId = id;
   state.selectedSchema = schema;
-  byId('programming-connection').value = id;
+  byId('programming-connection').value = id; syncConnectionMarkers();
   switchView('programming');
   await loadProgrammingSchemas(id);
   byId('programming-schema').value = schema;
@@ -2377,10 +2482,11 @@ async function loadProgrammingObjects(id, schema) {
   }
   state.selectedConnectionId = id;
   state.selectedSchema = schema;
-  byId('programming-new-function').disabled = false;
-  byId('programming-new-procedure').disabled = false;
-  byId('programming-new-trigger').disabled = false;
-  byId('programming-new-view').disabled = false;
+  const writable = !isReadOnly(id);
+  byId('programming-new-function').disabled = !writable;
+  byId('programming-new-procedure').disabled = !writable;
+  byId('programming-new-trigger').disabled = !writable;
+  byId('programming-new-view').disabled = !writable;
   content.replaceChildren(errorState(t('programming.loadingProgrammingObjects'), t('programming.readingViewsFunctionsProceduresAnd')));
   status.textContent = t('programming.loadingNamed', { name: schema });
   try {
@@ -2506,6 +2612,9 @@ function tableDataPanel(id, schema, table) {
   headingCopy.append(title, summary);
   const controls = document.createElement('div'); controls.className = 'table-data-controls';
   const insert = document.createElement('button'); insert.className = 'button small'; insert.type = 'button'; insert.textContent = t('table.insertRow');
+  // Read-only connections browse the data without row editing; the server would refuse it anyway.
+  const readOnly = isReadOnly(id);
+  insert.hidden = readOnly;
   const refresh = document.createElement('button'); refresh.className = 'button small'; refresh.type = 'button'; refresh.textContent = t('table.refresh');
   const previous = document.createElement('button'); previous.className = 'button small'; previous.type = 'button'; previous.textContent = t('table.previous');
   const next = document.createElement('button'); next.className = 'button small'; next.type = 'button'; next.textContent = t('explorer.sequenceNext');
@@ -2537,6 +2646,7 @@ function tableDataPanel(id, schema, table) {
       const columns = result.columns || [];
       const rows = result.rows || [];
       const primaryKeys = result.primary_key_columns || [];
+      const editable = primaryKeys.length > 0 && !readOnly;
       const first = result.total ? offset + 1 : 0;
       const last = Math.min(offset + rows.length, result.total);
       summary.textContent = `${t('table.pageRange', { first, last, total: result.total })}${primaryKeys.length ? ` · ${t('table.keyColumns', { columns: primaryKeys.join(', ') })}` : t('table.readOnlyWithoutAPrimary')}`;
@@ -2548,14 +2658,14 @@ function tableDataPanel(id, schema, table) {
       const tableElement = document.createElement('table');
       const head = document.createElement('thead'); const header = document.createElement('tr');
       for (const column of columns) { const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = column; header.append(cell); }
-      if (primaryKeys.length) { const actions = document.createElement('th'); actions.scope = 'col'; actions.textContent = t('table.actions'); header.append(actions); }
+      if (editable) { const actions = document.createElement('th'); actions.scope = 'col'; actions.textContent = t('table.actions'); header.append(actions); }
       head.append(header); tableElement.append(head);
       const body = document.createElement('tbody');
       for (const row of rows) {
         const tr = document.createElement('tr');
         for (const column of columns) {
           const td = document.createElement('td');
-          if (primaryKeys.length) {
+          if (editable) {
             td.className = 'editable-table-cell';
             const edit = document.createElement('button'); edit.className = 'table-cell-button'; edit.type = 'button'; edit.textContent = formatTableCell(row[column]); edit.title = t('table.editNamed', { name: column });
             edit.addEventListener('click', async () => {
@@ -2577,7 +2687,7 @@ function tableDataPanel(id, schema, table) {
           }
           tr.append(td);
         }
-        if (primaryKeys.length) {
+        if (editable) {
           const td = document.createElement('td'); td.className = 'table-row-actions';
           const remove = document.createElement('button'); remove.className = 'button small danger'; remove.type = 'button'; remove.textContent = t('common.delete');
           remove.addEventListener('click', async () => {
@@ -3072,11 +3182,11 @@ function returnToExplorer() {
 
 async function openTable(id, schema, table, kind = 'table') {
   rememberExplorerState();
-  switchView('table-detail'); byId('detail-title').textContent = table; byId('detail-eyebrow').textContent = `${schema.toUpperCase()} · ${kind === 'view' ? t('table.viewDetailEyebrow') : t('table.tableDetailEyebrow')}`; byId('detail-summary').textContent = t('erd.loading');
+  switchView('table-detail'); byId('detail-title').textContent = table; byId('detail-title').append(...connectionBadges(connectionById(id))); byId('detail-eyebrow').textContent = `${schema.toUpperCase()} · ${kind === 'view' ? t('table.viewDetailEyebrow') : t('table.tableDetailEyebrow')}`; byId('detail-summary').textContent = t('erd.loading');
   const content = byId('detail-content'); content.replaceChildren(errorState(t('table.loadingTableDetail'), ''));
   try {
     const payload = await invoke('table_detail', { id, schema, table }); const detail = payload.detail; content.replaceChildren(); byId('detail-summary').textContent = t('table.estimatedRows', { count: detail.row_estimate ?? 0 });
-    if (kind === 'table') content.append(tableMaintenancePanel(id, schema, table, detail));
+    if (kind === 'table' && !isReadOnly(id)) content.append(tableMaintenancePanel(id, schema, table, detail));
     content.append(tableDataPanel(id, schema, table));
     content.append(dataPanel(t('table.columns'), (detail.columns || []).map((row) => [row.name, `${row.full_type || row.data_type}${row.is_nullable ? '' : ' · NOT NULL'}${row.is_primary_key ? ' · PK' : ''}`])));
     content.append(dataPanel(t('table.constraints'), (detail.constraints || []).map((row) => [row.name, `${row.type}: ${row.definition}`])));
@@ -3089,7 +3199,7 @@ async function openTable(id, schema, table, kind = 'table') {
 
 async function openErd() {
   const id = state.selectedConnectionId; const schema = state.selectedSchema; if (!id || !schema) return;
-  switchView('erd'); byId('erd-title').textContent = `ERD · ${schema}`; byId('erd-summary').textContent = t('erd.loading');
+  switchView('erd'); byId('erd-title').textContent = `ERD · ${schema}`; byId('erd-title').append(...connectionBadges(connectionById(id))); byId('erd-summary').textContent = t('erd.loading');
   const content = byId('erd-content'); content.replaceChildren(errorState(t('erd.loadingErd'), ''));
   try {
     const payload = await invoke('erd', { id, schema }); const data = payload.data; content.replaceChildren(); byId('erd-summary').textContent = `${t('erd.tableCount', { count: (data.tables || []).length })} · ${t('erd.relationCount', { count: (data.relations || []).length })}`;
@@ -3375,7 +3485,7 @@ async function runQuery(mode = 'query') {
     byId('query-status').textContent = explain ? t('query.planReady') : t('query.completed');
   } catch (error) {
     renderResult(null);
-    byId('result-error').textContent = state.cancelRequested ? t('query.cancelledDetail') : explain ? t('query.explainFailed') : t('query.failed');
+    byId('result-error').textContent = state.cancelRequested ? t('query.cancelledDetail') : errorMessage(error, t, explain ? 'query.explainFailed' : 'query.failed');
     byId('query-status').textContent = state.cancelRequested ? t('query.cancelled') : t('query.error');
   } finally {
     state.currentQueryId = null;
@@ -3478,7 +3588,7 @@ function showAdminWorkspaceSection(section) {
   }
   for (const panel of document.querySelectorAll('[data-admin-workspace-panel]')) panel.hidden = panel.dataset.adminWorkspacePanel !== section;
   if (section === 'backup' && !byId('backup-connection').value && byId('admin-connection').value) {
-    byId('backup-connection').value = byId('admin-connection').value;
+    byId('backup-connection').value = byId('admin-connection').value; syncConnectionMarkers();
     const connection = state.connections.find((item) => item.id === byId('backup-connection').value);
     if (connection) byId('restore-database').value = connection.database;
   }
@@ -3515,8 +3625,9 @@ function filterExplorerTree() {
 function updateExplorerObjectActions() {
   const connected = state.connections.some((connection) => connection.id === state.selectedConnectionId && connection.state === 'connected');
   const hasSchema = connected && Boolean(state.selectedSchema);
-  byId('new-schema').disabled = !connected;
-  for (const id of ['new-table', 'new-function', 'new-procedure', 'new-sequence', 'new-trigger']) byId(id).disabled = !hasSchema;
+  const writable = !isReadOnly(state.selectedConnectionId);
+  byId('new-schema').disabled = !connected || !writable;
+  for (const id of ['new-table', 'new-function', 'new-procedure', 'new-sequence', 'new-trigger']) byId(id).disabled = !hasSchema || !writable;
 }
 
 function formatEstimatedRows(value) {
@@ -3580,7 +3691,7 @@ function appendSchemaObjectRow(parent, id, schemaName, object) {
 
 function openAdminForConnection(id) {
   state.selectedConnectionId = id;
-  byId('admin-connection').value = id;
+  byId('admin-connection').value = id; syncConnectionMarkers();
   switchView('admin');
   showAdminWorkspaceSection('administration');
 }
@@ -4198,6 +4309,7 @@ byId('explorer-filter').addEventListener('input', (event) => {
   filterExplorerTree();
   if (state.explorerFilter.trim() && state.selectedConnectionId) void loadExplorerTablesForFilter(state.selectedConnectionId);
 });
+for (const id of CONNECTION_SELECTS) byId(id).addEventListener('change', syncConnectionMarkers);
 byId('dashboard-connection').addEventListener('change', () => loadDashboard(byId('dashboard-connection').value));
 byId('admin-connection').addEventListener('change', () => loadAdmin(byId('admin-connection').value));
 byId('programming-connection').addEventListener('change', () => void loadProgrammingSchemas(byId('programming-connection').value));

@@ -4,7 +4,8 @@
 //! source connection from Secret Service, creates a temporary metadata connection, exercises the
 //! same application methods exposed by Tauri, and removes only its temporary metadata afterward.
 
-use draco_app::{Application, ConnectionInput, CreateRoleInput};
+use draco_app::{Application, ApplicationError, ConnectionInput, CreateRoleInput};
+use draco_core::error::CoreError;
 use draco_core::secrets;
 use futures_util::FutureExt;
 use std::panic::AssertUnwindSafe;
@@ -13,17 +14,10 @@ fn env(name: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| panic!("set {name} to run this test"))
 }
 
-#[tokio::test]
-#[ignore]
-async fn application_boundary_reaches_postgres_for_tauri_views() {
-    let source_id = env("DRACO_TEST_CONN_ID");
-    let password = secrets::get_password(&source_id)
-        .await
-        .expect("source password available in Secret Service");
-    let id = format!("draco-tauri-live-{}", std::process::id());
-    let input = ConnectionInput {
-        id: Some(id.clone()),
-        label: "Tauri live test".to_string(),
+fn live_input(id: &str, label: &str, read_only: bool) -> ConnectionInput {
+    ConnectionInput {
+        id: Some(id.to_string()),
+        label: label.to_string(),
         host: env("DRACO_TEST_HOST"),
         port: 5432,
         database: env("DRACO_TEST_DB"),
@@ -39,7 +33,133 @@ async fn application_boundary_reaches_postgres_for_tauri_views() {
         ssh_jump_user: None,
         ssh_jump_key_path: None,
         favorite: false,
-    };
+        environment: None,
+        read_only,
+    }
+}
+
+/// SQLSTATE 25006, raised by PostgreSQL itself (the message text depends on the server locale).
+fn is_read_only_transaction_error(error: &ApplicationError) -> bool {
+    matches!(
+        error,
+        ApplicationError::Core(CoreError::Postgres(error))
+            if error.code().map(|state| state.code()) == Some("25006")
+    )
+}
+
+#[tokio::test]
+#[ignore]
+async fn read_only_connection_is_refused_writes_by_the_server() {
+    let source_id = env("DRACO_TEST_CONN_ID");
+    let password = secrets::get_password(&source_id)
+        .await
+        .expect("source password available in Secret Service");
+    let writer = format!("draco-tauri-live-writer-{}", std::process::id());
+    let reader = format!("draco-tauri-live-reader-{}", std::process::id());
+    let schema = format!("draco_live_ro_{}", std::process::id());
+
+    let app = Application::new();
+    let scenario = AssertUnwindSafe(async {
+        app.save_connection(live_input(&writer, "Read-only live writer", false))
+            .await
+            .expect("save writer metadata");
+        app.save_connection(live_input(&reader, "Read-only live reader", true))
+            .await
+            .expect("save reader metadata");
+        app.connect(&writer, &password, 30_000, None, None)
+            .await
+            .expect("connect writer");
+        app.connect(&reader, &password, 30_000, None, None)
+            .await
+            .expect("connect read-only reader");
+        app.execute_script(
+            &writer,
+            &format!(
+                "CREATE SCHEMA {schema}; CREATE TABLE {schema}.items (id integer PRIMARY KEY); \
+                 INSERT INTO {schema}.items VALUES (1)"
+            ),
+        )
+        .await
+        .expect("writer creates the fixture");
+
+        let rows = app
+            .execute_query(
+                &reader,
+                &format!("SELECT count(*) AS total FROM {schema}.items"),
+            )
+            .await
+            .expect("read-only connection still reads");
+        assert_eq!(rows.rows.len(), 1);
+
+        for sql in [
+            format!("INSERT INTO {schema}.items VALUES (2)"),
+            format!("UPDATE {schema}.items SET id = 3"),
+            format!("DELETE FROM {schema}.items"),
+            format!("CREATE TABLE {schema}.other (id integer)"),
+            format!("DROP TABLE {schema}.items"),
+        ] {
+            let error = app
+                .execute_query(&reader, &sql)
+                .await
+                .expect_err("PostgreSQL must refuse a write on a read-only connection");
+            assert!(is_read_only_transaction_error(&error), "{sql}: {error}");
+        }
+        let error = app
+            .execute_script(&reader, &format!("TRUNCATE {schema}.items"))
+            .await
+            .expect_err("scripts are refused too");
+        assert!(is_read_only_transaction_error(&error), "{error}");
+
+        // Draco refuses its own write operations and attempts to undo the session setting.
+        assert!(matches!(
+            app.execute_query(&reader, "SET default_transaction_read_only = off")
+                .await,
+            Err(ApplicationError::ReadOnly(_))
+        ));
+        assert!(matches!(
+            app.create_schema(&reader, "draco_live_ro_never").await,
+            Err(ApplicationError::ReadOnly(_))
+        ));
+
+        let survivors = app
+            .execute_query(&writer, &format!("SELECT id FROM {schema}.items"))
+            .await
+            .expect("writer reads the fixture back");
+        assert_eq!(
+            survivors.rows.len(),
+            1,
+            "no write went through the read-only connection"
+        );
+    })
+    .catch_unwind()
+    .await;
+
+    let cleanup = app
+        .execute_query(&writer, &format!("DROP SCHEMA IF EXISTS {schema} CASCADE"))
+        .await;
+    let _ = app.disconnect(&reader).await;
+    let _ = app.disconnect(&writer).await;
+    let removed_reader = app.delete_connection(&reader).await;
+    let removed_writer = app.delete_connection(&writer).await;
+    match scenario {
+        Ok(()) => {
+            cleanup.expect("drop the read-only fixture");
+            removed_reader.expect("remove reader metadata");
+            removed_writer.expect("remove writer metadata");
+        }
+        Err(payload) => std::panic::resume_unwind(payload),
+    }
+}
+
+#[tokio::test]
+#[ignore]
+async fn application_boundary_reaches_postgres_for_tauri_views() {
+    let source_id = env("DRACO_TEST_CONN_ID");
+    let password = secrets::get_password(&source_id)
+        .await
+        .expect("source password available in Secret Service");
+    let id = format!("draco-tauri-live-{}", std::process::id());
+    let input = live_input(&id, "Tauri live test", false);
 
     let app = Application::new();
     let scenario = AssertUnwindSafe(async {

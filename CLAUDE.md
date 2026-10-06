@@ -53,7 +53,9 @@ frontend/dist -> comandos Tauri -> draco-app -> draco-core -> PostgreSQL/SSH/XDG
 A bridge registrada em `src-tauri/src/main.rs` oferece:
 
 - criação, teste obrigatório, edição, favoritos, conexão/desconexão e exclusão
-  de conexões, incluindo SSH/jump host;
+  de conexões, incluindo SSH/jump host, ambiente (desenvolvimento/homologação/
+  produção, com marcação visual) e modo somente leitura
+  (`default_transaction_read_only`); escrita em produção pede o nome da conexão;
 - Explorer lazy de schemas, tabelas, views, funções, procedures, sequences e
   triggers, mais busca global;
 - Editor SQL com abas, seleção/buffer completo, execução de query ou script,

@@ -63,6 +63,12 @@ impl From<ApplicationError> for CommandError {
                 params: std::collections::BTreeMap::new(),
                 message: format!("Connection '{id}' is not connected"),
             },
+            ApplicationError::ReadOnly(id) => Self {
+                code: "connection_read_only",
+                key: Some("error.connection_read_only"),
+                params: std::collections::BTreeMap::new(),
+                message: format!("Connection '{id}' is read-only"),
+            },
             ApplicationError::Assistant(validation) => Self {
                 code: "assistant_error",
                 key: Some(validation.key),
