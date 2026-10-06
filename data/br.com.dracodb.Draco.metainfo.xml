@@ -90,6 +90,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="2.2.0" date="2026-10-06">
+      <description>
+        <p>Conexões podem ser criadas a partir de uma URL postgres:// ou importadas de ~/.pgpass e ~/.pg_service.conf, com as senhas guardadas só no cofre de credenciais do sistema. Cada conexão pode ser marcada como desenvolvimento, homologação ou produção e aberta em modo somente leitura; escrever em produção pede o nome da conexão.</p>
+        <p>Novidades: importação de CSV e JSON para uma tabela em uma única transação, monitor de replicação na Administração, diff de schema entre duas conexões ou dois schemas com o script de migração para revisão no editor SQL e notificação do sistema quando uma operação longa termina com o Draco fora de foco.</p>
+        <p>O identificador do aplicativo passa a ser br.com.dracodb.Draco.</p>
+      </description>
+    </release>
     <release version="2.1.7" date="2026-10-05">
       <description>
         <p>O editor SQL e o Assistente de IA passam a mostrar os valores de numeric, datas, uuid, json, intervalos e arrays, que antes apareciam como NULL. A edição de sequences volta a funcionar, e o tema claro ganha destaque de sintaxe no editor e contraste correto na tabela de dados e no ERD. A ficha do app agora tem capturas de tela.</p>
