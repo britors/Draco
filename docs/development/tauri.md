@@ -118,6 +118,8 @@ gerado por agentes. O que o app precisa do sandbox:
   a esse diretório ou que o usuário escolha um caminho acessível.
 - **Backup/restauração:** `pg_dump`, `pg_restore` e `psql` são procurados no `PATH`; o sandbox não
   enxerga os do host, então o client do PostgreSQL precisa estar no Flatpak (`/app/bin`).
+- **Notificações:** o fim de operações longas usa `tauri-plugin-notification` (`notify-rust`, D-Bus
+  `org.freedesktop.Notifications`), que precisa de `--talk-name=org.freedesktop.Notifications`.
 - **Atualizações:** dentro do Flatpak (`FLATPAK_ID` ou `/.flatpak-info`), `health` devolve
   `updates_managed: true` e as Preferências escondem a checagem de release do GitHub; a central de
   software entrega as atualizações.
