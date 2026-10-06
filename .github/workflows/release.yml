@@ -124,13 +124,13 @@ jobs:
           package="$(find target/release/bundle/deb -maxdepth 1 -type f -name '*.deb' -print -quit)"
           test -n "$package"
           dpkg-deb -c "$package" > package-contents.txt
-          grep -q 'usr/share/icons/hicolor/32x32/apps/org.lyraos.Draco.png' package-contents.txt
-          grep -q 'usr/share/icons/hicolor/512x512/apps/org.lyraos.Draco.png' package-contents.txt
-          ! grep -q 'usr/share/icons/hicolor/2720x2720/apps/org.lyraos.Draco.png' package-contents.txt
-          dpkg-deb --fsys-tarfile "$package" | tar -xOf - ./usr/share/applications/org.lyraos.Draco.desktop > package.desktop
+          grep -q 'usr/share/icons/hicolor/32x32/apps/br.com.dracodb.Draco.png' package-contents.txt
+          grep -q 'usr/share/icons/hicolor/512x512/apps/br.com.dracodb.Draco.png' package-contents.txt
+          ! grep -q 'usr/share/icons/hicolor/2720x2720/apps/br.com.dracodb.Draco.png' package-contents.txt
+          dpkg-deb --fsys-tarfile "$package" | tar -xOf - ./usr/share/applications/br.com.dracodb.Draco.desktop > package.desktop
           desktop-file-validate package.desktop
-          grep -qx 'Icon=org.lyraos.Draco' package.desktop
-          grep -qx 'StartupWMClass=org.lyraos.Draco' package.desktop
+          grep -qx 'Icon=br.com.dracodb.Draco' package.desktop
+          grep -qx 'StartupWMClass=br.com.dracodb.Draco' package.desktop
       - name: Give package a stable release name
         env:
           VERSION: ${{ needs.validate.outputs.version }}
@@ -176,13 +176,13 @@ jobs:
           package="$(find target/release/bundle/rpm -maxdepth 1 -type f -name '*.rpm' -print -quit)"
           test -n "$package"
           rpm -qlp "$package" > package-contents.txt
-          grep -q '/usr/share/icons/hicolor/32x32/apps/org.lyraos.Draco.png' package-contents.txt
-          grep -q '/usr/share/icons/hicolor/512x512/apps/org.lyraos.Draco.png' package-contents.txt
-          ! grep -q '/usr/share/icons/hicolor/2720x2720/apps/org.lyraos.Draco.png' package-contents.txt
-          rpm2cpio "$package" | cpio --quiet -i --to-stdout ./usr/share/applications/org.lyraos.Draco.desktop > package.desktop
+          grep -q '/usr/share/icons/hicolor/32x32/apps/br.com.dracodb.Draco.png' package-contents.txt
+          grep -q '/usr/share/icons/hicolor/512x512/apps/br.com.dracodb.Draco.png' package-contents.txt
+          ! grep -q '/usr/share/icons/hicolor/2720x2720/apps/br.com.dracodb.Draco.png' package-contents.txt
+          rpm2cpio "$package" | cpio --quiet -i --to-stdout ./usr/share/applications/br.com.dracodb.Draco.desktop > package.desktop
           desktop-file-validate package.desktop
-          grep -qx 'Icon=org.lyraos.Draco' package.desktop
-          grep -qx 'StartupWMClass=org.lyraos.Draco' package.desktop
+          grep -qx 'Icon=br.com.dracodb.Draco' package.desktop
+          grep -qx 'StartupWMClass=br.com.dracodb.Draco' package.desktop
       - name: Give package a distribution-specific name
         env:
           VERSION: ${{ needs.validate.outputs.version }}
@@ -230,13 +230,13 @@ jobs:
           package="$(find target/release/bundle/rpm -maxdepth 1 -type f -name '*.rpm' -print -quit)"
           test -n "$package"
           rpm -qlp "$package" > package-contents.txt
-          grep -q '/usr/share/icons/hicolor/32x32/apps/org.lyraos.Draco.png' package-contents.txt
-          grep -q '/usr/share/icons/hicolor/512x512/apps/org.lyraos.Draco.png' package-contents.txt
-          ! grep -q '/usr/share/icons/hicolor/2720x2720/apps/org.lyraos.Draco.png' package-contents.txt
-          rpm2cpio "$package" | cpio --quiet -i --to-stdout ./usr/share/applications/org.lyraos.Draco.desktop > package.desktop
+          grep -q '/usr/share/icons/hicolor/32x32/apps/br.com.dracodb.Draco.png' package-contents.txt
+          grep -q '/usr/share/icons/hicolor/512x512/apps/br.com.dracodb.Draco.png' package-contents.txt
+          ! grep -q '/usr/share/icons/hicolor/2720x2720/apps/br.com.dracodb.Draco.png' package-contents.txt
+          rpm2cpio "$package" | cpio --quiet -i --to-stdout ./usr/share/applications/br.com.dracodb.Draco.desktop > package.desktop
           desktop-file-validate package.desktop
-          grep -qx 'Icon=org.lyraos.Draco' package.desktop
-          grep -qx 'StartupWMClass=org.lyraos.Draco' package.desktop
+          grep -qx 'Icon=br.com.dracodb.Draco' package.desktop
+          grep -qx 'StartupWMClass=br.com.dracodb.Draco' package.desktop
       - name: Give package a distribution-specific name
         env:
           VERSION: ${{ needs.validate.outputs.version }}

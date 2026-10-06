@@ -53,20 +53,20 @@ cargo build --locked --offline --release -p draco-tauri
 
 %install
 install -Dm0755 target/release/draco %{buildroot}%{_bindir}/draco
-install -Dm0644 data/org.lyraos.Draco.desktop \
-    %{buildroot}%{_datadir}/applications/org.lyraos.Draco.desktop
-install -Dm0644 data/org.lyraos.Draco.metainfo.xml \
-    %{buildroot}%{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
+install -Dm0644 data/br.com.dracodb.Draco.desktop \
+    %{buildroot}%{_datadir}/applications/br.com.dracodb.Draco.desktop
+install -Dm0644 data/br.com.dracodb.Draco.metainfo.xml \
+    %{buildroot}%{_datadir}/metainfo/br.com.dracodb.Draco.metainfo.xml
 for size in 32 128 512; do
     install -Dm0644 src-tauri/icons/${size}x${size}.png \
-        %{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/org.lyraos.Draco.png
+        %{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/br.com.dracodb.Draco.png
 done
 install -Dm0644 src-tauri/icons/128x128@2x.png \
-    %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/org.lyraos.Draco.png
+    %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/br.com.dracodb.Draco.png
 
-desktop-file-validate %{buildroot}%{_datadir}/applications/org.lyraos.Draco.desktop
+desktop-file-validate %{buildroot}%{_datadir}/applications/br.com.dracodb.Draco.desktop
 appstream-util validate-relax --nonet \
-    %{buildroot}%{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
+    %{buildroot}%{_datadir}/metainfo/br.com.dracodb.Draco.metainfo.xml
 
 %check
 # Live PostgreSQL and browser/display tests are ignored; unit, contract and Tauri smoke tests run
@@ -77,8 +77,8 @@ cargo test --locked --offline --workspace
 %license LICENSE
 %doc README.md
 %{_bindir}/draco
-%{_datadir}/applications/org.lyraos.Draco.desktop
-%{_datadir}/metainfo/org.lyraos.Draco.metainfo.xml
-%{_datadir}/icons/hicolor/*/apps/org.lyraos.Draco.png
+%{_datadir}/applications/br.com.dracodb.Draco.desktop
+%{_datadir}/metainfo/br.com.dracodb.Draco.metainfo.xml
+%{_datadir}/icons/hicolor/*/apps/br.com.dracodb.Draco.png
 
 %changelog

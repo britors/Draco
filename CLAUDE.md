@@ -4,7 +4,7 @@ Cliente desktop PostgreSQL do ecossistema **Lyra OS**. O único frontend e
 artefato oficial é o app **Tauri 2**.
 
 - Repositório: <https://github.com/britors/Draco>
-- Identificador desktop: `org.lyraos.Draco`
+- Identificador desktop: `br.com.dracodb.Draco`
 - Versão do workspace: `2.1.7`
 - Licença: GPL-3.0-or-later
 - Binário oficial: `target/release/draco`
@@ -158,8 +158,8 @@ cargo fmt --all --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
 cargo test --locked --workspace
 cargo build --locked -p draco-tauri
-desktop-file-validate data/org.lyraos.Draco.desktop
-appstreamcli validate --no-net data/org.lyraos.Draco.metainfo.xml
+desktop-file-validate data/br.com.dracodb.Draco.desktop
+appstreamcli validate --no-net data/br.com.dracodb.Draco.metainfo.xml
 ```
 
 O teste contra PostgreSQL real é ignorado por padrão e busca a senha no

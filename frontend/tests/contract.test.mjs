@@ -256,6 +256,13 @@ test('connection environment and read-only mode guard every database write', asy
   assert.match(style, /--env-production:[^;]+;[\s\S]*html\[data-theme="light"\] \{[\s\S]*--env-production:/, 'environment tokens need light theme values');
 });
 
+test('a Flatpak installation leaves updates to the store instead of the GitHub release check', () => {
+  assert.match(index, /id="updates-managed" hidden data-i18n="prefs\.updatesManaged"/);
+  assert.match(app, /byId\('update-card'\)\.hidden = Boolean\(health\.updates_managed\);/);
+  assert.match(app, /if \(preferences\.check_updates_on_startup && !health\.updates_managed\) void checkForUpdates\(false\);/);
+  assert.match(style, /\.update-card\[hidden\], \.check-row\[hidden\] \{ display: none; \}/);
+});
+
 test('administration links a blocked session to its blocking activity', () => {
   assert.match(app, /function renderLocksPanel/);
   assert.match(app, /row\.dataset\.pid/);

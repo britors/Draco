@@ -11,6 +11,8 @@ use uuid::Uuid;
 use crate::connection::DbConnection;
 use crate::error::{CoreError, Result};
 
+// Not the desktop app ID (`br.com.dracodb.Draco`): these components pick the on-disk location
+// (`lyraos\Draco` on Windows), so changing them would orphan existing connections and history.
 fn project_dirs() -> ProjectDirs {
     ProjectDirs::from("org", "lyraos", "Draco").expect("no home directory for the current user")
 }

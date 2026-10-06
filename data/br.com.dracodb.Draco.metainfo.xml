@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>org.lyraos.Draco</id>
+  <id>br.com.dracodb.Draco</id>
   <name>Draco</name>
   <name xml:lang="pt-BR">Draco</name>
   <summary>Explore, query and administer PostgreSQL databases</summary>
@@ -8,7 +8,7 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <update_contact>rodrigo@dracodb.com.br</update_contact>
-  <developer id="org.lyraos">
+  <developer id="br.com.dracodb">
     <name>Lyra OS</name>
   </developer>
 
@@ -43,7 +43,12 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">org.lyraos.Draco.desktop</launchable>
+  <launchable type="desktop-id">br.com.dracodb.Draco.desktop</launchable>
+
+  <!-- Renamed for Flathub, which requires an ID under a domain the project controls. -->
+  <replaces>
+    <id>org.lyraos.Draco</id>
+  </replaces>
 
   <screenshots>
     <screenshot type="default">
@@ -73,8 +78,14 @@
     </screenshot>
   </screenshots>
 
-  <url type="homepage">https://github.com/britors/Draco</url>
+  <url type="homepage">https://dracodb.com.br/</url>
   <url type="bugtracker">https://github.com/britors/Draco/issues</url>
+  <url type="vcs-browser">https://github.com/britors/Draco</url>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#f3f1ed</color>
+    <color type="primary" scheme_preference="dark">#0b0b0d</color>
+  </branding>
 
   <content_rating type="oars-1.1"/>
 

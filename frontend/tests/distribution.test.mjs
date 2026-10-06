@@ -8,8 +8,8 @@ const [workspace, frontend, tauri, tauriMain, desktop, metainfo, spec, releaseSp
   read('../package.json'),
   read('../../src-tauri/tauri.conf.json'),
   read('../../src-tauri/src/main.rs'),
-  read('../../data/org.lyraos.Draco.desktop'),
-  read('../../data/org.lyraos.Draco.metainfo.xml'),
+  read('../../data/br.com.dracodb.Draco.desktop'),
+  read('../../data/br.com.dracodb.Draco.metainfo.xml'),
   read('../../packaging/obs/postgres-draco.spec'),
   read('../../packaging/draco-release.spec'),
   read('../../.github/workflows/release.yml'),
@@ -36,7 +36,7 @@ test('published OBS metadata describes one immutable release', () => {
 
 test('installed identity is consistent across Tauri, desktop and AppStream', async () => {
   const appId = tauriConfig.identifier;
-  assert.equal(appId, 'org.lyraos.Draco');
+  assert.equal(appId, 'br.com.dracodb.Draco');
   assert.equal(tauriConfig.app.enableGTKAppId, true);
   assert.deepEqual(
     (await readdir(new URL('../../data/', import.meta.url))).filter((name) => name.endsWith('.desktop')),
@@ -51,10 +51,10 @@ test('installed identity is consistent across Tauri, desktop and AppStream', asy
   assert.match(metainfo, /<binary>draco<\/binary>/);
   assert.equal(tauriConfig.bundle.linux.deb.desktopTemplate, `../data/${appId}.desktop`);
   assert.equal(tauriConfig.bundle.linux.rpm.desktopTemplate, `../data/${appId}.desktop`);
-  assert.match(spec, /icons\/hicolor\/\$\{size\}x\$\{size\}\/apps\/org\.lyraos\.Draco\.png/);
-  assert.match(spec, /icons\/hicolor\/256x256\/apps\/org\.lyraos\.Draco\.png/);
-  assert.match(releaseSpec, /applications\/org\.lyraos\.Draco\.desktop/);
-  assert.match(releaseSpec, /icons\/hicolor\/\$\{size\}x\$\{size\}\/apps\/org\.lyraos\.Draco\.png/);
+  assert.match(spec, /icons\/hicolor\/\$\{size\}x\$\{size\}\/apps\/br\.com\.dracodb\.Draco\.png/);
+  assert.match(spec, /icons\/hicolor\/256x256\/apps\/br\.com\.dracodb\.Draco\.png/);
+  assert.match(releaseSpec, /applications\/br\.com\.dracodb\.Draco\.desktop/);
+  assert.match(releaseSpec, /icons\/hicolor\/\$\{size\}x\$\{size\}\/apps\/br\.com\.dracodb\.Draco\.png/);
   assert.doesNotMatch(
     spec,
     new RegExp(`${appId.replaceAll('.', '\\.')}-symbolic`),

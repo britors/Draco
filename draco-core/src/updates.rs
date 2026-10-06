@@ -12,6 +12,12 @@ pub struct LatestRelease {
     pub html_url: String,
 }
 
+/// True inside a Flatpak sandbox, where the store (e.g. Flathub) delivers updates and the app
+/// must not point users to GitHub downloads. Flatpak sets `FLATPAK_ID` and mounts `/.flatpak-info`.
+pub fn updates_managed_by_flatpak() -> bool {
+    std::env::var_os("FLATPAK_ID").is_some() || std::path::Path::new("/.flatpak-info").exists()
+}
+
 pub async fn latest_release() -> Result<LatestRelease> {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
