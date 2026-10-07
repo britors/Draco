@@ -141,7 +141,15 @@ function assistantModelField(provider) {
 }
 
 function assistantProviderLabel(provider) {
+  if (provider === 'openai_compatible') return t('aiSettings.providerCompatible');
   return { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini' }[provider] || provider;
+}
+
+// The OpenAI-compatible provider is the only one with a user-chosen server and an optional key.
+function renderAssistantProviderFields(provider) {
+  const compatible = provider === 'openai_compatible';
+  byId('ai-base-url-field').hidden = !compatible;
+  byId('ai-key-optional').hidden = !compatible;
 }
 
 function renderAssistantSettings(settings) {
@@ -149,6 +157,8 @@ function renderAssistantSettings(settings) {
   activeAssistantProvider = settings.provider;
   byId('ai-provider').value = settings.provider;
   byId('ai-model').value = settings[assistantModelField(settings.provider)] || '';
+  byId('ai-base-url').value = settings.openai_compatible_base_url || '';
+  renderAssistantProviderFields(settings.provider);
   byId('ai-daily-limit').value = String(settings.max_messages_per_day);
   byId('ai-round-limit').value = String(settings.max_rounds_per_message);
   byId('ai-key-title').textContent = t('aiSettings.credentialTitle', { provider: assistantProviderLabel(settings.provider) });
@@ -203,6 +213,7 @@ function changeAssistantProvider(provider) {
   activeAssistantProvider = provider;
   assistantSettingsDraft.provider = provider;
   byId('ai-model').value = assistantSettingsDraft[assistantModelField(provider)] || '';
+  renderAssistantProviderFields(provider);
   byId('ai-api-key').value = '';
   byId('ai-key-title').textContent = t('aiSettings.credentialTitle', { provider: assistantProviderLabel(provider) });
   byId('ai-settings-status').textContent = t('aiSettings.configure', { provider: assistantProviderLabel(provider) });
@@ -216,6 +227,7 @@ async function saveAssistantSettings(event) {
   const model = value('ai-model');
   const dailyLimit = Number(value('ai-daily-limit'));
   const roundLimit = Number(value('ai-round-limit'));
+  const baseUrl = value('ai-base-url');
   const status = byId('ai-settings-status');
   if (!model || !Number.isInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > 10000 || !Number.isInteger(roundLimit) || roundLimit < 1 || roundLimit > 32) {
     status.textContent = t('aiSettings.enterAModelADaily');
@@ -226,6 +238,7 @@ async function saveAssistantSettings(event) {
   assistantSettingsDraft[assistantModelField(activeAssistantProvider)] = model;
   assistantSettingsDraft.max_messages_per_day = dailyLimit;
   assistantSettingsDraft.max_rounds_per_message = roundLimit;
+  if (baseUrl) assistantSettingsDraft.openai_compatible_base_url = baseUrl;
   byId('save-ai-settings').disabled = true;
   status.textContent = t('aiSettings.savingAiSettings');
   status.className = 'form-status';
@@ -233,6 +246,8 @@ async function saveAssistantSettings(event) {
     renderAssistantSettings(await invoke('save_assistant_settings', { settings: assistantSettingsDraft }));
     status.textContent = t('aiSettings.aiSettingsSavedLocally');
     status.className = 'form-status success';
+    // The model list depends on the saved server for the OpenAI-compatible provider.
+    if (activeAssistantProvider === 'openai_compatible') void loadAssistantModels(activeAssistantProvider);
   } catch (error) {
     status.textContent = errorMessage(error, t, 'aiSettings.couldNotSaveAiSettings');
     status.className = 'form-status error';

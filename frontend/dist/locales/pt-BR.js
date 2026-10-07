@@ -875,6 +875,8 @@ export default Object.freeze({
   'assistant.error.rateLimited': 'O provedor de IA está limitando as solicitações. Aguarde um pouco e tente de novo.',
   'assistant.error.rejected': 'O provedor de IA recusou a solicitação (HTTP {status}).',
   'assistant.error.noModels': 'O provedor de IA não retornou modelos compatíveis.',
+  'assistant.error.invalidBaseUrl': 'Informe a URL do servidor com http:// ou https://, sem usuário, senha, query ou fragmento.',
+  'assistant.error.insecureBaseUrl': 'Use https:// para este servidor. http:// simples só é aceito para localhost.',
   'assistant.error.network': 'Não foi possível falar com o provedor de IA. Verifique a conexão de rede.',
   'assistant.error.invalidResponse': 'O provedor de IA enviou uma resposta inválida.',
 
@@ -1085,6 +1087,9 @@ export default Object.freeze({
   'prefs.saveOnlyYourGithubCredential': 'Salve aqui apenas a credencial do GitHub. Repositórios, branches, diffs, commits e pull requests são escolhidos na Programação.',
   'prefs.scriptsFolderOptional': 'Pasta de scripts (opcional)',
   'prefs.sourceControl': 'CONTROLE DE VERSÃO',
+  'prefs.serverUrl': 'URL do servidor',
+  'prefs.serverUrlHint': 'Ollama, LM Studio, vLLM ou um gateway. Use https://; http:// simples só é aceito para localhost.',
+  'prefs.compatibleKeyOptional': 'Opcional: servidores locais como Ollama ou LM Studio normalmente não precisam de chave.',
   'prefs.theKeyIsWrittenDirectly': 'A chave é gravada direto no cofre de segredos do sistema e nunca volta para esta interface.',
   'prefs.theme': 'TEMA',
   'prefs.toolRoundsPerMessage': 'Rodadas de ferramentas por mensagem',
@@ -1139,6 +1144,7 @@ export default Object.freeze({
   'dialog.filterCommands': 'Filtrar comandos',
   'dialog.runRoutine': 'Executar rotina',
 
+  'aiSettings.providerCompatible': 'Compatível com OpenAI',
   'aiSettings.credentialTitle': 'Credencial do {provider}',
 
   'programming.parameterNumber': 'Parâmetro {number}',

@@ -644,6 +644,14 @@ fn assistant_error(error: assistant::AssistantError) -> ApplicationError {
             "assistant.error.noModels",
             "The AI provider returned no compatible models",
         ),
+        E::InvalidBaseUrl => Validation::new(
+            "assistant.error.invalidBaseUrl",
+            "Enter the provider URL as http:// or https:// without credentials, query or fragment",
+        ),
+        E::InsecureBaseUrl => Validation::new(
+            "assistant.error.insecureBaseUrl",
+            "Use https:// for this provider; plain http:// is only allowed for localhost",
+        ),
         E::Http(_) => Validation::new("assistant.error.network", "Could not reach the AI provider"),
         E::Json(_) => Validation::new(
             "assistant.error.invalidResponse",
@@ -2092,16 +2100,23 @@ impl Application {
         store::get_ai_settings()
     }
 
+    /// Persists the Assistant settings. When the OpenAI-compatible provider is selected, its base
+    /// URL is normalized and must pass the same https/loopback rule enforced before each request.
     pub fn save_assistant_settings(
         &self,
-        settings: assistant::Settings,
+        mut settings: assistant::Settings,
     ) -> Result<assistant::Settings> {
+        if settings.provider == assistant::Provider::OpenAiCompatible {
+            settings.openai_compatible_base_url =
+                assistant::normalize_base_url(&settings.openai_compatible_base_url)
+                    .map_err(assistant_error)?;
+        }
         store::save_ai_settings(&settings)?;
         Ok(settings)
     }
 
     pub async fn assistant_models(&self, provider: assistant::Provider) -> Result<Vec<String>> {
-        assistant::list_models(provider)
+        assistant::list_models(&store::get_ai_settings(), provider)
             .await
             .map_err(assistant_error)
     }
@@ -3998,6 +4013,8 @@ mod tests {
             (E::Rejected(429), "assistant.error.rateLimited"),
             (E::Rejected(500), "assistant.error.rejected"),
             (E::NoModels, "assistant.error.noModels"),
+            (E::InvalidBaseUrl, "assistant.error.invalidBaseUrl"),
+            (E::InsecureBaseUrl, "assistant.error.insecureBaseUrl"),
             (
                 E::Json(serde_json::from_str::<serde_json::Value>("{").unwrap_err()),
                 "assistant.error.invalidResponse",

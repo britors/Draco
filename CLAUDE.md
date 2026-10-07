@@ -78,7 +78,8 @@ A bridge registrada em `src-tauri/src/main.rs` oferece:
   foco), via `tauri-plugin-notification` usado só pelo Rust e com texto de catálogo fixo;
 - preferências de tema/destaque, About/Pix e checagem somente leitura da release
   mais recente no GitHub;
-- Assistente de IA por conexão com Anthropic, OpenAI ou Gemini.
+- Assistente de IA por conexão com Anthropic, OpenAI, Gemini ou um servidor compatível
+  com OpenAI (Ollama, LM Studio, vLLM) em URL configurável, chave opcional.
 
 A UI Tauri já cobre browse/edit paginado por PK, criação/alteração visual de
 tabelas (incluindo FK inline e troca de PK), criação de schema/sequence/trigger,
@@ -143,7 +144,9 @@ cancelar outra query concorrente da mesma conexão.
 - O frontend usa o global Tauri (`window.__TAURI__`) e somente comandos
   registrados em `src-tauri/src/main.rs`.
 - Não introduzir `fetch` no frontend. As únicas saídas de rede atuais ficam no
-  backend: checagem de atualização e provedores do Assistente.
+  backend: checagem de atualização e provedores do Assistente. O provedor compatível
+  com OpenAI tem destino escolhido pelo usuário: `https://`, ou `http://` só no loopback,
+  sem seguir redirecionamentos (`assistant::normalize_base_url`).
 - Módulos testáveis isoladamente vivem em arquivos como `sql-highlight.js`,
   `sql-autocomplete.js`, `virtual-list.js` e `result-export.js`.
 

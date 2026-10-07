@@ -875,6 +875,8 @@ export default Object.freeze({
   'assistant.error.rateLimited': 'The AI provider is limiting requests. Wait a moment and try again.',
   'assistant.error.rejected': 'The AI provider rejected the request (HTTP {status}).',
   'assistant.error.noModels': 'The AI provider returned no compatible models.',
+  'assistant.error.invalidBaseUrl': 'Enter the server URL as http:// or https://, without a user, password, query or fragment.',
+  'assistant.error.insecureBaseUrl': 'Use https:// for this server. Plain http:// is only accepted for localhost.',
   'assistant.error.network': 'Could not reach the AI provider. Check your network connection.',
   'assistant.error.invalidResponse': 'The AI provider sent an invalid response.',
 
@@ -1085,6 +1087,9 @@ export default Object.freeze({
   'prefs.saveOnlyYourGithubCredential': 'Save only your GitHub credential here. Repositories, branches, diffs, commits and pull requests are selected in Programming.',
   'prefs.scriptsFolderOptional': 'Scripts folder (optional)',
   'prefs.sourceControl': 'SOURCE CONTROL',
+  'prefs.serverUrl': 'Server URL',
+  'prefs.serverUrlHint': 'Ollama, LM Studio, vLLM or a gateway. Use https://; plain http:// is only accepted for localhost.',
+  'prefs.compatibleKeyOptional': 'Optional: local servers such as Ollama or LM Studio usually need no key.',
   'prefs.theKeyIsWrittenDirectly': 'The key is written directly to the system Secret Service and is never returned to this interface.',
   'prefs.theme': 'THEME',
   'prefs.toolRoundsPerMessage': 'Tool rounds per message',
@@ -1139,6 +1144,7 @@ export default Object.freeze({
   'dialog.filterCommands': 'Filter commands',
   'dialog.runRoutine': 'Run routine',
 
+  'aiSettings.providerCompatible': 'OpenAI-compatible',
   'aiSettings.credentialTitle': '{provider} credential',
 
   'programming.parameterNumber': 'Parameter {number}',

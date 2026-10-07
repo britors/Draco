@@ -277,16 +277,26 @@ pub enum AiProvider {
     Anthropic,
     OpenAi,
     Gemini,
+    /// Any server speaking the OpenAI chat-completions API at a user-chosen base URL (Ollama,
+    /// LM Studio, vLLM, corporate gateways). Its API key is optional.
+    #[serde(rename = "openai_compatible")]
+    OpenAiCompatible,
 }
 
 impl AiProvider {
-    pub const ALL: [Self; 3] = [Self::Anthropic, Self::OpenAi, Self::Gemini];
+    pub const ALL: [Self; 4] = [
+        Self::Anthropic,
+        Self::OpenAi,
+        Self::Gemini,
+        Self::OpenAiCompatible,
+    ];
 
     pub fn id(self) -> &'static str {
         match self {
             Self::Anthropic => "anthropic",
             Self::OpenAi => "openai",
             Self::Gemini => "gemini",
+            Self::OpenAiCompatible => "openai_compatible",
         }
     }
 
@@ -295,6 +305,7 @@ impl AiProvider {
             Self::Anthropic => "Anthropic",
             Self::OpenAi => "OpenAI",
             Self::Gemini => "Gemini",
+            Self::OpenAiCompatible => "OpenAI-compatible",
         }
     }
 
@@ -303,6 +314,7 @@ impl AiProvider {
             Self::Anthropic => "claude-haiku-4-5",
             Self::OpenAi => "gpt-4.1-mini",
             Self::Gemini => "gemini-2.5-flash",
+            Self::OpenAiCompatible => "llama3.1",
         }
     }
 
@@ -324,6 +336,12 @@ pub struct AiSettings {
     pub anthropic_model: String,
     pub openai_model: String,
     pub gemini_model: String,
+    #[serde(default = "default_compatible_model")]
+    pub openai_compatible_model: String,
+    /// Base URL of the OpenAI-compatible server, including the API prefix (for example
+    /// `http://localhost:11434/v1`). Never carries credentials: the key stays in the keyring.
+    #[serde(default = "default_compatible_base_url")]
+    pub openai_compatible_base_url: String,
     pub max_messages_per_day: u32,
     pub max_rounds_per_message: u32,
 }
@@ -335,6 +353,8 @@ impl Default for AiSettings {
             anthropic_model: AiProvider::Anthropic.default_model().to_string(),
             openai_model: AiProvider::OpenAi.default_model().to_string(),
             gemini_model: AiProvider::Gemini.default_model().to_string(),
+            openai_compatible_model: default_compatible_model(),
+            openai_compatible_base_url: default_compatible_base_url(),
             max_messages_per_day: 200,
             max_rounds_per_message: 8,
         }
@@ -347,6 +367,7 @@ impl AiSettings {
             AiProvider::Anthropic => &self.anthropic_model,
             AiProvider::OpenAi => &self.openai_model,
             AiProvider::Gemini => &self.gemini_model,
+            AiProvider::OpenAiCompatible => &self.openai_compatible_model,
         }
     }
 
@@ -355,8 +376,18 @@ impl AiSettings {
             AiProvider::Anthropic => self.anthropic_model = value,
             AiProvider::OpenAi => self.openai_model = value,
             AiProvider::Gemini => self.gemini_model = value,
+            AiProvider::OpenAiCompatible => self.openai_compatible_model = value,
         }
     }
+}
+
+fn default_compatible_model() -> String {
+    AiProvider::OpenAiCompatible.default_model().to_string()
+}
+
+/// Ollama's OpenAI-compatible endpoint on the local machine.
+fn default_compatible_base_url() -> String {
+    "http://localhost:11434/v1".to_string()
 }
 
 pub fn get_ai_settings() -> AiSettings {
