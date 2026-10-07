@@ -69,6 +69,7 @@ h1, h2, h3, p { margin: 0; }
 .site-nav a:hover { color: var(--color-text); }
 .site-nav .nav-cta { padding: 7px 14px; border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-text); }
 .site-nav .nav-cta:hover { border-color: var(--color-gold); }
+.site-nav .nav-lang { color: var(--color-text); font-weight: 600; }
 
 /* Hero */
 .hero { position: relative; overflow: hidden; padding: 88px 0 96px; }
@@ -167,7 +168,7 @@ h2 { margin-top: 12px; max-width: 720px; font-size: clamp(30px, 4vw, 42px); line
   .hero-logo { right: 0; }
 }
 @media (max-width: 640px) {
-  .site-nav a:not(.nav-cta) { display: none; }
+  .site-nav a:not(.nav-cta):not(.nav-lang) { display: none; }
   .hero { padding: 56px 0 72px; }
   .hero-logo { width: 130px; height: 130px; top: -40px; }
   .mock-window { margin-top: 50px; }

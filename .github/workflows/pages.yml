@@ -31,9 +31,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # site/index.html is written against a known release so it previews locally. At publish time
-      # every mention of that version is replaced by the latest GitHub Release, after checking that
-      # the release really has the four packages the download cards link to.
+      # site/index.html (pt-BR) and site/en/index.html are written against a known release so they
+      # preview locally. At publish time every mention of that version in both pages is replaced by
+      # the latest GitHub Release, after checking that the release really has the four packages the
+      # download cards link to.
       - name: Point downloads at the latest release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,12 +52,14 @@ jobs:
             "Draco_${version}_windows_x64-setup.exe"; do
             grep -qxF "$asset" <<<"$assets" || { echo "release $tag is missing $asset" >&2; exit 1; }
           done
-          current="$(grep -oP '"softwareVersion": "\K[0-9]+\.[0-9]+\.[0-9]+' site/index.html)"
-          if [[ "$current" != "$version" ]]; then
-            sed -i "s/${current//./\\.}/${version}/g" site/index.html
-          fi
-          grep -c "$version" site/index.html
-          echo "Site points to Draco $version"
+          for page in site/index.html site/en/index.html; do
+            current="$(grep -oP '"softwareVersion": "\K[0-9]+\.[0-9]+\.[0-9]+' "$page")"
+            if [[ "$current" != "$version" ]]; then
+              sed -i "s/${current//./\\.}/${version}/g" "$page"
+            fi
+            grep -c "$version" "$page"
+          done
+          echo "Site (pt-BR and en) points to Draco $version"
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:

@@ -127,3 +127,32 @@ test('AppStream screenshots are served by the site from files kept in the reposi
     assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [Number(width), Number(height)], path);
   }
 });
+
+test('the site ships matching pt-BR and English pages that the Site workflow keeps on one release', async () => {
+  const [ptPage, enPage, sitemap, pagesWorkflow] = await Promise.all([
+    read('../../site/index.html'),
+    read('../../site/en/index.html'),
+    read('../../site/sitemap.xml'),
+    read('../../.github/workflows/pages.yml'),
+  ]);
+  const version = (page) => page.match(/"softwareVersion": "(\d+\.\d+\.\d+)"/)?.[1];
+  assert.ok(version(ptPage));
+  assert.equal(version(enPage), version(ptPage), 'both pages must start from the same release');
+  for (const page of [ptPage, enPage]) {
+    // The workflow rewrites every mention of the source version, so no other release may appear.
+    const versions = new Set(page.match(/\b\d+\.\d+\.\d+\b/g));
+    assert.deepEqual([...versions], [version(ptPage)]);
+    assert.match(page, /<link rel="alternate" hreflang="pt-BR" href="https:\/\/dracodb\.com\.br\/">/);
+    assert.match(page, /<link rel="alternate" hreflang="en" href="https:\/\/dracodb\.com\.br\/en\/">/);
+    assert.match(page, /<link rel="alternate" hreflang="x-default" href="https:\/\/dracodb\.com\.br\/en\/">/);
+    assert.match(page, /class="nav-lang"/, 'each page links to the other language');
+  }
+  assert.match(ptPage, /<html lang="pt-BR">/);
+  assert.match(enPage, /<html lang="en">/);
+  assert.match(enPage, /<link rel="canonical" href="https:\/\/dracodb\.com\.br\/en\/">/);
+  for (const [, path] of enPage.matchAll(/(?:src|href)="\.\.\/([^"#]+)"/g)) {
+    await stat(new URL(`../../site/${path}`, import.meta.url));
+  }
+  assert.match(sitemap, /<loc>https:\/\/dracodb\.com\.br\/en\/<\/loc>/);
+  assert.match(pagesWorkflow, /for page in site\/index\.html site\/en\/index\.html; do/);
+});

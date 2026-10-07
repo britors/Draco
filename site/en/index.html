@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Draco Postgres — free PostgreSQL client for Linux and Windows</title>
+  <meta name="description" content="Draco Postgres is a free, open-source PostgreSQL client for Linux and Windows: SQL editor with autocomplete, schema explorer, ER diagrams, administration, backup and an AI assistant.">
+  <meta name="keywords" content="PostgreSQL client, PostgreSQL GUI, PostgreSQL client for Linux, SQL editor, database manager, Postgres Linux, pgAdmin alternative, DBeaver, openSUSE, Fedora, Ubuntu">
+  <meta name="author" content="Rodrigo Brito">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#0b0b0d">
+  <link rel="canonical" href="https://dracodb.com.br/en/">
+  <link rel="alternate" hreflang="pt-BR" href="https://dracodb.com.br/">
+  <link rel="alternate" hreflang="en" href="https://dracodb.com.br/en/">
+  <link rel="alternate" hreflang="x-default" href="https://dracodb.com.br/en/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="pt_BR">
+  <meta property="og:site_name" content="Draco Postgres">
+  <meta property="og:title" content="Draco Postgres — free PostgreSQL client for Linux and Windows">
+  <meta property="og:description" content="SQL editor, schema explorer, ER diagrams, administration and backup for PostgreSQL in a native, free and secure app.">
+  <meta property="og:url" content="https://dracodb.com.br/en/">
+  <meta property="og:image" content="https://dracodb.com.br/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Draco Postgres — PostgreSQL client for Linux and Windows">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Draco Postgres — free PostgreSQL client for Linux and Windows">
+  <meta name="twitter:description" content="SQL editor, schema explorer, ER diagrams, administration and backup for PostgreSQL in a native, free and secure app.">
+  <meta name="twitter:image" content="https://dracodb.com.br/assets/og-image.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://dracodb.com.br/en/#app",
+        "name": "Draco Postgres",
+        "alternateName": ["Draco", "postgres-draco"],
+        "description": "Free and open-source PostgreSQL desktop client with a SQL editor, schema explorer, ER diagrams, administration, backup and a read-only AI assistant.",
+        "url": "https://dracodb.com.br/en/",
+        "image": "https://dracodb.com.br/assets/draco-logo.png",
+        "applicationCategory": "DeveloperApplication",
+        "applicationSubCategory": "Database client",
+        "operatingSystem": "Linux, Windows",
+        "softwareVersion": "2.1.4",
+        "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+        "downloadUrl": "https://github.com/britors/Draco/releases",
+        "codeRepository": "https://github.com/britors/Draco",
+        "inLanguage": "en",
+        "author": { "@type": "Person", "name": "Rodrigo Brito", "url": "https://github.com/britors", "email": "mailto:rodrigo@dracodb.com.br" },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://dracodb.com.br/en/#site",
+        "name": "Draco Postgres",
+        "url": "https://dracodb.com.br/en/",
+        "inLanguage": "en"
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is Draco Postgres free?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Draco Postgres is free software, licensed under GPL-3.0-or-later, and can be used at no cost, including in commercial environments." }
+          },
+          {
+            "@type": "Question",
+            "name": "Which operating systems does Draco Postgres run on?",
+            "acceptedAnswer": { "@type": "Answer", "text": "There are native packages for Ubuntu (.deb), Fedora and openSUSE (.rpm) and an installer for Windows. You can also build it from source on any modern Linux distribution." }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need psql to use Draco Postgres?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. Queries use a native PostgreSQL driver. Only backup and restore use the official pg_dump, pg_restore and psql tools." }
+          },
+          {
+            "@type": "Question",
+            "name": "Where are my passwords stored?",
+            "acceptedAnswer": { "@type": "Answer", "text": "In the operating system's credential store, such as GNOME Keyring, KWallet or Windows Credential Manager. Draco Postgres never writes passwords to configuration files." }
+          },
+          {
+            "@type": "Question",
+            "name": "Can the AI assistant change my database?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. The assistant only inspects the database with read-only tools. Any SQL it suggests is shown as text for you to review and run yourself." }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon.png">
+  <link rel="apple-touch-icon" href="../assets/draco-logo.png">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="#top" aria-label="Draco Postgres — home">
+        <img src="../assets/draco-logo.png" alt="" width="36" height="36">
+        <span>Draco <strong>Postgres</strong></span>
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="#features">Features</a>
+        <a href="#screenshots">Screenshots</a>
+        <a href="#security">Security</a>
+        <a href="#download">Download</a>
+        <a href="#faq">FAQ</a>
+        <a class="nav-lang" href="../" hreflang="pt-BR" lang="pt-BR">Português</a>
+        <a class="nav-cta" href="https://github.com/britors/Draco">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="content">
+    <section class="hero" id="top">
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow">Free PostgreSQL client · version 2.1.4</p>
+          <h1>Draco <span class="gold">Postgres</span></h1>
+          <p class="lead">
+            The open-source PostgreSQL client for Linux and Windows that brings a
+            schema explorer, SQL editor and administration tools together in a
+            native, lightweight and free app — no <code>psql</code> needed for everyday work.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#download">Download Draco Postgres</a>
+            <a class="btn btn-ghost" href="https://github.com/britors/Draco">View source code</a>
+          </div>
+          <ul class="hero-meta" aria-label="Highlights">
+            <li>Rust + Tauri 2</li>
+            <li>Linux and Windows</li>
+            <li>GPL-3.0-or-later</li>
+          </ul>
+        </div>
+
+        <div class="hero-visual" aria-hidden="true">
+          <img class="hero-logo" src="../assets/draco-logo.png" alt="" width="220" height="220" fetchpriority="high">
+          <div class="mock-window">
+            <div class="mock-bar">
+              <span></span><span></span><span></span>
+              <em>query.sql — production</em>
+            </div>
+<pre class="mock-code"><span class="k">SELECT</span> c.name, <span class="f">count</span>(o.id) <span class="k">AS</span> orders
+  <span class="k">FROM</span> customers c
+  <span class="k">JOIN</span> orders o <span class="k">ON</span> o.customer_id = c.id
+ <span class="k">WHERE</span> o.created_at &gt;= <span class="s">'2026-01-01'</span>
+ <span class="k">GROUP BY</span> c.name
+ <span class="k">ORDER BY</span> orders <span class="k">DESC</span>
+ <span class="k">LIMIT</span> <span class="n">10</span>;</pre>
+            <div class="mock-grid">
+              <div class="row head"><span>name</span><span>orders</span></div>
+              <div class="row"><span>Ann Smith</span><span>182</span></div>
+              <div class="row"><span>Brian Lee</span><span>147</span></div>
+              <div class="row"><span>Carla Diaz</span><span>139</span></div>
+            </div>
+            <div class="mock-status"><i></i>10 rows · 12 ms</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="container">
+        <p class="eyebrow">Features</p>
+        <h2 id="features-title">Everything you need to work with PostgreSQL</h2>
+        <p class="section-lead">From the first <code>SELECT</code> to server maintenance, in a single window.</p>
+
+        <div class="feature-grid">
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m16 15 3 3-3 3"/></svg>
+            </div>
+            <h3>Full SQL editor</h3>
+            <p>Tabs, highlighting, schema-aware autocomplete, query or script execution, <code>EXPLAIN</code> and cancellation aimed at the operation's own backend.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 5h6v6H4zM14 13h6v6h-6z"/><path d="M7 11v5h7M17 13V8h-7"/></svg>
+            </div>
+            <h3>Explorer and ERD</h3>
+            <p>Lazy browsing of schemas, tables, views, functions, procedures, sequences and triggers, global search and a navigable ER diagram.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 4h18v16H3z"/><path d="M3 10h18M9 4v16"/></svg>
+            </div>
+            <h3>Result grid</h3>
+            <p>Virtualized results, row detail, TSV copy, CSV/JSON export and paginated editing by primary key.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 4 7v5c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V7z"/><path d="m9 12 2 2 4-4"/></svg>
+            </div>
+            <h3>Administration</h3>
+            <p>Dashboard, activity and locks, roles, extensions, <code>pg_cron</code>, <code>pg_stat_statements</code> and maintenance with <code>VACUUM</code>/<code>ANALYZE</code>.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M8 6 3 12l5 6M16 6l5 6-5 6M14 4l-4 16"/></svg>
+            </div>
+            <h3>Programming + GitHub</h3>
+            <p>A dedicated editor for views, functions, procedures and triggers, with branches, diffs against the deployed database, commits and pull requests.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            <h3>AI assistant</h3>
+            <p>Anthropic, OpenAI or Gemini per connection, with read-only tools and SQL review for security, performance and readability.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 7h16v12H4z"/><path d="M8 7V4h8v3M12 11v5M9.5 13.5 12 16l2.5-2.5"/></svg>
+            </div>
+            <h3>Backup and restore</h3>
+            <p>Cancellable operations with <code>pg_dump</code>, <code>pg_restore</code> and <code>psql</code>, with paths redacted from logs.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg>
+            </div>
+            <h3>Native SSH tunnel</h3>
+            <p>SSH and jump hosts handled in process with <code>russh</code>, without calling the <code>ssh</code> executable. TLS via <code>rustls</code>.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="screenshots" aria-labelledby="screenshots-title">
+      <div class="container">
+        <p class="eyebrow">Screenshots</p>
+        <h2 id="screenshots-title">See Draco Postgres in action</h2>
+        <p class="section-lead">Captured from the app with a fictional sample database.</p>
+
+        <div class="shot-gallery">
+          <figure class="shot shot-main">
+            <img src="../assets/screenshots/01-sql-editor.png" alt="Draco Postgres SQL editor with a highlighted query and the result grid" width="1600" height="900" loading="lazy">
+            <figcaption>SQL editor with syntax highlighting and the result grid</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="../assets/screenshots/02-table-detail.png" alt="Table detail with paginated rows and maintenance actions" width="1600" height="900" loading="lazy">
+            <figcaption>Table detail with editable rows</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="../assets/screenshots/03-erd.png" alt="Entity-relationship diagram of a schema" width="1600" height="900" loading="lazy">
+            <figcaption>Entity-relationship diagram</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="../assets/screenshots/04-dashboard.png" alt="Dashboard with database indicators and the largest tables" width="1600" height="900" loading="lazy">
+            <figcaption>Dashboard with database health</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="../assets/screenshots/05-programming.png" alt="Programming workspace editing a PL/pgSQL function" width="1600" height="900" loading="lazy">
+            <figcaption>Programming: functions, procedures and triggers</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="security" aria-labelledby="security-title">
+      <div class="container split">
+        <div>
+          <p class="eyebrow">Secure by default</p>
+          <h2 id="security-title">Your credentials are never stored in plain text</h2>
+          <p class="section-lead">
+            Draco Postgres is designed to work with real production databases
+            without leaking secrets.
+          </p>
+        </div>
+        <ul class="check-list">
+          <li><strong>System keyring.</strong> Passwords, passphrases and API keys live in GNOME Keyring, KWallet or Credential Manager — never in configuration files.</li>
+          <li><strong>Clean logs.</strong> SQL, results and credentials never appear in logs or error messages.</li>
+          <li><strong>Explicit confirmation.</strong> Destructive changes require confirmation, including typing the name when it applies.</li>
+          <li><strong>Read-only AI.</strong> The assistant inspects the database but never runs DDL or DML; suggestions are text for you to review.</li>
+          <li><strong>No network in the interface.</strong> A fully local interface, with no CDN, a strict CSP and minimal IPC.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="download" aria-labelledby="download-title">
+      <div class="container">
+        <p class="eyebrow">Download</p>
+        <h2 id="download-title">Install Draco Postgres</h2>
+        <p class="section-lead">Native packages for version 2.1.4, built from an immutable tag.</p>
+
+        <div class="download-grid">
+          <a class="download-card" href="https://github.com/britors/Draco/releases/download/v2.1.4/draco_2.1.4_ubuntu24.04_amd64.deb">
+            <span class="os">Ubuntu 24.04</span>
+            <span class="pkg">.deb · amd64</span>
+            <span class="arrow" aria-hidden="true">↓</span>
+          </a>
+          <a class="download-card" href="https://github.com/britors/Draco/releases/download/v2.1.4/draco_2.1.4_fedora43_x86_64.rpm">
+            <span class="os">Fedora 43</span>
+            <span class="pkg">.rpm · x86_64</span>
+            <span class="arrow" aria-hidden="true">↓</span>
+          </a>
+          <a class="download-card" href="https://github.com/britors/Draco/releases/download/v2.1.4/draco_2.1.4_opensuse-leap16.0_x86_64.rpm">
+            <span class="os">openSUSE Leap 16.0</span>
+            <span class="pkg">.rpm · x86_64</span>
+            <span class="arrow" aria-hidden="true">↓</span>
+          </a>
+          <a class="download-card" href="https://github.com/britors/Draco/releases/download/v2.1.4/Draco_2.1.4_windows_x64-setup.exe">
+            <span class="os">Windows</span>
+            <span class="pkg">NSIS installer · x64</span>
+            <span class="arrow" aria-hidden="true">↓</span>
+          </a>
+        </div>
+
+        <div class="install-notes">
+          <div class="note">
+            <h3>openSUSE via OBS</h3>
+            <p>The official RPM is on the Open Build Service, in the
+              <code>home:rodrigosbrito:lyra</code> project. Once the repository is added,
+              Zypper delivers updates automatically.</p>
+<pre class="shell"><code>sudo zypper addrepo https://download.opensuse.org/repositories/home:/rodrigosbrito:/lyra/openSUSE_Leap_16.1/home:rodrigosbrito:lyra.repo
+sudo zypper refresh
+sudo zypper install postgres-draco</code></pre>
+            <p>The package is called <code>postgres-draco</code> because <code>draco</code> is
+              already taken in openSUSE; the installed application is still Draco.
+              <a href="https://software.opensuse.org/download.html?project=home%3Arodrigosbrito%3Alyra&amp;package=postgres-draco">Package page on OBS →</a></p>
+          </div>
+          <div class="note">
+            <h3>Build from source</h3>
+<pre class="shell"><code>git clone https://github.com/britors/Draco.git
+cd Draco
+cargo build --locked --release -p draco-tauri
+./target/release/draco</code></pre>
+          </div>
+        </div>
+        <p class="all-releases"><a href="https://github.com/britors/Draco/releases">See all versions and release notes →</a></p>
+      </div>
+    </section>
+    <section class="section" id="faq" aria-labelledby="faq-title">
+      <div class="container">
+        <p class="eyebrow">Frequently asked questions</p>
+        <h2 id="faq-title">Questions about Draco Postgres</h2>
+        <div class="faq-list">
+          <details>
+            <summary>Is Draco Postgres free?</summary>
+            <p>Yes. Draco Postgres is free software, licensed under GPL-3.0-or-later, and can be used at no cost, including in commercial environments.</p>
+          </details>
+          <details>
+            <summary>Which operating systems does Draco Postgres run on?</summary>
+            <p>There are native packages for Ubuntu (.deb), Fedora and openSUSE (.rpm) and an installer for Windows. You can also build it from source on any modern Linux distribution.</p>
+          </details>
+          <details>
+            <summary>Do I need psql to use Draco Postgres?</summary>
+            <p>No. Queries use a native PostgreSQL driver. Only backup and restore use the official <code>pg_dump</code>, <code>pg_restore</code> and <code>psql</code> tools.</p>
+          </details>
+          <details>
+            <summary>Where are my passwords stored?</summary>
+            <p>In the operating system's credential store, such as GNOME Keyring, KWallet or Windows Credential Manager. Draco Postgres never writes passwords to configuration files.</p>
+          </details>
+          <details>
+            <summary>Can the AI assistant change my database?</summary>
+            <p>No. The assistant only inspects the database with read-only tools. Any SQL it suggests is shown as text for you to review and run yourself.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="brand footer-brand">
+        <img src="../assets/draco-logo.png" alt="" width="28" height="28">
+        <span>Draco <strong>Postgres</strong></span>
+      </div>
+      <p>Free software under <a href="https://github.com/britors/Draco/blob/main/LICENSE">GPL-3.0-or-later</a> © Rodrigo Brito · Part of the Lyra OS ecosystem.</p>
+      <p>Contact: <a href="mailto:rodrigo@dracodb.com.br">rodrigo@dracodb.com.br</a></p>
+      <p class="footnote">PostgreSQL is a registered trademark of the PostgreSQL Community Association. Draco Postgres is an independent project.</p>
+    </div>
+  </footer>
+</body>
+</html>

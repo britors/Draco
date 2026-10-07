@@ -59,10 +59,19 @@ nativos no GitHub, além do RPM no OBS.
 ## Site oficial
 
 O site em <https://dracodb.com.br> vive em `site/` e é publicado pelo workflow `Site` (GitHub
-Pages). Ao publicar, o workflow troca a versão citada em `site/index.html` pela release mais
-recente do GitHub e falha se essa release não tiver os quatro pacotes linkados. O job `publish`
-do `release.yml` dispara o `Site` ao final, então os links de download acompanham cada tag sem
-editar o HTML.
+Pages). A página em português fica na raiz (`site/index.html`) e a em inglês em `/en/`
+(`site/en/index.html`, com caminhos relativos `../` para os assets compartilhados). As duas
+trazem `hreflang` recíproco (`x-default` aponta para o inglês), um link visível para o outro
+idioma e entram no `sitemap.xml`. Ao mudar o conteúdo de uma, atualize a outra.
+
+Ao publicar, o workflow troca a versão citada nas duas páginas pela release mais recente do
+GitHub e falha se essa release não tiver os quatro pacotes linkados. O job `publish` do
+`release.yml` dispara o `Site` ao final, então os links de download acompanham cada tag sem
+editar o HTML. O teste `frontend/tests/distribution.test.mjs` garante que as duas páginas partem
+da mesma versão e mantêm os `hreflang`.
+
+O README também existe nos dois idiomas: `README.md` em inglês (o padrão do GitHub) e
+`README.pt-BR.md` em português; a nota de release de cada versão entra nos dois.
 
 ## Notas de versão no AppStream
 

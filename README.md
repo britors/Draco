@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <sub>Logo inspirado na imagem de referência gerada com <a href="https://www.craiyon.com/pt/image/Hem-omdSQoWd0VBfMnBbHg">Craiyon</a>.</sub>
+  <sub>Logo inspired by a reference image generated with <a href="https://www.craiyon.com/pt/image/Hem-omdSQoWd0VBfMnBbHg">Craiyon</a>.</sub>
 </p>
 
 <p align="center">
@@ -16,75 +16,78 @@
 </p>
 
 <p align="center">
-  <strong><a href="https://dracodb.com.br">dracodb.com.br</a></strong> — site oficial do Draco Postgres, com downloads e instalação
+  <strong>English</strong> · <a href="README.pt-BR.md">Português</a>
 </p>
-
-**Draco** é o cliente de banco de dados do ecossistema **Lyra OS**: explorador de
-esquemas, editor SQL e ferramenta de administração para PostgreSQL. Funciona em
-qualquer distribuição Linux moderna, com integração visual prioritária ao Lyra
-(GNOME/Wayland).
-
-![Editor SQL do Draco com destaque de sintaxe e grade de resultados](site/assets/screenshots/01-sql-editor.png)
 
 <p align="center">
-  <img src="site/assets/screenshots/02-table-detail.png" alt="Detalhe de tabela" width="49%">
-  <img src="site/assets/screenshots/03-erd.png" alt="Diagrama entidade-relacionamento" width="49%">
-  <img src="site/assets/screenshots/04-dashboard.png" alt="Dashboard" width="49%">
-  <img src="site/assets/screenshots/05-programming.png" alt="Área Programming editando uma função" width="49%">
+  <strong><a href="https://dracodb.com.br/en/">dracodb.com.br</a></strong> — official Draco Postgres website, with downloads and installation
 </p>
 
-As capturas usam um banco fictício e são geradas por
-`scripts/capture-screenshots.sh` (veja [`docs/development/tauri.md`](docs/development/tauri.md)).
+**Draco** is a free, open-source PostgreSQL client for Linux and Windows and the
+database client of the **Lyra OS** ecosystem: a schema explorer, SQL editor and
+administration tool for PostgreSQL. It runs on any modern Linux distribution,
+with first-class visual integration with Lyra (GNOME/Wayland).
 
-- Driver Postgres assíncrono (`tokio-postgres`) para queries — sem CLI externo
-  (`psql`); backup/restauração usam explicitamente as ferramentas oficiais do
-  PostgreSQL.
-- Túnel SSH (incluindo jump host) feito em processo (`russh`), sem depender do
-  binário `ssh`.
-- Interface oficial Tauri 2, com frontend local sem CDN.
-- Workbench Programming com tela dedicada e editor SQL para
-  views/functions/procedures/triggers, além de editores validados de sequences
-  e índices comuns.
-- Integração nativa com GitHub: repositório configurável, branches, diff contra
-  o banco implantado, comparação entre branches, commit e criação de pull request.
-- Nenhuma senha ou passphrase é manuseada em texto plano — armazenamento
-  delegado ao Serviço de Segredos do sistema (GNOME Keyring/KWallet, via
-  `keyring`), já integrado ao sistema.
+![Draco SQL editor with syntax highlighting and the result grid](site/assets/screenshots/01-sql-editor.png)
 
-> **Status**: Tauri 2 é o único frontend e artefato oficial.
+<p align="center">
+  <img src="site/assets/screenshots/02-table-detail.png" alt="Table detail" width="49%">
+  <img src="site/assets/screenshots/03-erd.png" alt="Entity-relationship diagram" width="49%">
+  <img src="site/assets/screenshots/04-dashboard.png" alt="Dashboard" width="49%">
+  <img src="site/assets/screenshots/05-programming.png" alt="Programming workspace editing a function" width="49%">
+</p>
+
+The screenshots use a fictional database and are produced by
+`scripts/capture-screenshots.sh` (see [`docs/development/tauri.md`](docs/development/tauri.md)).
+
+- Asynchronous Postgres driver (`tokio-postgres`) for queries — no external CLI
+  (`psql`); backup and restore deliberately use the official PostgreSQL tools.
+- SSH tunnels (including jump hosts) handled in process (`russh`), without
+  relying on the `ssh` binary.
+- Official Tauri 2 interface, with a local frontend and no CDN.
+- Programming workbench with a dedicated screen and SQL editor for
+  views/functions/procedures/triggers, plus validated editors for sequences and
+  common indexes.
+- Native GitHub integration: configurable repository, branches, diff against the
+  deployed database, branch comparison, commits and pull requests.
+- No password or passphrase is handled in plain text — storage is delegated to
+  the system Secret Service (GNOME Keyring/KWallet, via `keyring`).
+
+> **Status**: Tauri 2 is the only official frontend and artifact. The interface
+> is available in English and Brazilian Portuguese.
 
 ---
 
-## Estrutura do repositório
+## Repository layout
 
-- `draco-core`: pool Postgres, túnel SSH, queries de introspecção/DDL/stats,
-  storage local (TOML/XDG) e segredos — sem dependência de nenhum toolkit
-  gráfico.
-- `draco-app`: casos de uso e DTOs serializáveis consumidos pelo shell Tauri.
-- `src-tauri`: shell Tauri 2, capabilities mínimas e bridge IPC tipada.
-- `frontend/dist`: shell web local empacotado pelo Tauri, sem dependências de
-  rede em runtime.
-- `data`: `.desktop` e metadados AppStream.
-- `site`: site estático publicado em <https://dracodb.com.br> pelo workflow `Site` (GitHub
-  Pages) a cada mudança na `main`.
-- `packaging/obs`: artefatos para o pacote RPM no OBS
+- `draco-core`: Postgres pool, SSH tunnel, introspection/DDL/stats queries,
+  local storage (TOML/XDG) and secrets — with no dependency on any GUI toolkit.
+- `draco-app`: use cases and serializable DTOs consumed by the Tauri shell.
+- `src-tauri`: Tauri 2 shell, minimal capabilities and typed IPC bridge.
+- `frontend/dist`: local web shell bundled by Tauri, with no network
+  dependencies at runtime.
+- `data`: `.desktop` file and AppStream metadata.
+- `site`: static website (Portuguese at the root, English under `site/en/`)
+  published to <https://dracodb.com.br> by the `Site` workflow (GitHub Pages) on
+  every change to `main`.
+- `packaging/obs`: artifacts for the RPM package on OBS
   (`home:rodrigosbrito:lyra/postgres-draco`).
 
-## Compilando
+## Building
 
-Dependências de sistema para o app oficial (nomes Fedora/openSUSE): WebKitGTK
-4.1, GTK3, OpenSSL, librsvg e `xdg-desktop-portal` (seletores de arquivo
-nativos), além de um compilador Rust estável recente (`cargo`, `rustc` ≥ 1.85).
+System dependencies for the official app (Fedora/openSUSE names): WebKitGTK
+4.1, GTK3, OpenSSL, librsvg and `xdg-desktop-portal` (native file pickers),
+plus a recent stable Rust toolchain (`cargo`, `rustc` ≥ 1.85).
 
 ```sh
 cargo build --locked --release -p draco-tauri
 ./target/release/draco
 ```
 
-Para diagnóstico, use `RUST_BACKTRACE=1 cargo run -p draco-tauri`. Senhas e
-conteúdo de query nunca são registrados nos logs.
+For diagnostics, use `RUST_BACKTRACE=1 cargo run -p draco-tauri`. Passwords and
+query contents are never written to the logs.
 
-### Testes
+### Tests
 
 ```sh
 cargo test -p draco-core
@@ -93,28 +96,30 @@ cargo test -p draco-tauri
 (cd frontend && npm run check && npm test)
 ```
 
-## Instalação
+## Installation
 
-Cada tag `vX.Y.Z` gera e anexa à GitHub Release quatro pacotes nativos:
+Every `vX.Y.Z` tag builds four native packages and attaches them to the GitHub
+Release:
 
-- instalador Windows x64 em NSIS (`.exe`), sem janela de console e instalado
-  para o usuário atual por padrão;
-- pacote `.deb` compilado no Ubuntu 24.04;
-- pacote `.rpm` compilado no Fedora 43;
-- pacote `.rpm` compilado no openSUSE Leap 16.0.
+- Windows x64 NSIS installer (`.exe`), with no console window and installed for
+  the current user by default;
+- `.deb` package built on Ubuntu 24.04;
+- `.rpm` package built on Fedora 43;
+- `.rpm` package built on openSUSE Leap 16.0.
 
-O RPM oficial via OBS (`home:rodrigosbrito:lyra/postgres-draco`) continua
-disponível para openSUSE. O nome do pacote OBS não é "draco" simples porque
-esse nome já é usado pelo projeto "graphics" do openSUSE; o aplicativo continua
-se chamando Draco.
+The official RPM on OBS (`home:rodrigosbrito:lyra/postgres-draco`) remains
+available for openSUSE. The OBS package is not called plain "draco" because that
+name is already used by openSUSE's "graphics" project; the application is still
+called Draco.
 
-> **Release Tauri:** a versão `2.2.1` distribui pacotes nativos no GitHub para
-> Windows, Ubuntu, Fedora e openSUSE e mantém o RPM oficial no OBS. Ela atualiza a ficha
-> AppStream (resumo, descrição e notas de versão em inglês e português). A `2.2.0` trouxe conexão
-> por URL `postgres://` e importação de `.pgpass`/`pg_service.conf`, ambientes e modo
-> somente leitura por conexão, importação de CSV/JSON, monitor de replicação, diff de
-> schema e notificação ao fim de operações longas.
+> **Tauri release:** version `2.2.1` ships native packages on GitHub for Windows,
+> Ubuntu, Fedora and openSUSE and keeps the official RPM on OBS. It refreshes the
+> AppStream listing (summary, description and release notes in English and
+> Portuguese). `2.2.0` added connections from `postgres://` URLs and
+> `.pgpass`/`pg_service.conf` import, per-connection environments and read-only
+> mode, CSV/JSON import, a replication monitor, schema diff and a notification
+> when long operations finish.
 
-## Licença
+## License
 
 [GPL-3.0-or-later](LICENSE) © Rodrigo Brito
