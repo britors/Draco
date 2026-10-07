@@ -3,8 +3,8 @@
   <id>br.com.dracodb.Draco</id>
   <name>Draco</name>
   <name xml:lang="pt-BR">Draco</name>
-  <summary>Explore, query and administer PostgreSQL databases</summary>
-  <summary xml:lang="pt-BR">Explore, consulte e administre bancos de dados PostgreSQL</summary>
+  <summary>Query and manage PostgreSQL</summary>
+  <summary xml:lang="pt-BR">Consulte e gerencie o PostgreSQL</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <update_contact>rodrigo@dracodb.com.br</update_contact>
@@ -14,32 +14,32 @@
 
   <description>
     <p>
-      Draco is the database client of the Lyra OS ecosystem: a schema explorer, SQL
-      editor and administration tool for PostgreSQL. It works on any modern Linux
-      distribution, with a local Tauri/WebKitGTK shell giving it native desktop
-      integration with GNOME and Lyra.
+      Draco is a desktop client for PostgreSQL: a schema explorer, SQL editor and
+      administration tool in one window. It is part of the Lyra OS ecosystem and
+      runs on any modern Linux distribution.
     </p>
     <p xml:lang="pt-BR">
-      Draco é o cliente de banco de dados do ecossistema Lyra OS: um explorador de
-      esquemas, editor SQL e ferramenta de administração para PostgreSQL. Funciona
-      em qualquer distribuição Linux moderna, com frontend local Tauri e integração
-      visual com GNOME e Lyra.
+      O Draco é um cliente desktop para PostgreSQL: explorador de esquemas, editor
+      SQL e ferramenta de administração em uma só janela. Faz parte do ecossistema
+      Lyra OS e funciona em qualquer distribuição Linux moderna.
     </p>
     <p>Features:</p>
     <p xml:lang="pt-BR">Recursos:</p>
     <ul>
-      <li>Schema explorer with tables, views, functions, sequences and extensions</li>
-      <li xml:lang="pt-BR">Explorador de esquemas com tabelas, views, funções, sequences e extensões</li>
-      <li>SQL editor with local editing, scripts and result export</li>
-      <li xml:lang="pt-BR">Editor SQL com edição local, scripts e exportação de resultados</li>
-      <li>DDL, index, constraint and foreign-key inspection</li>
-      <li xml:lang="pt-BR">Inspeção de DDL, índices, constraints e chaves estrangeiras</li>
-      <li>Connections over SSH tunnels, including jump hosts</li>
-      <li xml:lang="pt-BR">Conexões por túnel SSH, inclusive com jump host</li>
-      <li>No password or passphrase is stored by Draco itself — handled by the
-      Secret Service / GNOME Keyring already integrated into the system</li>
-      <li xml:lang="pt-BR">O Draco não armazena senhas nem passphrases — elas ficam no
-      Secret Service / GNOME Keyring já integrado ao sistema</li>
+      <li>Schema explorer with tables, views, functions, sequences and triggers</li>
+      <li xml:lang="pt-BR">Explorador de esquemas com tabelas, views, funções, sequences e triggers</li>
+      <li>SQL editor with tabs, autocomplete, EXPLAIN and CSV/JSON export</li>
+      <li xml:lang="pt-BR">Editor SQL com abas, autocomplete, EXPLAIN e exportação CSV/JSON</li>
+      <li>Table browsing and editing, visual table design and entity-relationship diagrams</li>
+      <li xml:lang="pt-BR">Navegação e edição de tabelas, criação visual de tabelas e diagramas entidade-relacionamento</li>
+      <li>Activity, locks, roles, replication, backup, restore and schema diff</li>
+      <li xml:lang="pt-BR">Atividade, locks, roles, replicação, backup, restauração e diff de schema</li>
+      <li>Connections over SSH tunnels, including jump hosts, with development, staging and production labels</li>
+      <li xml:lang="pt-BR">Conexões por túnel SSH, inclusive com jump host, marcadas como desenvolvimento, homologação ou produção</li>
+      <li>Passwords and passphrases stay in the system keyring, never in Draco's files</li>
+      <li xml:lang="pt-BR">Senhas e passphrases ficam no cofre de credenciais do sistema, nunca nos arquivos do Draco</li>
+      <li>Optional read-only AI assistant that uses your own Anthropic, OpenAI or Gemini key</li>
+      <li xml:lang="pt-BR">Assistente de IA opcional e somente leitura, com a sua própria chave da Anthropic, OpenAI ou Gemini</li>
     </ul>
   </description>
 
@@ -89,87 +89,113 @@
 
   <content_rating type="oars-1.1"/>
 
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+
   <releases>
     <release version="2.2.0" date="2026-10-06">
       <description>
-        <p>Conexões podem ser criadas a partir de uma URL postgres:// ou importadas de ~/.pgpass e ~/.pg_service.conf, com as senhas guardadas só no cofre de credenciais do sistema. Cada conexão pode ser marcada como desenvolvimento, homologação ou produção e aberta em modo somente leitura; escrever em produção pede o nome da conexão.</p>
-        <p>Novidades: importação de CSV e JSON para uma tabela em uma única transação, monitor de replicação na Administração, diff de schema entre duas conexões ou dois schemas com o script de migração para revisão no editor SQL e notificação do sistema quando uma operação longa termina com o Draco fora de foco.</p>
-        <p>O identificador do aplicativo passa a ser br.com.dracodb.Draco.</p>
+        <p>Connections can be created from a postgres:// URL or imported from ~/.pgpass and ~/.pg_service.conf, with passwords kept only in the system keyring. Each connection can be labeled as development, staging or production and opened read-only; writing to production asks for the connection name.</p>
+        <p>New: CSV and JSON import into a table in a single transaction, a replication monitor under Administration, schema diff between two connections or two schemas with the migration script opened in the SQL editor for review, and a system notification when a long operation finishes while Draco is in the background.</p>
+        <p>The application ID is now br.com.dracodb.Draco.</p>
+        <p xml:lang="pt-BR">Conexões podem ser criadas a partir de uma URL postgres:// ou importadas de ~/.pgpass e ~/.pg_service.conf, com as senhas guardadas só no cofre de credenciais do sistema. Cada conexão pode ser marcada como desenvolvimento, homologação ou produção e aberta em modo somente leitura; escrever em produção pede o nome da conexão.</p>
+        <p xml:lang="pt-BR">Novidades: importação de CSV e JSON para uma tabela em uma única transação, monitor de replicação na Administração, diff de schema entre duas conexões ou dois schemas com o script de migração para revisão no editor SQL e notificação do sistema quando uma operação longa termina com o Draco fora de foco.</p>
+        <p xml:lang="pt-BR">O identificador do aplicativo passa a ser br.com.dracodb.Draco.</p>
       </description>
     </release>
     <release version="2.1.7" date="2026-10-05">
       <description>
-        <p>O editor SQL e o Assistente de IA passam a mostrar os valores de numeric, datas, uuid, json, intervalos e arrays, que antes apareciam como NULL. A edição de sequences volta a funcionar, e o tema claro ganha destaque de sintaxe no editor e contraste correto na tabela de dados e no ERD. A ficha do app agora tem capturas de tela.</p>
+        <p>The SQL editor and the AI assistant now show numeric, date, uuid, json, interval and array values that previously appeared as NULL. Sequence editing works again, and the light theme gets syntax highlighting in the editor and proper contrast in the data grid and the ERD. The app listing now has screenshots.</p>
+        <p xml:lang="pt-BR">O editor SQL e o Assistente de IA passam a mostrar os valores de numeric, datas, uuid, json, intervalos e arrays, que antes apareciam como NULL. A edição de sequences volta a funcionar, e o tema claro ganha destaque de sintaxe no editor e contraste correto na tabela de dados e no ERD. A ficha do app agora tem capturas de tela.</p>
       </description>
     </release>
     <release version="2.1.6" date="2026-10-05">
       <description>
-        <p>O Assistente de IA passa a explicar por que uma solicitação falhou (chave ausente ou recusada, limite de requisições, falha de rede) e o histórico mostra só o resultado das ferramentas, sem o texto interno enviado ao modelo.</p>
+        <p>The AI assistant now explains why a request failed (missing or rejected key, rate limit, network error), and the history shows only tool results, without the internal text sent to the model.</p>
+        <p xml:lang="pt-BR">O Assistente de IA passa a explicar por que uma solicitação falhou (chave ausente ou recusada, limite de requisições, falha de rede) e o histórico mostra só o resultado das ferramentas, sem o texto interno enviado ao modelo.</p>
       </description>
     </release>
     <release version="2.1.5" date="2026-10-05">
       <description>
-        <p>Interface traduzida para português do Brasil e inglês, escolhida pelo idioma do sistema, incluindo as mensagens de validação. O detalhe de tabela passa a mostrar o tipo declarado das colunas (por exemplo, integer em vez de int4(32,0)).</p>
+        <p>The interface is translated into Brazilian Portuguese and English, chosen from the system language, including validation messages. The table detail shows the declared column type (for example, integer instead of int4(32,0)).</p>
+        <p xml:lang="pt-BR">Interface traduzida para português do Brasil e inglês, escolhida pelo idioma do sistema, incluindo as mensagens de validação. O detalhe de tabela passa a mostrar o tipo declarado das colunas (por exemplo, integer em vez de int4(32,0)).</p>
       </description>
     </release>
     <release version="2.1.4" date="2026-08-09">
       <description>
-        <p>Corrigida a associação da janela com o lançador no GNOME, usando o GTK app-id e a identidade desktop canônica em Wayland e X11.</p>
+        <p>Fixed the window's association with its launcher on GNOME by using the GTK app ID and the canonical desktop identity on Wayland and X11.</p>
+        <p xml:lang="pt-BR">Corrigida a associação da janela com o lançador no GNOME, usando o GTK app-id e a identidade desktop canônica em Wayland e X11.</p>
       </description>
     </release>
     <release version="2.1.3" date="2026-08-07">
       <description>
-        <p>Workspace Programming com arquivos SQL locais, seleção de repositórios e branches, fluxo Git separado, criação de views e execução de código.</p>
+        <p>Programming workspace with local SQL files, repository and branch selection, a separate Git flow, view creation and code execution.</p>
+        <p xml:lang="pt-BR">Workspace Programming com arquivos SQL locais, seleção de repositórios e branches, fluxo Git separado, criação de views e execução de código.</p>
       </description>
     </release>
     <release version="2.1.2" date="2026-08-06">
       <description>
-        <p>Gerenciamento completo de functions, procedures e triggers na bancada Programming, com editor estruturado, autocomplete, exclusão protegida e retorno contextual do Assistente de IA.</p>
+        <p>Full management of functions, procedures and triggers in the Programming workspace, with a structured editor, autocomplete, protected deletion and contextual feedback from the AI assistant.</p>
+        <p xml:lang="pt-BR">Gerenciamento completo de functions, procedures e triggers na bancada Programming, com editor estruturado, autocomplete, exclusão protegida e retorno contextual do Assistente de IA.</p>
       </description>
     </release>
     <release version="2.1.1" date="2026-08-06">
       <description>
-        <p>Correções de formatação de código sem mudanças funcionais.</p>
+        <p>Code formatting fixes with no functional changes.</p>
+        <p xml:lang="pt-BR">Correções de formatação de código sem mudanças funcionais.</p>
       </description>
     </release>
     <release version="2.1.0" date="2026-08-05">
       <description>
-        <p>Nova bancada Programming para views, functions, procedures e triggers, com editor SQL dedicado e integração GitHub para branches, diffs, commits e pull requests.</p>
+        <p>New Programming workspace for views, functions, procedures and triggers, with a dedicated SQL editor and GitHub integration for branches, diffs, commits and pull requests.</p>
+        <p xml:lang="pt-BR">Nova bancada Programming para views, functions, procedures e triggers, com editor SQL dedicado e integração GitHub para branches, diffs, commits e pull requests.</p>
       </description>
     </release>
     <release version="2.0.5" date="2026-08-05">
       <description>
-        <p>Corrigido o ícone ausente no desktop Linux com imagens em tamanhos padrão do tema hicolor e validação dos pacotes publicados.</p>
+        <p>Fixed the missing icon on the Linux desktop with images in the standard hicolor theme sizes and validation of the published packages.</p>
+        <p xml:lang="pt-BR">Corrigido o ícone ausente no desktop Linux com imagens em tamanhos padrão do tema hicolor e validação dos pacotes publicados.</p>
       </description>
     </release>
     <release version="2.0.4" date="2026-08-05">
       <description>
-        <p>Pacotes nativos para Windows, Ubuntu, Fedora e openSUSE, remoção do frontend GTK legado e correção do ícone colorido no desktop.</p>
+        <p>Native packages for Windows, Ubuntu, Fedora and openSUSE, removal of the legacy GTK frontend and a fix for the colored desktop icon.</p>
+        <p xml:lang="pt-BR">Pacotes nativos para Windows, Ubuntu, Fedora e openSUSE, remoção do frontend GTK legado e correção do ícone colorido no desktop.</p>
       </description>
     </release>
     <release version="2.0.3" date="2026-08-04">
       <description>
-        <p>Nova aplicação oficial em Tauri 2, com Explorer, editor SQL, administração, ERD, backup e Assistente de IA integrados.</p>
+        <p>New official Tauri 2 application, with the explorer, SQL editor, administration, ERD, backup and AI assistant built in.</p>
+        <p xml:lang="pt-BR">Nova aplicação oficial em Tauri 2, com Explorer, editor SQL, administração, ERD, backup e Assistente de IA integrados.</p>
       </description>
     </release>
     <release version="1.1.3" date="2026-08-03">
       <description>
-        <p>Shell Tauri 2 preparado como artefato oficial, com CI de contratos e pacotes Linux sem dependências GTK4/libadwaita/GtkSourceView5.</p>
+        <p>Tauri 2 shell prepared as the official artifact, with contract CI and Linux packages without GTK4/libadwaita/GtkSourceView5 dependencies.</p>
+        <p xml:lang="pt-BR">Shell Tauri 2 preparado como artefato oficial, com CI de contratos e pacotes Linux sem dependências GTK4/libadwaita/GtkSourceView5.</p>
       </description>
     </release>
     <release version="1.1.2" date="2026-08-03">
       <description>
-        <p>Alinhada a identidade visual do aplicativo e dos pacotes para usar o novo logo dourado do Draco.</p>
+        <p>Aligned the visual identity of the application and packages with the new golden Draco logo.</p>
+        <p xml:lang="pt-BR">Alinhada a identidade visual do aplicativo e dos pacotes para usar o novo logo dourado do Draco.</p>
       </description>
     </release>
     <release version="1.1.1" date="2026-08-02">
       <description>
-        <p>Corrigido o ícone do desktop para usar o logo oficial do cilindro do Draco.</p>
+        <p>Fixed the desktop icon to use the official Draco cylinder logo.</p>
+        <p xml:lang="pt-BR">Corrigido o ícone do desktop para usar o logo oficial do cilindro do Draco.</p>
       </description>
     </release>
     <release version="1.1.0" date="2026-08-02">
       <description>
-        <p>Atualização visual do Draco com o novo símbolo dourado de dragão, aplicado ao aplicativo, à janela Sobre e aos pacotes de desktop.</p>
+        <p>Visual refresh with the new golden dragon symbol, applied to the application, the About window and the desktop packages.</p>
+        <p xml:lang="pt-BR">Atualização visual do Draco com o novo símbolo dourado de dragão, aplicado ao aplicativo, à janela Sobre e aos pacotes de desktop.</p>
       </description>
     </release>
     <release version="0.1.0" date="2026-07-27">
