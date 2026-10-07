@@ -54,7 +54,7 @@ const currentWindow = window.__TAURI__?.window?.getCurrentWindow?.();
 const t = createTranslator(resolveLocale(navigator.languages?.length ? navigator.languages : [navigator.language]));
 document.documentElement.lang = t.locale;
 applyTranslations(document, t);
-const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.2.1', theme: 'dark', accent: 'coral', check_updates_on_startup: true, programming_workspace: null, notify_long_operations: true }, releaseUrl: '', queryTabs: [{ id: 1, label: t('query.tabLabel', { number: 1 }), sql: '' }], currentQueryTabId: 1 };
+const state = { connections: [], selectedConnectionId: null, selectedSchema: null, explorerFilter: '', explorerFilterRequest: 0, explorerConnectionRequest: 0, lastTested: null, result: null, currentQueryId: null, currentQueryOperationId: null, cancelRequested: false, currentOperationId: null, preferences: { version: '2.3.0', theme: 'dark', accent: 'coral', check_updates_on_startup: true, programming_workspace: null, notify_long_operations: true }, releaseUrl: '', queryTabs: [{ id: 1, label: t('query.tabLabel', { number: 1 }), sql: '' }], currentQueryTabId: 1 };
 let dialogResolver = null;
 let aiReviewRequest = null;
 let aiReviewReturnFocus = null;

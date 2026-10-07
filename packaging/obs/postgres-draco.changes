@@ -1,4 +1,12 @@
 -------------------------------------------------------------------
+Wed Oct 07 20:00:00 UTC 2026 - rodrigo@dracodb.com.br
+
+- Versão 2.3.0: provedor de IA compatível com OpenAI (experimental), com URL
+  configurável (Ollama, LM Studio, vLLM, gateways) e chave opcional no cofre
+  de credenciais; http:// só para localhost e sem seguir redirecionamentos.
+- Site e README também em inglês.
+
+-------------------------------------------------------------------
 Wed Oct 07 14:30:00 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.2.1: ficha AppStream atualizada (resumo mais curto, recursos da
