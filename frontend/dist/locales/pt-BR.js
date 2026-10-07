@@ -1144,7 +1144,7 @@ export default Object.freeze({
   'dialog.filterCommands': 'Filtrar comandos',
   'dialog.runRoutine': 'Executar rotina',
 
-  'aiSettings.providerCompatible': 'Compatível com OpenAI',
+  'aiSettings.providerCompatible': 'Compatível com OpenAI (experimental)',
   'aiSettings.credentialTitle': 'Credencial do {provider}',
 
   'programming.parameterNumber': 'Parâmetro {number}',

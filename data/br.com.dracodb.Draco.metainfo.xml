@@ -38,8 +38,8 @@
       <li xml:lang="pt-BR">Conexões por túnel SSH, inclusive com jump host, marcadas como desenvolvimento, homologação ou produção</li>
       <li>Passwords and passphrases stay in the system keyring, never in Draco's files</li>
       <li xml:lang="pt-BR">Senhas e passphrases ficam no cofre de credenciais do sistema, nunca nos arquivos do Draco</li>
-      <li>Optional read-only AI assistant that uses your own Anthropic, OpenAI or Gemini key</li>
-      <li xml:lang="pt-BR">Assistente de IA opcional e somente leitura, com a sua própria chave da Anthropic, OpenAI ou Gemini</li>
+      <li>Optional read-only AI assistant that uses your own Anthropic, OpenAI or Gemini key, or an OpenAI-compatible server such as Ollama</li>
+      <li xml:lang="pt-BR">Assistente de IA opcional e somente leitura, com a sua própria chave da Anthropic, OpenAI ou Gemini, ou um servidor compatível com OpenAI como o Ollama</li>
     </ul>
   </description>
 
@@ -98,6 +98,14 @@
   </supports>
 
   <releases>
+    <release version="2.3.0" date="2026-10-07">
+      <description>
+        <p>Experimental: the AI assistant can use any OpenAI-compatible server at a URL you choose, such as Ollama, LM Studio, vLLM or a corporate gateway, so the schema and query samples can stay on your machine. The API key is optional and stays in the system keyring; plain http:// is only accepted for localhost, and redirects are never followed.</p>
+        <p>The website and README are now also available in English.</p>
+        <p xml:lang="pt-BR">Experimental: o Assistente de IA pode usar qualquer servidor compatível com OpenAI numa URL escolhida por você, como Ollama, LM Studio, vLLM ou um gateway corporativo, para que o schema e as amostras de consulta fiquem na sua máquina. A chave de API é opcional e fica no cofre de credenciais do sistema; http:// simples só é aceito para localhost, e redirecionamentos nunca são seguidos.</p>
+        <p xml:lang="pt-BR">O site e o README agora também estão em inglês.</p>
+      </description>
+    </release>
     <release version="2.2.1" date="2026-10-07">
       <description>
         <p>The app listing is refreshed: a shorter summary, an up-to-date feature list and release notes in English with Brazilian Portuguese translations. There are no changes to the application itself.</p>
