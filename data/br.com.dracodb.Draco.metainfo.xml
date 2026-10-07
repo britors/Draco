@@ -98,6 +98,12 @@
   </supports>
 
   <releases>
+    <release version="2.2.1" date="2026-10-07">
+      <description>
+        <p>The app listing is refreshed: a shorter summary, an up-to-date feature list and release notes in English with Brazilian Portuguese translations. There are no changes to the application itself.</p>
+        <p xml:lang="pt-BR">A ficha do app foi atualizada: resumo mais curto, lista de recursos em dia e notas de versão em inglês com tradução para português do Brasil. Não há mudanças no aplicativo.</p>
+      </description>
+    </release>
     <release version="2.2.0" date="2026-10-06">
       <description>
         <p>Connections can be created from a postgres:// URL or imported from ~/.pgpass and ~/.pg_service.conf, with passwords kept only in the system keyring. Each connection can be labeled as development, staging or production and opened read-only; writing to production asks for the connection name.</p>

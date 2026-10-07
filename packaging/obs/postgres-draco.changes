@@ -1,4 +1,11 @@
 -------------------------------------------------------------------
+Wed Oct 07 14:30:00 UTC 2026 - rodrigo@dracodb.com.br
+
+- Versão 2.2.1: ficha AppStream atualizada (resumo mais curto, recursos da
+  2.2 e notas de versão em inglês com tradução pt-BR). Sem mudanças no
+  aplicativo.
+
+-------------------------------------------------------------------
 Tue Oct 06 23:19:23 UTC 2026 - rodrigo@dracodb.com.br
 
 - Versão 2.2.0: conexão por URL postgres:// e importação de ~/.pgpass e
