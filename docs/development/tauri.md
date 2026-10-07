@@ -64,6 +64,13 @@ recente do GitHub e falha se essa release não tiver os quatro pacotes linkados.
 do `release.yml` dispara o `Site` ao final, então os links de download acompanham cada tag sem
 editar o HTML.
 
+## Notas de versão no AppStream
+
+Cada `<release>` de `data/br.com.dracodb.Draco.metainfo.xml` traz o texto em inglês sem
+`xml:lang` (o idioma padrão que GNOME Software, Discover e Flathub exibem) seguido da tradução
+com `xml:lang="pt-BR"`. O mesmo vale para `<summary>` e `<description>`. Valide com
+`appstreamcli validate --pedantic --no-net` antes da tag.
+
 ## Capturas de tela
 
 As capturas em `site/assets/screenshots/` servem ao AppStream (`<screenshots>` em
