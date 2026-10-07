@@ -104,6 +104,27 @@ Em produção, o frontend pede o nome da conexão antes de qualquer comando de e
 em que uma heurística local (`sql-write-detect.js`) encontra uma palavra de escrita fora de
 literais e comentários. A heurística só serve para pedir confirmação; nunca libera nada.
 
+## Assistente de IA e saída de rede
+
+O Assistente fala com Anthropic, OpenAI e Gemini em URLs fixas e com um provedor
+"compatível com OpenAI" cujo destino é escolhido pelo usuário (Ollama, LM Studio, vLLM ou um
+gateway). Para esse destino configurável:
+
+- A URL base só é aceita como `https://`, ou como `http://` quando o host é `localhost` ou um IP de
+  loopback, sem usuário, senha, query ou fragmento. A regra vale ao salvar
+  (`save_assistant_settings`) e de novo antes de cada requisição, então um `ai-settings.toml`
+  editado à mão não contorna a validação.
+- Redirecionamentos não são seguidos, para que o servidor não reenvie a requisição, e a chave, a
+  um host que o usuário não escolheu; um 3xx vira erro HTTP comum.
+- A chave é opcional e fica no Secret Service (serviço `draco-ai`, conta `openai_compatible`);
+  sem chave salva, a requisição sai sem cabeçalho `Authorization`. A URL base fica no TOML porque
+  não é segredo.
+- O tool loop e o limite diário são os mesmos dos outros provedores: só ferramentas de inspeção
+  read-only, nunca DDL/DML. O custo estimado não é calculado para esse provedor.
+
+O schema, amostras de até 50 linhas e o SQL revisado chegam a qualquer provedor escolhido; com um
+servidor local, esses dados não saem da máquina.
+
 ## Erros e payloads
 
 Payloads vazios, IDs de operação duplicados, compressão fora de `0..=9` e caminhos relativos ou

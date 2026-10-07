@@ -635,6 +635,8 @@ html[data-theme="light"] .function-param-row { border-color: var(--color-border)
 .accent-option.amber { background: #c48932; }
 .ai-settings-form { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 14px; max-width: 760px; margin-top: 22px; }
 .ai-model-picker { display: flex; align-items: stretch; gap: 7px; }
+.ai-base-url-field { grid-column: 1 / -1; }
+.ai-base-url-field[hidden], .ai-key-card [hidden] { display: none; }
 .ai-model-picker input { min-width: 0; }
 .ai-model-picker .button { flex: 0 0 auto; }
 .ai-settings-actions { grid-column: 1 / -1; }

@@ -116,7 +116,8 @@ conteúdo gerado ou assistido por IA no manifesto e proíbe que ferramentas de I
 automatizem o PR de submissão; por isso o manifesto não fica neste repositório e não deve ser
 gerado por agentes. O que o app precisa do sandbox:
 
-- **Rede:** PostgreSQL, túnel SSH (`russh`, em processo) e provedores do Assistente.
+- **Rede:** PostgreSQL, túnel SSH (`russh`, em processo) e provedores do Assistente. Um servidor
+  compatível com OpenAI em `localhost` (Ollama, LM Studio) também precisa de rede no sandbox.
 - **Display:** Wayland, com fallback X11; WebKitGTK 4.1 vem do runtime GNOME.
 - **Credenciais:** acesso D-Bus ao Secret Service (`org.freedesktop.secrets`). Sem ele, conectar
   falha ao ler a senha.

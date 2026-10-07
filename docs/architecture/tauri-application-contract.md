@@ -110,7 +110,8 @@ Toda falha de comando chega ao frontend como:
   (`invalid_input`, chaves `validation.*`, montadas com `draco_app::Validation`), conexão não
   encontrada/inativa/somente leitura, falhas do Assistente (`assistant_error`, chaves `assistant.error.*`: chave
   vazia ou ausente, credential store indisponível, chave recusada, limite de requisições, outro
-  status HTTP, nenhum modelo, rede, resposta inválida), falha genérica de operação, falha
+  status HTTP, nenhum modelo, URL do servidor inválida ou `http://` fora do loopback, rede, resposta
+  inválida), falha genérica de operação, falha
   não-PostgreSQL do core e seletor de arquivos indisponível. Nas falhas do Assistente só cruzam
   o IPC o status HTTP e o nome do provedor; o texto de erro do provedor é descartado no core,
   porque alguns provedores ecoam parte da chave de API.
@@ -173,8 +174,8 @@ O shell inicial em `src-tauri` expõe:
 | `choose_backup_output` / `choose_restore_input` | abrir seletor nativo e emitir autorização de caminho com finalidade e uso único |
 | `run_backup` / `run_restore` | backup/restauração via `pg_dump`, `pg_restore` ou `psql`, somente após autorização nativa do caminho |
 | `cancel_operation` | cancelar uma operação de backup/restauração em andamento |
-| `assistant_settings` / `save_assistant_settings` | configurações não secretas do Assistente |
-| `assistant_models` | listar modelos compatíveis do provedor usando a chave do Secret Service |
+| `assistant_settings` / `save_assistant_settings` | configurações não secretas do Assistente; `save_assistant_settings` normaliza e valida `openai_compatible_base_url` (https, ou http só no loopback) |
+| `assistant_models` | listar modelos do provedor usando a chave do Secret Service; no provedor compatível com OpenAI usa a URL base salva e a chave é opcional |
 | `save_assistant_key` / `clear_assistant_key` | gerenciar chaves no Secret Service |
 | `assistant_history` / `clear_assistant_history` | histórico por conexão, como `AssistantMessageView` |
 | `assistant_send` | conversar e executar somente ferramentas de inspeção read-only |

@@ -49,6 +49,11 @@ pub enum AssistantError {
     /// some providers echo part of the API key in it.
     Rejected(u16),
     NoModels,
+    /// The OpenAI-compatible base URL is not an absolute `http(s)` URL without credentials,
+    /// query or fragment.
+    InvalidBaseUrl,
+    /// The OpenAI-compatible base URL uses `http://` for a host other than the loopback.
+    InsecureBaseUrl,
     Core(crate::error::CoreError),
     Http(reqwest::Error),
     Json(serde_json::Error),
@@ -67,6 +72,10 @@ impl std::fmt::Display for AssistantError {
                 write!(f, "The provider rejected the request (HTTP {status})")
             }
             Self::NoModels => write!(f, "The provider returned no compatible models"),
+            Self::InvalidBaseUrl => write!(f, "The provider URL is not valid"),
+            Self::InsecureBaseUrl => {
+                write!(f, "Plain http:// is only allowed for localhost")
+            }
             Self::Core(error) => write!(f, "{error}"),
             Self::Http(error) => write!(f, "Could not reach the provider: {error}"),
             Self::Json(error) => write!(f, "Invalid provider response: {error}"),
@@ -148,6 +157,69 @@ pub async fn load_key(provider: Provider) -> Result<String, AssistantError> {
         Err(error) => Err(AssistantError::from(error)),
     })
     .await?
+}
+
+/// The key for `provider`, or `None` when the provider accepts requests without one and none is
+/// stored.
+async fn load_request_key(provider: Provider) -> Result<Option<String>, AssistantError> {
+    match load_key(provider).await {
+        Ok(key) => Ok(Some(key)),
+        Err(AssistantError::MissingKey(_)) if provider == Provider::OpenAiCompatible => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// Validates and normalizes the OpenAI-compatible base URL: an absolute `https://` URL, or
+/// `http://` only for the loopback, with no user info, query or fragment, and no trailing slash.
+/// The user picks this destination, so it is checked again before every request.
+pub fn normalize_base_url(raw: &str) -> Result<String, AssistantError> {
+    let url = reqwest::Url::parse(raw.trim()).map_err(|_| AssistantError::InvalidBaseUrl)?;
+    let host = url.host_str().ok_or(AssistantError::InvalidBaseUrl)?;
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(AssistantError::InvalidBaseUrl);
+    }
+    match url.scheme() {
+        "https" => {}
+        "http" if is_loopback_host(host) => {}
+        "http" => return Err(AssistantError::InsecureBaseUrl),
+        _ => return Err(AssistantError::InvalidBaseUrl),
+    }
+    Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
+}
+
+/// Where chat-completions and model requests go for the OpenAI-style providers.
+fn openai_base(settings: &Settings, provider: Provider) -> Result<String, AssistantError> {
+    match provider {
+        Provider::OpenAiCompatible => normalize_base_url(&settings.openai_compatible_base_url),
+        _ => Ok("https://api.openai.com/v1".to_string()),
+    }
+}
+
+/// HTTP client for one provider round-trip. Redirects are never followed for the
+/// OpenAI-compatible provider, so a server cannot bounce the request (and its key) to a host the
+/// user did not choose; local models also get a longer timeout.
+fn http_client(provider: Provider, timeout: Duration) -> Result<reqwest::Client, AssistantError> {
+    let builder = reqwest::Client::builder();
+    let builder = if provider == Provider::OpenAiCompatible {
+        builder
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(timeout * 3)
+    } else {
+        builder.timeout(timeout)
+    };
+    Ok(builder.build()?)
 }
 
 pub async fn clear_key(provider: Provider) -> Result<(), AssistantError> {
@@ -405,17 +477,24 @@ async fn send_round(
     history: &[AiMessage],
     count_usage: bool,
 ) -> Result<Reply, AssistantError> {
+    let provider = settings.provider;
+    let base = openai_base(settings, provider)?;
     if count_usage {
         store::consume_ai_usage(settings.max_messages_per_day)?;
     }
-    let key = load_key(settings.provider).await?;
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(90))
-        .build()?;
-    let mut reply = match settings.provider {
-        Provider::OpenAi => send_openai(&client, &key, settings.model(), history).await?,
-        Provider::Anthropic => send_anthropic(&client, &key, settings.model(), history).await?,
-        Provider::Gemini => send_gemini(&client, &key, settings.model(), history).await?,
+    let key = load_request_key(provider).await?;
+    let client = http_client(provider, Duration::from_secs(90))?;
+    let mut reply = match (provider, key.as_deref()) {
+        (Provider::OpenAi | Provider::OpenAiCompatible, key) => {
+            send_openai(&client, &base, key, settings.model(), history).await?
+        }
+        (Provider::Anthropic, Some(key)) => {
+            send_anthropic(&client, key, settings.model(), history).await?
+        }
+        (Provider::Gemini, Some(key)) => {
+            send_gemini(&client, key, settings.model(), history).await?
+        }
+        (_, None) => return Err(AssistantError::MissingKey(provider)),
     };
     reply.estimated_cost_usd = estimate_cost(
         settings.provider,
@@ -441,43 +520,44 @@ async fn response_json(response: reqwest::Response) -> Result<Value, AssistantEr
     Ok(response.json().await?)
 }
 
-pub async fn list_models(provider: Provider) -> Result<Vec<String>, AssistantError> {
-    let key = load_key(provider).await?;
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(45))
-        .build()?;
-    let value = match provider {
-        Provider::OpenAi => {
-            response_json(
-                client
-                    .get("https://api.openai.com/v1/models")
-                    .bearer_auth(&key)
-                    .send()
-                    .await?,
-            )
-            .await?
+pub async fn list_models(
+    settings: &Settings,
+    provider: Provider,
+) -> Result<Vec<String>, AssistantError> {
+    let base = openai_base(settings, provider)?;
+    let key = load_request_key(provider).await?;
+    let client = http_client(provider, Duration::from_secs(45))?;
+    let value = match (provider, key.as_deref()) {
+        (Provider::OpenAi | Provider::OpenAiCompatible, key) => {
+            let request = client.get(format!("{base}/models"));
+            let request = match key {
+                Some(key) => request.bearer_auth(key),
+                None => request,
+            };
+            response_json(request.send().await?).await?
         }
-        Provider::Anthropic => {
+        (Provider::Anthropic, Some(key)) => {
             response_json(
                 client
                     .get("https://api.anthropic.com/v1/models?limit=100")
-                    .header("x-api-key", &key)
+                    .header("x-api-key", key)
                     .header("anthropic-version", "2023-06-01")
                     .send()
                     .await?,
             )
             .await?
         }
-        Provider::Gemini => {
+        (Provider::Gemini, Some(key)) => {
             response_json(
                 client
                     .get("https://generativelanguage.googleapis.com/v1beta/models?pageSize=100")
-                    .header("x-goog-api-key", &key)
+                    .header("x-goog-api-key", key)
                     .send()
                     .await?,
             )
             .await?
         }
+        (_, None) => return Err(AssistantError::MissingKey(provider)),
     };
     let mut models = match provider {
         Provider::OpenAi => value
@@ -497,6 +577,15 @@ pub async fn list_models(provider: Provider) -> Result<Vec<String>, AssistantErr
             })
             .map(str::to_owned)
             .collect::<Vec<_>>(),
+        // A self-hosted server lists only what it serves; keep every model it reports.
+        Provider::OpenAiCompatible => value
+            .get("data")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|item| item.get("id").and_then(Value::as_str))
+            .map(str::to_owned)
+            .collect(),
         Provider::Anthropic => value
             .get("data")
             .and_then(Value::as_array)
@@ -531,7 +620,8 @@ pub async fn list_models(provider: Provider) -> Result<Vec<String>, AssistantErr
 
 async fn send_openai(
     client: &reqwest::Client,
-    key: &str,
+    base: &str,
+    key: Option<&str>,
     model: &str,
     history: &[AiMessage],
 ) -> Result<Reply, AssistantError> {
@@ -545,15 +635,14 @@ async fn send_openai(
         .into_iter()
         .map(|function| json!({"type": "function", "function": function}))
         .collect::<Vec<_>>();
-    let value = response_json(
-        client
-            .post("https://api.openai.com/v1/chat/completions")
-            .bearer_auth(key)
-            .json(&json!({"model": model, "messages": messages, "tools": tools}))
-            .send()
-            .await?,
-    )
-    .await?;
+    let request = client
+        .post(format!("{base}/chat/completions"))
+        .json(&json!({"model": model, "messages": messages, "tools": tools}));
+    let request = match key {
+        Some(key) => request.bearer_auth(key),
+        None => request,
+    };
+    let value = response_json(request.send().await?).await?;
     let tool_calls = value
         .pointer("/choices/0/message/tool_calls")
         .and_then(Value::as_array)
@@ -774,6 +863,123 @@ mod tests {
         assert_eq!(
             tool_result_display(&raw).expect("tool").output,
             "plain output"
+        );
+    }
+
+    #[test]
+    fn base_url_allows_https_anywhere_and_http_only_on_the_loopback() {
+        for (raw, normalized) in [
+            ("http://localhost:11434/v1/", "http://localhost:11434/v1"),
+            ("http://127.0.0.1:1234/v1", "http://127.0.0.1:1234/v1"),
+            ("http://[::1]:8000/v1", "http://[::1]:8000/v1"),
+            (
+                "  https://llm.example.com/v1  ",
+                "https://llm.example.com/v1",
+            ),
+            ("https://gateway.example.com", "https://gateway.example.com"),
+        ] {
+            assert_eq!(normalize_base_url(raw).unwrap(), normalized, "{raw}");
+        }
+        for raw in [
+            "http://llm.example.com/v1",
+            "http://192.168.0.10:11434/v1",
+            "http://localhost.example.com/v1",
+        ] {
+            assert!(
+                matches!(
+                    normalize_base_url(raw),
+                    Err(AssistantError::InsecureBaseUrl)
+                ),
+                "{raw}"
+            );
+        }
+        for raw in [
+            "",
+            "localhost:11434",
+            "ftp://localhost/v1",
+            "https://user:secret@llm.example.com/v1",
+            "https://llm.example.com/v1?key=secret",
+            "https://llm.example.com/v1#frag",
+        ] {
+            assert!(
+                matches!(normalize_base_url(raw), Err(AssistantError::InvalidBaseUrl)),
+                "{raw}"
+            );
+        }
+    }
+
+    /// Serves one HTTP request on the loopback with `response` and hands back the request head.
+    fn one_shot_server(response: &'static str) -> (String, std::thread::JoinHandle<String>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}/v1", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 4096];
+            while !request.windows(4).any(|w| w == b"\r\n\r\n") {
+                let read = stream.read(&mut buffer).unwrap();
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+            }
+            stream.write_all(response.as_bytes()).unwrap();
+            let request = String::from_utf8_lossy(&request).to_string();
+            request.split("\r\n\r\n").next().unwrap().to_lowercase()
+        });
+        (base, handle)
+    }
+
+    #[tokio::test]
+    async fn compatible_provider_sends_no_authorization_without_a_key() {
+        let body = r#"{"choices":[{"message":{"content":"ok","tool_calls":[{"function":{"name":"list_schemas","arguments":"{}"}}]}}],"usage":{"prompt_tokens":3,"completion_tokens":2}}"#;
+        let response = Box::leak(
+            format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .into_boxed_str(),
+        );
+        let (base, server) = one_shot_server(response);
+        let client = http_client(Provider::OpenAiCompatible, Duration::from_secs(5)).unwrap();
+        let reply = send_openai(&client, &base, None, "llama3.1", &[])
+            .await
+            .unwrap();
+        let head = server.join().unwrap();
+        assert!(head.starts_with("post /v1/chat/completions "), "{head}");
+        assert!(!head.contains("authorization"), "{head}");
+        assert_eq!(reply.text, "ok");
+        assert_eq!(reply.tool_calls[0].name, "list_schemas");
+        assert_eq!((reply.input_tokens, reply.output_tokens), (3, 2));
+    }
+
+    #[tokio::test]
+    async fn compatible_provider_never_follows_redirects() {
+        let (base, server) = one_shot_server(
+            "HTTP/1.1 307 Temporary Redirect\r\nlocation: http://192.0.2.1/v1/chat/completions\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
+        );
+        let client = http_client(Provider::OpenAiCompatible, Duration::from_secs(5)).unwrap();
+        let error = send_openai(&client, &base, Some("secret"), "m", &[])
+            .await
+            .unwrap_err();
+        server.join().unwrap();
+        assert!(matches!(error, AssistantError::Rejected(307)), "{error}");
+    }
+
+    #[test]
+    fn settings_without_compatible_fields_keep_their_values() {
+        let settings: Settings = toml::from_str(
+            "provider = \"gemini\"\nanthropic_model = \"a\"\nopenai_model = \"o\"\n\
+             gemini_model = \"g\"\nmax_messages_per_day = 7\nmax_rounds_per_message = 3\n",
+        )
+        .unwrap();
+        assert_eq!(settings.provider, Provider::Gemini);
+        assert_eq!(settings.max_messages_per_day, 7);
+        assert_eq!(settings.openai_compatible_model, "llama3.1");
+        assert_eq!(
+            settings.openai_compatible_base_url,
+            "http://localhost:11434/v1"
         );
     }
 
