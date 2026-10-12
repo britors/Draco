@@ -31,9 +31,22 @@ fn read_toml<T: Default + serde::de::DeserializeOwned>(file_name: &str) -> T {
     }
 }
 
+/// Writes the file atomically: the content goes to a sibling temporary file that is then renamed
+/// over the target, so a reader (or a crash halfway through) never sees a truncated or partial
+/// TOML file that `read_toml` would silently treat as empty and the next save would overwrite.
 fn write_toml<T: Serialize>(file_name: &str, data: &T) -> Result<()> {
     let raw = toml::to_string_pretty(data)?;
-    fs::write(config_path(file_name), raw)?;
+    let path = config_path(file_name);
+    let temp_path = path.with_file_name(format!(
+        "{file_name}.{}.{}.tmp",
+        std::process::id(),
+        Uuid::new_v4().simple()
+    ));
+    let result = fs::write(&temp_path, raw).and_then(|_| fs::rename(&temp_path, &path));
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result?;
     Ok(())
 }
 

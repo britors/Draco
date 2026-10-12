@@ -137,11 +137,19 @@ pub async fn drop_routine(
     Ok(())
 }
 
-/// Runs an existing function/procedure with caller-supplied arguments, bound as real `$N`
-/// parameters (never interpolated into the SQL text) so a value like `1); DROP TABLE x; --`
-/// is just a literal text argument, not executable SQL. `params` covers only the IN/INOUT/
-/// VARIADIC positions in call order — OUT-only parameters aren't passed by the caller in
-/// PostgreSQL's own call syntax, so the UI must already have filtered those out.
+/// Runs an existing function/procedure with caller-supplied arguments. Each argument is sent as
+/// an untyped SQL string literal (`E'...'` with every backslash and quote escaped, `NULL` for a
+/// missing value), exactly what a `psql` user would type: PostgreSQL resolves the literal
+/// against the routine's declared parameter types and overloads, so an `integer` or `numeric`
+/// parameter accepts `"42"` or `"1.5"`. Binding the values as `$N` parameters does not work
+/// here — the binary protocol can only bind a `String` to text-like parameters, and its result
+/// rows decode `numeric`, timestamps, `uuid`, `json` and arrays as NULL — so the call goes
+/// through the same text path as `execute_query`. A value like `1); DROP TABLE x; --` is still
+/// just a literal text argument, not executable SQL.
+///
+/// `params` covers only the IN/INOUT/VARIADIC positions in call order — OUT-only parameters
+/// aren't passed by the caller in PostgreSQL's own call syntax, so the UI must already have
+/// filtered those out.
 pub async fn call_routine(
     driver: &PostgresDriver,
     schema: &str,
@@ -149,26 +157,20 @@ pub async fn call_routine(
     is_procedure: bool,
     params: &[Option<String>],
 ) -> Result<FunctionTestResult> {
-    let placeholders: Vec<String> = (1..=params.len()).map(|i| format!("${i}")).collect();
+    let arguments: Vec<String> = params
+        .iter()
+        .map(|value| match value {
+            Some(text) => quote_literal(text),
+            None => "NULL".to_string(),
+        })
+        .collect();
     let qualified = format!("{}.{}", quote_ident(schema), quote_ident(name));
     let sql = if is_procedure {
-        format!("CALL {}({})", qualified, placeholders.join(", "))
+        format!("CALL {}({})", qualified, arguments.join(", "))
     } else {
-        format!("SELECT * FROM {}({})", qualified, placeholders.join(", "))
+        format!("SELECT * FROM {}({})", qualified, arguments.join(", "))
     };
-    let values: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params
-        .iter()
-        .map(|value| value as &(dyn tokio_postgres::types::ToSql + Sync))
-        .collect();
-    let rows = driver.query(&sql, &values).await?;
-    let columns = rows
-        .first()
-        .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
-        .unwrap_or_default();
-    Ok(FunctionTestResult {
-        columns,
-        rows: rows.iter().map(row_to_json_map).collect(),
-    })
+    execute_query(driver, &sql).await
 }
 
 /// Result shape shared by the SQL query editor and the function tester — same "run arbitrary
