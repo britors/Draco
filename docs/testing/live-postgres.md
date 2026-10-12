@@ -24,6 +24,16 @@ cargo test -p draco-app --test live_postgres -- --ignored --nocapture
 O `DRACO_TEST_CONN_ID` é usado somente para buscar a senha no Secret Service. Senhas e conteúdo
 sensível não são impressos pelo teste.
 
+O teste do `draco-app` passa pelo store XDG real (`connections.toml`, `history.toml`). Por isso o
+binário aponta `XDG_CONFIG_HOME` para um diretório temporário próprio do processo
+(`draco-live-app-config-<pid>` no diretório temporário do sistema) e executa seus testes um por
+vez: as conexões, o histórico e as preferências do usuário não são lidos nem alterados, e os
+testes não disputam o mesmo arquivo. O diretório temporário pode ser removido após a execução.
+
+O teste do `draco-core` cobre também o testador de funções (`call_routine`): argumentos inteiros,
+texto com aspas e barras invertidas, `NULL`, resultado `numeric`/`timestamp`/`uuid`/`jsonb` em
+forma textual e uma procedure com parâmetro `INOUT`.
+
 Para executar os dois testes em sequência, com a mesma configuração e uma checagem prévia de
 disponibilidade do servidor:
 

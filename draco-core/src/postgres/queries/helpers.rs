@@ -27,17 +27,16 @@ pub(super) fn quote_ident(ident: &str) -> String {
     format!("\"{}\"", ident.replace('"', "\"\""))
 }
 
-pub(super) fn row_to_json_map(row: &Row) -> serde_json::Map<String, serde_json::Value> {
-    let mut map = serde_json::Map::new();
-    for (i, col) in row.columns().iter().enumerate() {
-        map.insert(col.name().to_string(), pg_value_to_json(row, i));
-    }
-    map
+/// Quotes `value` as an SQL string literal in the escape-string form `E'...'`, which reads the
+/// same whatever `standard_conforming_strings` is set to: backslashes and single quotes are the
+/// only characters that need doubling.
+pub(super) fn quote_literal(value: &str) -> String {
+    format!("E'{}'", value.replace('\\', "\\\\").replace('\'', "''"))
 }
 
 /// Builds the editor's row map from `PostgresDriver::query_text` output. Booleans and integer
-/// and float columns keep their JSON types, as with `row_to_json_map`; every other type keeps
-/// PostgreSQL's text form, so `numeric` precision and timestamp offsets reach the UI unchanged.
+/// and float columns keep their JSON types; every other type keeps PostgreSQL's text form, so
+/// `numeric` precision and timestamp offsets reach the UI unchanged.
 pub(super) fn text_row_to_json_map(
     columns: &[(String, Type)],
     row: &[Option<String>],
@@ -73,54 +72,6 @@ fn text_value_to_json(ty: &Type, value: Option<&str>) -> serde_json::Value {
     typed.unwrap_or_else(|| serde_json::Value::String(text.to_string()))
 }
 
-fn pg_value_to_json(row: &Row, idx: usize) -> serde_json::Value {
-    let ty = row.columns()[idx].type_();
-    match *ty {
-        Type::BOOL => row
-            .try_get::<_, Option<bool>>(idx)
-            .ok()
-            .flatten()
-            .map(serde_json::Value::Bool)
-            .unwrap_or(serde_json::Value::Null),
-        Type::INT2 => row
-            .try_get::<_, Option<i16>>(idx)
-            .ok()
-            .flatten()
-            .map(|v| serde_json::json!(v))
-            .unwrap_or(serde_json::Value::Null),
-        Type::INT4 => row
-            .try_get::<_, Option<i32>>(idx)
-            .ok()
-            .flatten()
-            .map(|v| serde_json::json!(v))
-            .unwrap_or(serde_json::Value::Null),
-        Type::INT8 => row
-            .try_get::<_, Option<i64>>(idx)
-            .ok()
-            .flatten()
-            .map(|v| serde_json::json!(v))
-            .unwrap_or(serde_json::Value::Null),
-        Type::FLOAT4 => row
-            .try_get::<_, Option<f32>>(idx)
-            .ok()
-            .flatten()
-            .map(|v| serde_json::json!(v))
-            .unwrap_or(serde_json::Value::Null),
-        Type::FLOAT8 => row
-            .try_get::<_, Option<f64>>(idx)
-            .ok()
-            .flatten()
-            .map(|v| serde_json::json!(v))
-            .unwrap_or(serde_json::Value::Null),
-        _ => row
-            .try_get::<_, Option<String>>(idx)
-            .ok()
-            .flatten()
-            .map(serde_json::Value::String)
-            .unwrap_or(serde_json::Value::Null),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,6 +97,19 @@ mod tests {
             json!("2026-03-01 09:30:00-03")
         );
         assert_eq!(text_value_to_json(&Type::NUMERIC, None), Value::Null);
+    }
+
+    #[test]
+    fn quote_literal_escapes_backslashes_and_quotes() {
+        assert_eq!(quote_literal("plain"), "E'plain'");
+        assert_eq!(quote_literal("it's"), "E'it''s'");
+        assert_eq!(quote_literal(r"a\b"), r"E'a\\b'");
+        assert_eq!(quote_literal(r"\'"), r"E'\\'''");
+        assert_eq!(
+            quote_literal("1); DROP TABLE x; --"),
+            "E'1); DROP TABLE x; --'"
+        );
+        assert_eq!(quote_literal(r#"{"k": [1, 2]}"#), r#"E'{"k": [1, 2]}'"#);
     }
 
     #[test]

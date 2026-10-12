@@ -3,6 +3,11 @@
 //! This test is ignored by default and never stores a password. It reads the password for the
 //! source connection from Secret Service, creates a temporary metadata connection, exercises the
 //! same application methods exposed by Tauri, and removes only its temporary metadata afterward.
+//!
+//! Every test here goes through the real XDG store, so the process points `XDG_CONFIG_HOME` at a
+//! throwaway directory before touching it (the user's own connections, history and preferences
+//! stay untouched) and the tests run one at a time: they would otherwise race each other's
+//! load-modify-write of `connections.toml` and lose entries.
 
 use draco_app::{
     Application, ApplicationError, ConnectionInput, CreateRoleInput, TableImportFormat,
@@ -15,6 +20,18 @@ use std::panic::AssertUnwindSafe;
 
 fn env(name: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| panic!("set {name} to run this test"))
+}
+
+static STORE_GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Serialises the tests of this binary and redirects the XDG config store to a directory that
+/// belongs to this process only. The guard must stay alive for the whole test.
+async fn isolated_store() -> tokio::sync::MutexGuard<'static, ()> {
+    let guard = STORE_GUARD.lock().await;
+    let dir = std::env::temp_dir().join(format!("draco-live-app-config-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temporary XDG config directory");
+    std::env::set_var("XDG_CONFIG_HOME", &dir);
+    guard
 }
 
 fn live_input(id: &str, label: &str, read_only: bool) -> ConnectionInput {
@@ -53,6 +70,7 @@ fn is_read_only_transaction_error(error: &ApplicationError) -> bool {
 #[tokio::test]
 #[ignore]
 async fn read_only_connection_is_refused_writes_by_the_server() {
+    let _store = isolated_store().await;
     let source_id = env("DRACO_TEST_CONN_ID");
     let password = secrets::get_password(&source_id)
         .await
@@ -157,6 +175,7 @@ async fn read_only_connection_is_refused_writes_by_the_server() {
 #[tokio::test]
 #[ignore]
 async fn application_boundary_reaches_postgres_for_tauri_views() {
+    let _store = isolated_store().await;
     let source_id = env("DRACO_TEST_CONN_ID");
     let password = secrets::get_password(&source_id)
         .await
@@ -360,6 +379,7 @@ async fn count_rows(app: &Application, id: &str, schema: &str) -> i64 {
 #[tokio::test]
 #[ignore]
 async fn table_import_is_transactional() {
+    let _store = isolated_store().await;
     let source_id = env("DRACO_TEST_CONN_ID");
     let password = secrets::get_password(&source_id)
         .await

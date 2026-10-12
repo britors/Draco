@@ -351,6 +351,66 @@ async fn connects_and_introspects_the_real_database() {
     let call_result = queries::call_function(&driver, &format!("SELECT \"{test_schema}\".\"{function_name}\"(2, 3) AS sum")).await.expect("call_function");
     assert_eq!(call_result.rows[0].get("sum").and_then(|v| v.as_i64()), Some(5));
 
+    // The function tester sends every argument as an untyped literal, so integer parameters
+    // accept "2"/"3", a quote inside a text argument stays data, and non-native result types
+    // (numeric, timestamp, uuid, json) reach the UI in PostgreSQL's text form instead of NULL.
+    let called = queries::call_routine(&driver, &test_schema, function_name, false, &[Some("2".to_string()), Some("3".to_string())])
+        .await
+        .expect("call_routine with integer arguments");
+    assert_eq!(called.columns, vec![function_name.to_string()]);
+    assert_eq!(called.rows[0].get(function_name).and_then(|v| v.as_i64()), Some(5));
+
+    let typed_function = "draco_live_test_typed_fn";
+    queries::save_function(
+        &driver,
+        &format!("CREATE OR REPLACE FUNCTION \"{test_schema}\".\"{typed_function}\"(label text, amount numeric)\nRETURNS TABLE(echo text, total numeric, at timestamp, id uuid, doc jsonb)\nLANGUAGE sql\nAS $$ SELECT label, amount * 2, timestamp '2026-03-01 12:30:00', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid, jsonb_build_object('k', label); $$;"),
+    )
+    .await
+    .expect("save typed function");
+    let typed_call = queries::call_routine(
+        &driver,
+        &test_schema,
+        typed_function,
+        false,
+        &[Some(r#"it's \ "quoted""#.to_string()), Some("12345678901234567890.0123".to_string())],
+    )
+    .await
+    .expect("call_routine with text and numeric arguments");
+    assert_eq!(typed_call.columns, vec!["echo", "total", "at", "id", "doc"]);
+    let typed_row = &typed_call.rows[0];
+    for (column, expected) in [
+        ("echo", r#"it's \ "quoted""#),
+        ("total", "24691357802469135780.0246"),
+        ("at", "2026-03-01 12:30:00"),
+        ("id", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
+        ("doc", r#"{"k": "it's \\ \"quoted\""}"#),
+    ] {
+        assert_eq!(typed_row.get(column).and_then(|v| v.as_str()), Some(expected), "column {column}");
+    }
+    let null_call = queries::call_routine(&driver, &test_schema, typed_function, false, &[None, Some("1".to_string())])
+        .await
+        .expect("call_routine with a NULL argument");
+    assert!(null_call.rows[0].get("echo").map(|v| v.is_null()).unwrap_or(false));
+    assert!(
+        queries::call_routine(&driver, &test_schema, function_name, false, &[Some("1); DROP TABLE x; --".to_string()), Some("1".to_string())])
+            .await
+            .is_err(),
+        "an injection-shaped text argument must be rejected as an invalid integer, not executed"
+    );
+
+    let procedure_name = "draco_live_test_proc";
+    queries::save_function(
+        &driver,
+        &format!("CREATE OR REPLACE PROCEDURE \"{test_schema}\".\"{procedure_name}\"(INOUT total numeric, IN step numeric)\nLANGUAGE sql\nAS $$ SELECT total + step; $$;"),
+    )
+    .await
+    .expect("save procedure");
+    let proc_call = queries::call_routine(&driver, &test_schema, procedure_name, true, &[Some("0.1".to_string()), Some("0.2".to_string())])
+        .await
+        .expect("call_routine on a procedure");
+    assert_eq!(proc_call.columns, vec!["total"]);
+    assert_eq!(proc_call.rows[0].get("total").and_then(|v| v.as_str()), Some("0.3"));
+
     queries::save_function(
         &driver,
         &format!("CREATE OR REPLACE FUNCTION \"{test_schema}\".\"{trigger_function}\"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.description := upper(NEW.description); RETURN NEW; END; $$;"),
@@ -484,13 +544,21 @@ async fn connects_and_introspects_the_real_database() {
     assert!(queries::execute_query(&driver, "SELECT draco_missing_column").await.is_err());
     assert_eq!(queries::execute_query(&driver, "SELECT 2 AS recovered").await.expect("query after error").rows.len(), 1);
 
-    // Same functions the M8 ERD and global search drive.
+    // Same functions the M8 ERD and global search drive, against the objects this test created
+    // so the assertions hold on any database, not just one with a known application schema.
     let erd = queries::get_erd_data(&driver, "public").await.expect("get_erd_data");
     assert_eq!(erd.tables.len(), tables.len());
-    assert!(!erd.relations.is_empty(), "api_appointments alone has 3 outgoing FKs, expected at least one relation");
+    let test_erd = queries::get_erd_data(&driver, &test_schema).await.expect("get_erd_data for the test schema");
+    assert!(test_erd.tables.iter().any(|t| t.name == table));
+    assert!(
+        test_erd.relations.iter().any(|r| r.from_table == table && r.to_table == parent_table),
+        "the test table's foreign key must appear as an ERD relation, got {:?}",
+        test_erd.relations
+    );
 
-    let search_results = queries::global_search(&driver, "appointment").await.expect("global_search");
-    assert!(search_results.iter().any(|r| r.name.contains("appointment")));
+    let search_results = queries::global_search(&driver, "draco_live_test").await.expect("global_search");
+    assert!(search_results.iter().any(|r| r.name == table), "global search must find the test table");
+    assert!(search_results.iter().any(|r| r.name == function_name), "global search must find the test function");
 
     })
     .catch_unwind()
