@@ -98,12 +98,14 @@
   </supports>
 
   <releases>
-    <release version="2.3.0" date="2026-10-07">
+    <release version="2.3.1" date="2026-10-12">
       <description>
         <p>Experimental: the AI assistant can use any OpenAI-compatible server at a URL you choose, such as Ollama, LM Studio, vLLM or a corporate gateway, so the schema and query samples can stay on your machine. The API key is optional and stays in the system keyring; plain http:// is only accepted for localhost, and redirects are never followed.</p>
         <p>The website and README are now also available in English.</p>
+        <p>Fixes: calling a function or procedure now accepts integer, numeric and other non-text arguments and shows numeric, timestamp, uuid and json results instead of NULL. Connection, history and preference files are written atomically, so an interrupted save can no longer leave them empty. Version 2.3.0 was tagged but never published; this release carries its content.</p>
         <p xml:lang="pt-BR">Experimental: o Assistente de IA pode usar qualquer servidor compatível com OpenAI numa URL escolhida por você, como Ollama, LM Studio, vLLM ou um gateway corporativo, para que o schema e as amostras de consulta fiquem na sua máquina. A chave de API é opcional e fica no cofre de credenciais do sistema; http:// simples só é aceito para localhost, e redirecionamentos nunca são seguidos.</p>
         <p xml:lang="pt-BR">O site e o README agora também estão em inglês.</p>
+        <p xml:lang="pt-BR">Correções: chamar uma função ou procedure agora aceita argumentos inteiros, numéricos e de outros tipos não textuais e mostra resultados numeric, timestamp, uuid e json em vez de NULL. Os arquivos de conexões, histórico e preferências são gravados de forma atômica, então uma gravação interrompida não os deixa mais vazios. A versão 2.3.0 foi marcada mas nunca publicada; esta release traz o seu conteúdo.</p>
       </description>
     </release>
     <release version="2.2.1" date="2026-10-07">

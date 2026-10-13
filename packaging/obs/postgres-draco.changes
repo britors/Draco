@@ -1,10 +1,15 @@
 -------------------------------------------------------------------
-Wed Oct 07 20:00:00 UTC 2026 - rodrigo@dracodb.com.br
+Mon Oct 12 22:00:00 UTC 2026 - rodrigo@dracodb.com.br
 
-- Versão 2.3.0: provedor de IA compatível com OpenAI (experimental), com URL
-  configurável (Ollama, LM Studio, vLLM, gateways) e chave opcional no cofre
-  de credenciais; http:// só para localhost e sem seguir redirecionamentos.
+- Versão 2.3.1 (a 2.3.0 foi marcada mas não publicada): provedor de IA
+  compatível com OpenAI (experimental), com URL configurável (Ollama,
+  LM Studio, vLLM, gateways) e chave opcional no cofre de credenciais;
+  http:// só para localhost e sem seguir redirecionamentos.
 - Site e README também em inglês.
+- Correção: chamada de função/procedure aceita argumentos não textuais e
+  mostra resultados numeric, timestamp, uuid e json em vez de NULL.
+- Correção: arquivos TOML de conexões, histórico e preferências gravados de
+  forma atômica (arquivo temporário + rename).
 
 -------------------------------------------------------------------
 Wed Oct 07 14:30:00 UTC 2026 - rodrigo@dracodb.com.br

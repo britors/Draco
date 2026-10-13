@@ -112,10 +112,12 @@ disponível para openSUSE. O nome do pacote OBS não é "draco" simples porque
 esse nome já é usado pelo projeto "graphics" do openSUSE; o aplicativo continua
 se chamando Draco.
 
-> **Release Tauri:** a versão `2.3.0` distribui pacotes nativos no GitHub para
+> **Release Tauri:** a versão `2.3.1` distribui pacotes nativos no GitHub para
 > Windows, Ubuntu, Fedora e openSUSE e mantém o RPM oficial no OBS. Ela traz um provedor
 > de IA compatível com OpenAI (experimental), com URL configurável (Ollama, LM Studio, vLLM)
-> e chave opcional. A `2.2.1` atualizou a ficha AppStream, e a `2.2.0` trouxe conexão
+> e chave opcional, corrige a chamada de rotinas com argumentos não textuais e resultados
+> de tipos não nativos e grava os arquivos TOML de forma atômica (a `2.3.0` foi marcada
+> mas não publicada). A `2.2.1` atualizou a ficha AppStream, e a `2.2.0` trouxe conexão
 > por URL `postgres://` e importação de `.pgpass`/`pg_service.conf`, ambientes e modo
 > somente leitura por conexão, importação de CSV/JSON, monitor de replicação, diff de
 > schema e notificação ao fim de operações longas.
